@@ -21,7 +21,7 @@ namespace LAMMPS_NS {
 
 class Neighbor : protected Pointers {
  public:
-  enum{NSQ,BIN,MULTI};
+  enum{NSQ,BIN,MULTI,BYTYPE};
   int style;                       // 0,1,2 = nsq, bin, multi
   int every;                       // build every this many steps
   int delay;                       // delay build for this many steps
@@ -240,6 +240,8 @@ namespace NeighConst {
   static const int NB_KOKKOS_DEVICE = 1<<1;
   static const int NB_KOKKOS_HOST   = 1<<2;
   static const int NB_SSA           = 1<<3;
+  static const int NB_BYTYPE        = 1<<4; 
+  static const int NB_STANDARD      = 1<<5;
 
   static const int NS_BIN     = 1<<0;
   static const int NS_MULTI   = 1<<1;
@@ -253,6 +255,7 @@ namespace NeighConst {
   static const int NS_TRI     = 1<<9;
   static const int NS_GHOST   = 1<<10;
   static const int NS_SSA     = 1<<11;
+  static const int NS_BYTYPE  = 1<<12;
 
   static const int NP_NSQ           = 1<<0;
   static const int NP_BIN           = 1<<1;
@@ -279,6 +282,7 @@ namespace NeighConst {
   static const int NP_SKIP          = 1<<22;
   static const int NP_HALF_FULL     = 1<<23;
   static const int NP_OFF2ON        = 1<<24;
+  static const int NP_BYTYPE        = 1<<25;
 }
 
 }

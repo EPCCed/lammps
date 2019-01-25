@@ -37,6 +37,18 @@ class NBin : protected Pointers {
 
   double cutoff_custom;        // cutoff set by requestor
 
+  // Analogues for NBinType
+  int * nbinx_type, * nbiny_type, * nbinz_type;
+  int * mbins_type;
+  int * mbinx_type, * mbiny_type, * mbinz_type;
+  int * mbinxlo_type, * mbinylo_type, * mbinzlo_type;
+  double * binsizex_type, * binsizey_type, * binsizez_type;
+  double * bininvx_type, * bininvy_type, * bininvz_type;
+
+  int ** binhead_type;
+  int ** bins_type;
+  int ** atom2bin_type;
+
   NBin(class LAMMPS *);
   ~NBin();
   void post_constructor(class NeighRequest *);
@@ -46,6 +58,9 @@ class NBin : protected Pointers {
 
   virtual void setup_bins(int) = 0;
   virtual void bin_atoms() = 0;
+
+  // For NBinType
+  virtual int coord2bin(double *, int);
 
  protected:
 
