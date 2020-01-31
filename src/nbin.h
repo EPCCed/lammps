@@ -59,8 +59,14 @@ class NBin : protected Pointers {
   virtual void setup_bins(int) = 0;
   virtual void bin_atoms() = 0;
 
+
   // For NBinType
   virtual int coord2bin(double *, int);
+
+  // Kokkos package
+
+  int kokkos;                       // 1 if class stores Kokkos data
+
 
  protected:
 

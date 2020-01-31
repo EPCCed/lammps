@@ -15,10 +15,10 @@
    Contributing authors: Trung Dac Nguyen (ORNL), W. Michael Brown (ORNL)
 ------------------------------------------------------------------------- */
 
+#include "pair_eam_alloy_gpu.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include "pair_eam_alloy_gpu.h"
 #include "atom.h"
 #include "force.h"
 #include "comm.h"
@@ -29,6 +29,8 @@
 #include "neigh_request.h"
 #include "gpu_extra.h"
 #include "domain.h"
+#include "utils.h"
+#include "suffix.h"
 
 using namespace LAMMPS_NS;
 
@@ -70,6 +72,7 @@ PairEAMAlloyGPU::PairEAMAlloyGPU(LAMMPS *lmp) : PairEAM(lmp), gpu_mode(GPU_FORCE
   respa_enable = 0;
   reinitflag = 0;
   cpu_time = 0.0;
+  suffix_flag |= Suffix::GPU;
   GPU_EXTRA::gpu_ready(lmp->modify, lmp->error);
 }
 
@@ -92,8 +95,7 @@ double PairEAMAlloyGPU::memory_usage()
 
 void PairEAMAlloyGPU::compute(int eflag, int vflag)
 {
-  if (eflag || vflag) ev_setup(eflag,vflag);
-  else evflag = vflag_fdotr = eflag_global = eflag_atom = 0;
+  ev_init(eflag,vflag);
 
   // compute density on each atom on GPU
 
@@ -187,13 +189,15 @@ void PairEAMAlloyGPU::init_style()
     fp_single = false;
   else
     fp_single = true;
+
+  embedstep = -1;
 }
 
 /* ---------------------------------------------------------------------- */
 
 double PairEAMAlloyGPU::single(int i, int j, int itype, int jtype,
-                       double rsq, double factor_coul, double factor_lj,
-                       double &fforce)
+                               double rsq, double /* factor_coul */,
+                               double /* factor_lj */, double &fforce)
 {
   int m;
   double r,p,rhoip,rhojp,z2,z2p,recip,phi,phip,psip;
@@ -235,7 +239,7 @@ double PairEAMAlloyGPU::single(int i, int j, int itype, int jtype,
 /* ---------------------------------------------------------------------- */
 
 int PairEAMAlloyGPU::pack_forward_comm(int n, int *list, double *buf,
-                                  int pbc_flag,int *pbc)
+                                       int /* pbc_flag */, int * /* pbc */)
 {
   int i,j,m;
 
@@ -374,10 +378,10 @@ void PairEAMAlloyGPU::read_file(char *filename)
 
   int n;
   if (me == 0) {
-    fgets(line,MAXLINE,fptr);
-    fgets(line,MAXLINE,fptr);
-    fgets(line,MAXLINE,fptr);
-    fgets(line,MAXLINE,fptr);
+    utils::sfgets(FLERR,line,MAXLINE,fptr,filename,error);
+    utils::sfgets(FLERR,line,MAXLINE,fptr,filename,error);
+    utils::sfgets(FLERR,line,MAXLINE,fptr,filename,error);
+    utils::sfgets(FLERR,line,MAXLINE,fptr,filename,error);
     n = strlen(line) + 1;
   }
   MPI_Bcast(&n,1,MPI_INT,0,world);
@@ -402,7 +406,7 @@ void PairEAMAlloyGPU::read_file(char *filename)
   delete [] words;
 
   if (me == 0) {
-    fgets(line,MAXLINE,fptr);
+    utils::sfgets(FLERR,line,MAXLINE,fptr,filename,error);
     sscanf(line,"%d %lg %d %lg %lg",
            &file->nrho,&file->drho,&file->nr,&file->dr,&file->cut);
   }
@@ -422,7 +426,7 @@ void PairEAMAlloyGPU::read_file(char *filename)
   int i,j,tmp;
   for (i = 0; i < file->nelements; i++) {
     if (me == 0) {
-      fgets(line,MAXLINE,fptr);
+      utils::sfgets(FLERR,line,MAXLINE,fptr,filename,error);
       sscanf(line,"%d %lg",&tmp,&file->mass[i]);
     }
     MPI_Bcast(&file->mass[i],1,MPI_DOUBLE,0,world);

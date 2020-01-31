@@ -15,10 +15,9 @@
    Contributing author: Steven Vandenbrande
 ------------------------------------------------------------------------- */
 
-#include <math.h>
-#include <string.h>
-#include <stdlib.h>
 #include "angle_cross.h"
+#include <mpi.h>
+#include <cmath>
 #include "atom.h"
 #include "neighbor.h"
 #include "domain.h"
@@ -27,6 +26,7 @@
 #include "math_const.h"
 #include "memory.h"
 #include "error.h"
+#include "utils.h"
 
 using namespace LAMMPS_NS;
 using namespace MathConst;
@@ -61,14 +61,13 @@ void AngleCross::compute(int eflag, int vflag)
   int i1,i2,i3,n,type;
   double delx1,dely1,delz1,delx2,dely2,delz2;
   double eangle,f1[3],f3[3];
-  double dtheta,dtheta2,dtheta3,dtheta4,de_angle;
+  double dtheta;
   double dr1,dr2,tk1,tk2,aa1,aa2,aa11,aa12,aa21,aa22;
-  double rsq1,rsq2,r1,r2,c,s,a,a11,a12,a22,b1,b2;
+  double rsq1,rsq2,r1,r2,c,s,b1,b2;
   double vx11,vx12,vy11,vy12,vz11,vz12,vx21,vx22,vy21,vy22,vz21,vz22;
 
   eangle = 0.0;
-  if (eflag || vflag) ev_setup(eflag,vflag);
-  else evflag = 0;
+  ev_init(eflag,vflag);
 
   double **x = atom->x;
   double **f = atom->f;
@@ -280,12 +279,12 @@ void AngleCross::read_restart(FILE *fp)
   allocate();
 
   if (comm->me == 0) {
-    fread(&kss[1],sizeof(double),atom->nangletypes,fp);
-    fread(&kbs0[1],sizeof(double),atom->nangletypes,fp);
-    fread(&kbs1[1],sizeof(double),atom->nangletypes,fp);
-    fread(&r00[1],sizeof(double),atom->nangletypes,fp);
-    fread(&r01[1],sizeof(double),atom->nangletypes,fp);
-    fread(&theta0[1],sizeof(double),atom->nangletypes,fp);
+    utils::sfread(FLERR,&kss[1],sizeof(double),atom->nangletypes,fp,NULL,error);
+    utils::sfread(FLERR,&kbs0[1],sizeof(double),atom->nangletypes,fp,NULL,error);
+    utils::sfread(FLERR,&kbs1[1],sizeof(double),atom->nangletypes,fp,NULL,error);
+    utils::sfread(FLERR,&r00[1],sizeof(double),atom->nangletypes,fp,NULL,error);
+    utils::sfread(FLERR,&r01[1],sizeof(double),atom->nangletypes,fp,NULL,error);
+    utils::sfread(FLERR,&theta0[1],sizeof(double),atom->nangletypes,fp,NULL,error);
   }
 
   MPI_Bcast(&kss[1],atom->nangletypes,MPI_DOUBLE,0,world);
@@ -305,7 +304,7 @@ void AngleCross::read_restart(FILE *fp)
 void AngleCross::write_data(FILE *fp)
 {
   for (int i = 1; i <= atom->nangletypes; i++)
-    fprintf(fp,"%d %g %g %g %g\n",
+    fprintf(fp,"%d %g %g %g %g %g %g\n",
             i,kss[i],kbs0[i],kbs1[i],r00[i],r01[i],theta0[i]/MY_PI*180.0);
 }
 

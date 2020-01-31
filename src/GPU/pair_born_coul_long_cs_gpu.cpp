@@ -15,11 +15,11 @@
    Contributing author: Trung Dac Nguyen (Northwestern)
 ------------------------------------------------------------------------- */
 
+#include "pair_born_coul_long_cs_gpu.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include "pair_born_coul_long_cs_gpu.h"
 #include "atom.h"
 #include "atom_vec.h"
 #include "comm.h"
@@ -36,6 +36,7 @@
 #include "domain.h"
 #include "kspace.h"
 #include "gpu_extra.h"
+#include "suffix.h"
 
 using namespace LAMMPS_NS;
 using namespace MathConst;
@@ -90,6 +91,7 @@ PairBornCoulLongCSGPU::PairBornCoulLongCSGPU(LAMMPS *lmp) :
   respa_enable = 0;
   reinitflag = 0;
   cpu_time = 0.0;
+  suffix_flag |= Suffix::GPU;
   GPU_EXTRA::gpu_ready(lmp->modify, lmp->error);
 }
 
@@ -106,8 +108,7 @@ PairBornCoulLongCSGPU::~PairBornCoulLongCSGPU()
 
 void PairBornCoulLongCSGPU::compute(int eflag, int vflag)
 {
-  if (eflag || vflag) ev_setup(eflag,vflag);
-  else evflag = vflag_fdotr = 0;
+  ev_init(eflag,vflag);
 
   int nall = atom->nlocal + atom->nghost;
   int inum, host_start;
@@ -212,8 +213,8 @@ double PairBornCoulLongCSGPU::memory_usage()
 /* ---------------------------------------------------------------------- */
 
 void PairBornCoulLongCSGPU::cpu_compute(int start, int inum, int eflag,
-                                      int vflag, int *ilist, int *numneigh,
-                                      int **firstneigh)
+                                      int /* vflag */, int *ilist,
+                                      int *numneigh, int **firstneigh)
 {
   int i,j,ii,jj,jnum,itable,itype,jtype;
   double qtmp,xtmp,ytmp,ztmp,delx,dely,delz,evdwl,ecoul,fpair;

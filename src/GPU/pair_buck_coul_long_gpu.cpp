@@ -15,11 +15,11 @@
    Contributing author: Trung Dac Nguyen (ORNL)
 ------------------------------------------------------------------------- */
 
+#include "pair_buck_coul_long_gpu.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include "pair_buck_coul_long_gpu.h"
 #include "atom.h"
 #include "atom_vec.h"
 #include "comm.h"
@@ -35,6 +35,7 @@
 #include "domain.h"
 #include "kspace.h"
 #include "gpu_extra.h"
+#include "suffix.h"
 
 #define EWALD_F   1.12837917
 #define EWALD_P   0.3275911
@@ -81,6 +82,7 @@ PairBuckCoulLongGPU::PairBuckCoulLongGPU(LAMMPS *lmp) :
   respa_enable = 0;
   reinitflag = 0;
   cpu_time = 0.0;
+  suffix_flag |= Suffix::GPU;
   GPU_EXTRA::gpu_ready(lmp->modify, lmp->error);
 }
 
@@ -97,8 +99,7 @@ PairBuckCoulLongGPU::~PairBuckCoulLongGPU()
 
 void PairBuckCoulLongGPU::compute(int eflag, int vflag)
 {
-  if (eflag || vflag) ev_setup(eflag,vflag);
-  else evflag = vflag_fdotr = 0;
+  ev_init(eflag,vflag);
 
   int nall = atom->nlocal + atom->nghost;
   int inum, host_start;
@@ -201,8 +202,8 @@ double PairBuckCoulLongGPU::memory_usage()
 /* ---------------------------------------------------------------------- */
 
 void PairBuckCoulLongGPU::cpu_compute(int start, int inum, int eflag,
-                                       int vflag, int *ilist, int *numneigh,
-                                       int **firstneigh)
+                                       int /* vflag */, int *ilist,
+                                       int *numneigh, int **firstneigh)
 {
   int i,j,ii,jj,jnum,itype,jtype;
   double qtmp,xtmp,ytmp,ztmp,delx,dely,delz,evdwl,ecoul,fpair;

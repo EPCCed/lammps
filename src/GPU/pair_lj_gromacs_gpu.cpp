@@ -15,11 +15,11 @@
    Contributing author: Trung Dac Nguyen (ORNL)
 ------------------------------------------------------------------------- */
 
+#include "pair_lj_gromacs_gpu.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include "pair_lj_gromacs_gpu.h"
 #include "atom.h"
 #include "atom_vec.h"
 #include "comm.h"
@@ -35,6 +35,7 @@
 #include "domain.h"
 #include "kspace.h"
 #include "gpu_extra.h"
+#include "suffix.h"
 
 using namespace LAMMPS_NS;
 
@@ -71,6 +72,7 @@ PairLJGromacsGPU::PairLJGromacsGPU(LAMMPS *lmp) :
   respa_enable = 0;
   reinitflag = 0;
   cpu_time = 0.0;
+  suffix_flag |= Suffix::GPU;
   GPU_EXTRA::gpu_ready(lmp->modify, lmp->error);
 }
 
@@ -87,8 +89,7 @@ PairLJGromacsGPU::~PairLJGromacsGPU()
 
 void PairLJGromacsGPU::compute(int eflag, int vflag)
 {
-  if (eflag || vflag) ev_setup(eflag,vflag);
-  else evflag = vflag_fdotr = 0;
+  ev_init(eflag,vflag);
 
   int nall = atom->nlocal + atom->nghost;
   int inum, host_start;
@@ -177,7 +178,7 @@ double PairLJGromacsGPU::memory_usage()
 /* ---------------------------------------------------------------------- */
 
 void PairLJGromacsGPU::cpu_compute(int start, int inum, int eflag,
-                                   int vflag, int *ilist,
+                                   int /* vflag */, int *ilist,
                                    int *numneigh, int **firstneigh)
 {
   int i,j,ii,jj,jnum,itype,jtype;
