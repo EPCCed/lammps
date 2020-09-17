@@ -18,28 +18,28 @@ LAMMPS is an open-source code, distributed freely under the terms of
 the GNU Public License (GPL).
 
 The `LAMMPS website <lws_>`_ has a variety of information about the code.
-It includes links to an on-line version of this manual, a `mailing list <http://lammps.sandia.gov/mail.html>`_ where users can post
+It includes links to an on-line version of this manual, a `mailing list <https://lammps.sandia.gov/mail.html>`_ where users can post
 questions, and a `GitHub site <https://github.com/lammps/lammps>`_ where
 all LAMMPS development is coordinated.
 
-
 ----------
-
 
 The content for this manual is part of the LAMMPS distribution.  You
 can build a local copy of the Manual as HTML pages or a PDF file, by
 following the steps on the :doc:`Manual build <Manual_build>` doc page.
-There is also a `Developer.pdf <Developer.pdf>`_ document which gives
-a brief description of the basic code structure of LAMMPS.
-
+The manual is organized in two parts:
+1) A :ref:`User documentation <user_documentation>` for how to install
+and use LAMMPS and 2) a :ref:`Programmer documentation <programmer_documentation>`
+for how to write programs using the LAMMPS library or how to modify LAMMPS.
 
 ----------
 
-
-Once you are familiar with LAMMPS, you may want to bookmark :doc:`this page <Commands>` since it gives quick access to a doc page for
+Once you are familiar with LAMMPS, you may want to bookmark :doc:`this page <Commands_all>` since it gives quick access to a doc page for
 every LAMMPS command.
 
+.. _lws: https://lammps.sandia.gov
 
+.. _user_documentation:
 .. toctree::
    :maxdepth: 2
    :numbered: 3
@@ -57,10 +57,21 @@ every LAMMPS command.
    Howto
    Examples
    Tools
-   Modify
    Python_head
    Errors
    Manual_build
+
+.. _programmer_documentation:
+.. toctree::
+   :maxdepth: 2
+   :numbered: 3
+   :caption: Programmer Documentation
+   :name: progdoc
+   :includehidden:
+
+   pg_library
+   Modify
+   pg_developer
 
 .. toctree::
    :caption: Index
@@ -75,18 +86,10 @@ every LAMMPS command.
    angles
    dihedrals
    impropers
+   fix_modify_atc_commands
 
 Indices and tables
 ==================
 
 * :ref:`genindex`
 * :ref:`search`
-
-.. raw:: html
-
-   </BODY>
-
-
-.. _lws: http://lammps.sandia.gov
-.. _ld: Manual.html
-.. _lc: Commands_all.html
