@@ -23,6 +23,9 @@ class AtomVec : protected Pointers {
   int molecular;                       // 0 = atomic, 1 = molecular system
   int bonds_allow,angles_allow;        // 1 if bonds, angles are used
   int dihedrals_allow,impropers_allow; // 1 if dihedrals, impropers used
+//JY ADDED
+//  int spherharm_type;                  //
+
   int mass_type;                       // 1 if per-type masses
   int dipole_type;                     // 1 if per-type dipole moments
   int forceclearflag;                  // 1 if has forceclear() method

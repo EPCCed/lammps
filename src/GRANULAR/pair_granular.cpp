@@ -279,7 +279,8 @@ void PairGranular::compute(int eflag, int vflag)
           history = &allhistory[size_history*jj];
           for (int k = 0; k < size_history; k++) history[k] = 0.0;
         }
-      } else {
+      }
+      else {
         r = sqrt(rsq);
         rinv = 1.0/r;
 

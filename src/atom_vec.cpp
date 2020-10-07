@@ -43,6 +43,10 @@ AtomVec::AtomVec(LAMMPS *lmp) : Pointers(lmp)
   molecular = 0;
   bonds_allow = angles_allow = dihedrals_allow = impropers_allow = 0;
   mass_type = dipole_type = 0;
+
+//  JY ADDED
+//  spherharm_type = 0;
+
   forceclearflag = 0;
   maxexchange = 0;
   bonus_flag = 0;

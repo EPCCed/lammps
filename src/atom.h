@@ -62,6 +62,17 @@ class Atom : protected Pointers {
   imageint *image;
   double **x,**v,**f;
 
+  // spherical harmonics
+
+  int *shtype;             // integer array or spherical harmonic types
+  double **inertia;
+  double **quat;
+  double **quatinit;
+  double **shcoeffs;         // per atom
+//  double **shcoeff;        // spherical harmonic coefficients [PER-TYPE ARRAY, NOT PER-ATOM]
+//  int *sh_setflag;         // whether the spherical harmonic coefficients have been set or not
+//  int nshtypes;            // Number of spherical harmonic particle types
+
   // charged and dipolar particles
 
   double *rmass;
@@ -158,6 +169,9 @@ class Atom : protected Pointers {
   // identical list as Atom::set_atomflag_defaults()
   // most are existence flags for per-atom vectors and arrays
   // 1 if variable is used, 0 if not
+
+  //JY Added
+  int spherharm_flag;
 
   int sphere_flag,ellipsoid_flag,line_flag,tri_flag,body_flag;
   int peri_flag,electron_flag;
@@ -299,6 +313,9 @@ class Atom : protected Pointers {
   void data_bonus(int, char *, class AtomVec *, tagint);
   void data_bodies(int, char *, class AtomVec *, tagint);
   void data_fix_compute_variable(int, int);
+
+//  JY ADDED
+//  virtual void allocate_type_sh_arrays(int maxshexpan);
 
   virtual void allocate_type_arrays();
   void set_mass(const char *, int, const char *, int);

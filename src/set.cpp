@@ -16,12 +16,14 @@
 #include <cmath>
 #include <cstring>
 #include <climits>
+#include <iostream>
 #include "atom.h"
 #include "atom_vec.h"
 #include "atom_vec_ellipsoid.h"
 #include "atom_vec_line.h"
 #include "atom_vec_tri.h"
 #include "atom_vec_body.h"
+#include "atom_vec_shperatom.h"
 #include "domain.h"
 #include "region.h"
 #include "group.h"
@@ -50,7 +52,8 @@ enum{TYPE,TYPE_FRACTION,TYPE_RATIO,TYPE_SUBSET,
      THETA,THETA_RANDOM,ANGMOM,OMEGA,
      DIAMETER,DENSITY,VOLUME,IMAGE,BOND,ANGLE,DIHEDRAL,IMPROPER,
      SPH_E,SPH_CV,SPH_RHO,EDPD_TEMP,EDPD_CV,CC,SMD_MASS_DENSITY,
-     SMD_CONTACT_RADIUS,DPDTHETA,INAME,DNAME,VX,VY,VZ};
+     SMD_CONTACT_RADIUS,DPDTHETA,INAME,DNAME,VX,VY,VZ,
+     SH_TYPE, SH_TYPE_RANDOM, SH_QUAT, SH_QUAT_RANDOM };
 
 #define BIG INT_MAX
 
@@ -595,6 +598,48 @@ void Set::command(int narg, char **arg)
       set(DNAME);
       iarg += 2;
 
+    } else if (strcmp(arg[iarg],"sh/type") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal set command");
+      if (strstr(arg[iarg+1],"v_") == arg[iarg+1]) varparse(arg[iarg+1],1);
+      else ivalue = force->inumeric(FLERR,arg[iarg+1]);
+      set(SH_TYPE);
+      iarg += 2;
+
+    } else if (strcmp(arg[iarg],"sh/type/random") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal set command");
+      ivalue = force->inumeric(FLERR,arg[iarg+1]);
+      if (!atom->spherharm_flag)
+        error->all(FLERR,"Cannot set this attribute for this atom style");
+      if (ivalue <= 0)
+        error->all(FLERR,"Invalid random number seed in set command");
+      setrandom(SH_TYPE_RANDOM);
+      iarg += 2;
+
+    } else if (strcmp(arg[iarg],"sh/quat") == 0) {
+      if (iarg + 5 > narg) error->all(FLERR, "Illegal set command");
+      if (strstr(arg[iarg + 1], "v_") == arg[iarg + 1]) varparse(arg[iarg + 1], 1);
+      else xvalue = force->numeric(FLERR, arg[iarg + 1]);
+      if (strstr(arg[iarg + 2], "v_") == arg[iarg + 2]) varparse(arg[iarg + 2], 2);
+      else yvalue = force->numeric(FLERR, arg[iarg + 2]);
+      if (strstr(arg[iarg + 3], "v_") == arg[iarg + 3]) varparse(arg[iarg + 3], 3);
+      else zvalue = force->numeric(FLERR, arg[iarg + 3]);
+      if (strstr(arg[iarg + 4], "v_") == arg[iarg + 4]) varparse(arg[iarg + 4], 4);
+      else wvalue = force->numeric(FLERR, arg[iarg + 4]);
+      if (!atom->spherharm_flag)
+        error->all(FLERR, "Cannot set this attribute for this atom style");
+      set(SH_QUAT);
+      iarg += 5;
+
+    } else if (strcmp(arg[iarg],"sh/quat/random") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal set command");
+      ivalue = force->inumeric(FLERR,arg[iarg+1]);
+      if (!atom->spherharm_flag)
+        error->all(FLERR,"Cannot set this attribute for this atom style");
+      if (ivalue <= 0)
+        error->all(FLERR,"Invalid random number seed in set command");
+      setrandom(SH_QUAT_RANDOM);
+      iarg += 2;
+
     } else error->all(FLERR,"Illegal set command");
 
     // statistics
@@ -980,6 +1025,33 @@ void Set::set(int keyword)
       atom->dvector[index_custom][i] = dvalue;
     }
 
+    // Spherical Harmonics
+    else if (keyword == SH_TYPE) {
+
+      auto *avec_shperatom = (AtomVecShperatom *) atom->style_match("shperatom");
+      int nshtypes = avec_shperatom->num_sh_types();
+      if (ivalue <= 0 || ivalue > nshtypes)
+        error->one(FLERR,"Invalid value in set command");
+      atom->shtype[i] = ivalue-1;
+      avec_shperatom->set_properties(i);
+    }
+
+    else if (keyword == SH_QUAT) {
+      double *quat = NULL;
+      quat = atom -> quat[i];
+      if (domain->dimension == 2 && (xvalue != 0.0 || yvalue != 0.0))
+        error->one(FLERR,"Cannot set quaternion with xy components "
+                         "for 2d system");
+
+      double theta2 = MY_PI2 * wvalue/180.0;
+      double sintheta2 = sin(theta2);
+      quat[0] = cos(theta2);
+      quat[1] = xvalue * sintheta2;
+      quat[2] = yvalue * sintheta2;
+      quat[3] = zvalue * sintheta2;
+      MathExtra::qnormalize(quat);
+    }
+
     count++;
   }
 
@@ -1242,6 +1314,50 @@ void Set::setrandom(int keyword)
         count++;
       }
     }
+
+  // set atom sperical harmonic types to random values
+
+  } else if (keyword == SH_TYPE_RANDOM) {
+    auto *avec_shperatom = (AtomVecShperatom *) atom->style_match("shperatom");
+    int nshtypes = avec_shperatom->num_sh_types();
+    int nlocal = atom->nlocal;
+    srand(seed);
+    if (domain->dimension == 3) {
+      double s,t1,t2,theta1,theta2;
+      for (i = 0; i < nlocal; i++)
+        if (select[i]) {
+          atom->shtype[i] = rand() % nshtypes;
+          avec_shperatom->set_properties(i);
+          count++;
+        }
+
+    } else error->one(FLERR,"Shperatom must be three-dimensional");
+
+  // set quaternions to random orientations in 3d
+
+  } else if (keyword == SH_QUAT_RANDOM) {
+    int nlocal = atom->nlocal;
+    double *quat;
+
+    if (domain->dimension == 3) {
+      double s,t1,t2,theta1,theta2;
+      for (i = 0; i < nlocal; i++)
+        if (select[i]) {
+          quat = atom -> quat[i];
+          ranpark->reset(seed,x[i]);
+          s = ranpark->uniform();
+          t1 = sqrt(1.0-s);
+          t2 = sqrt(s);
+          theta1 = 2.0*MY_PI*ranpark->uniform();
+          theta2 = 2.0*MY_PI*ranpark->uniform();
+          quat[0] = cos(theta2)*t2;
+          quat[1] = sin(theta1)*t1;
+          quat[2] = cos(theta1)*t1;
+          quat[3] = sin(theta2)*t2;
+          count++;
+        }
+
+    } else error->one(FLERR,"Shperatom must be three-dimensional");
   }
 
   delete ranpark;

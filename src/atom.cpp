@@ -76,6 +76,17 @@ Atom::Atom(LAMMPS *lmp) : Pointers(lmp)
   // --------------------------------------------------------------------
   // 1st customization section: customize by adding new per-atom variables
 
+  // spherical harmonics
+
+  shtype = NULL;
+  inertia = NULL;
+  quat = NULL;
+  quatinit = NULL;
+  shcoeffs = NULL;
+//  nshtypes = 0;
+//  shcoeff = NULL;
+//  sh_setflag = NULL;
+
   tag = NULL;
   type = mask = NULL;
   image = NULL;
@@ -299,6 +310,13 @@ Atom::~Atom()
   map_delete();
 
   delete unique_tags;
+
+//  JY ADDED
+//  memory->destroy(shcoeff);
+  memory->destroy(shtype);
+  memory->destroy(inertia);
+  memory->destroy(quat);
+//  delete [] sh_setflag;
 }
 
 /* ----------------------------------------------------------------------
@@ -340,6 +358,12 @@ void Atom::peratom_create()
   if (sizeof(tagint) == 8) tagintsize = BIGINT;
   int imageintsize = INT;
   if (sizeof(imageint) == 8) imageintsize = BIGINT;
+
+  add_peratom("shtype",&shtype,INT,0);
+  add_peratom("inertia",&inertia,DOUBLE,3);
+  add_peratom("quat",&quat,DOUBLE,4);
+  add_peratom("quatinit",&quatinit,DOUBLE,4);
+  add_peratom("shcoeffs",&shcoeffs,DOUBLE,882);
 
   add_peratom("id",&tag,tagintsize,0);
   add_peratom("type",&type,INT,0);
@@ -576,6 +600,8 @@ void Atom::set_atomflag_defaults()
   // --------------------------------------------------------------------
   // 3rd customization section: customize by adding new flag
   // identical list as 2nd customization in atom.h
+
+  spherharm_flag = 0;
 
   sphere_flag = ellipsoid_flag = line_flag = tri_flag = body_flag = 0;
   peri_flag = electron_flag = 0;
@@ -2373,6 +2399,11 @@ void *Atom::extract(char *name)
   // --------------------------------------------------------------------
   // 4th customization section: customize by adding new variable name
 
+  if (strcmp(name,"shtype") == 0) return (void *) shtype;
+  if (strcmp(name,"inertia") == 0) return (void *) inertia;
+  if (strcmp(name,"quat") == 0) return (void *) quat;
+  if (strcmp(name,"quatinit") == 0) return (void *) quatinit;
+
   if (strcmp(name,"mass") == 0) return (void *) mass;
 
   if (strcmp(name,"id") == 0) return (void *) tag;
@@ -2463,3 +2494,12 @@ bigint Atom::memory_usage()
   return bytes;
 }
 
+
+//void Atom::allocate_type_sh_arrays(int maxshexpan)
+//{
+//  if (avec->spherharm_type) {
+//    memory->create(shcoeff, nshtypes, 2 * (maxshexpan + 1) * (maxshexpan + 1), "atom:shcoeff");
+//    sh_setflag = new int[nshtypes];
+//    for (int itype = 0; itype < nshtypes; itype++) sh_setflag[itype] = 0;
+//  }
+//}
