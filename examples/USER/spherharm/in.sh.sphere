@@ -1,0 +1,50 @@
+# Test
+
+variable	name string spherical_harmonics_testing
+atom_style	shperatom 0 100 sphere.dat
+units		lj
+
+
+###############################################
+# Geometry-related parameters
+###############################################
+
+variable	boxx equal 10
+variable	boxy equal 10
+variable	boxz equal 10
+
+
+###############################################
+# Particle-related parameters
+###############################################
+variable	def_rad equal 0.5
+variable 	skin equal 0.4*${def_rad}
+
+
+#############
+processors * * 1
+region		boxreg block 0 ${boxx} 0 ${boxy} 0 ${boxz}
+create_box	1 boxreg
+change_box	all boundary p p p
+create_atoms 	1 single 1.0 1.0 1.0
+create_atoms 	1 single 9.0 9.0 9.0
+
+set		group all sh/quat 1.0 0 0 0.0
+set		group all sh/type 1
+
+set 		atom 1 vx 1.0 vy 1.0 vz 1.0
+set 		atom 2 vx -1.0 vy -1.0 vz -1.0
+set 		group all mass 1.0
+
+fix		1 all nve/sh
+
+neighbor	${skin} bin
+neigh_modify	delay 0 every 1 check yes
+comm_modify	vel yes
+
+pair_style	granular 
+pair_coeff	1 * hertz/material 1e5 0.2 0.3 tangential mindlin NULL 1.0 0.5 damping tsuji
+
+timestep	0.005
+
+run		1000

@@ -1,0 +1,42 @@
+# Test
+
+variable	name string spherical_harmonics_testing
+atom_style	ellipsoid
+units		lj
+
+
+###############################################
+# Geometry-related parameters
+###############################################
+
+variable	boxx equal 10
+variable	boxy equal 10
+variable	boxz equal 10
+
+
+#############
+processors * * 1
+region		boxreg block 0 ${boxx} 0 ${boxy} 0 ${boxz}
+create_box	1 boxreg
+change_box	all boundary f f f
+create_atoms 	1 single 1.0 1.0 1.0
+create_atoms 	1 single 9.0 9.0 9.0
+
+set 		atom 1 vx 1.0 vy 1.0 vz 1.0
+set 		atom 2 vx -1.0 vy -1.0 vz -1.0
+set 		group all mass 1.0
+set 		group all shape 1 1 5
+set		group all quat/random 4
+
+fix		1 all nve/asphere
+
+neigh_modify	delay 0 every 1 check yes
+comm_modify	vel yes
+
+pair_style 	resquared 10.0
+pair_coeff 	* * 1.0 1.0 1.7 3.4 3.4 1.0 1.0 1.0
+
+
+timestep	0.005
+
+run		1000
