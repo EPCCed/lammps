@@ -14,6 +14,7 @@
 #include "atom_vec_shperatom.h"
 #include <cstring>
 #include <iostream>
+#include <iomanip>
 #include "atom.h"
 #include "modify.h"
 #include "fix.h"
@@ -69,7 +70,7 @@ AtomVecShperatom::AtomVecShperatom(LAMMPS *lmp) : AtomVec(lmp)
   fields_comm_vel = (char *) "omega angmom";
   fields_reverse = (char *) "torque";
   fields_border = (char *) "radius rmass shtype";
-  fields_border_vel = (char *) "radius rmass omega shtype angmom shcoeffs";
+  fields_border_vel = (char *) "radius rmass omega angmom shtype";
   fields_exchange = (char *) "radius rmass omega shtype angmom shcoeffs";
   fields_restart = (char *) "radius rmass omega shtype angmom shcoeffs";
   fields_create = (char *) "radius rmass omega shtype angmom shcoeffs";
@@ -90,6 +91,7 @@ AtomVecShperatom::~AtomVecShperatom()
   memory->sfree(angles);
   memory->sfree(weights);
   memory->sfree(quad_rads);
+  memory->sfree(expfacts);
 }
 
 /* ----------------------------------------------------------------------
@@ -117,13 +119,22 @@ void AtomVecShperatom::process_args(int narg, char **arg) {
 
   nshtypes = narg - 2;
   num_quad2 = num_quadrature*num_quadrature;
+  numcoeffs = 2*((maxshexpan*maxshexpan)-1);
+  maxrad = 0;
 
   memory->create(angles, 2, num_quad2, "AtomVecShperatom:angles");
   memory->create(weights, num_quadrature, "AtomVecShperatom:weights");
   memory->create(quad_rads, nshtypes, num_quad2, "AtomVecShperatom:quad_rads");
   memory->create(pinertia_bytype, nshtypes, 3, "AtomVecShperatom:pinertia");
   memory->create(orient_bytype, nshtypes, 9, "AtomVecShperatom:orient");
-  memory->create(shcoeffs_bytype, nshtypes, 2 * (maxshexpan + 1) * (maxshexpan + 1), "AtomVecShperatom:shcoeff");
+  memory->create(shcoeffs_bytype, nshtypes, numcoeffs, "AtomVecShperatom:shcoeff");
+  memory->create(expfacts, nshtypes, maxshexpan+1, "AtomVecShperatom:expfacts");
+
+  for (int type=0; type<nshtypes; type++) {
+    for (int i=0; i<numcoeffs; i++) {
+      shcoeffs_bytype[type][i] = 0.0;
+    }
+  }
 
   for (int i = 2; i < narg; i++) {
     read_coeffs(arg[i]);
@@ -133,6 +144,15 @@ void AtomVecShperatom::process_args(int narg, char **arg) {
   if (me==0){
     get_quadrature_values();
     getI();
+//    calcexpansionfactors();
+    calcexpansionfactors_gauss();
+  }
+
+//  JUST FOR ELLIPSOID COMPARISON
+  for (int i=0; i<nshtypes; i++){
+    pinertia_bytype[i][0] /=441.0;
+    pinertia_bytype[i][1] /=441.0;
+    pinertia_bytype[i][2] /=441.0;
   }
 
   MPI_Bcast(&(angles[0][0]), 2 * num_quad2, MPI_DOUBLE, 0, world);
@@ -140,21 +160,44 @@ void AtomVecShperatom::process_args(int narg, char **arg) {
   MPI_Bcast(&(quad_rads[0][0]), nshtypes * num_quad2, MPI_DOUBLE, 0, world);
   MPI_Bcast(&(pinertia_bytype[0][0]), nshtypes * 3, MPI_DOUBLE, 0, world);
   MPI_Bcast(&(orient_bytype[0][0]), nshtypes * 9, MPI_DOUBLE, 0, world);
-  MPI_Bcast(&(shcoeffs_bytype[0][0]), nshtypes * 2 * (maxshexpan + 1) * (maxshexpan + 1), MPI_DOUBLE, 0, world);
-
-//  std::cout << me << std::endl;
-//  if (me != 0) {
-//    for (int i = 0; i < nshtypes; i++) {
-//      int count = 1;
-//      for (int j = 0; j < 2 * (maxshexpan + 1) * (maxshexpan + 1); j = j + 2) {
-//        std::cout << i << " " << ++count << " " << shcoeff[i][j] << " " << shcoeff[i][j + 1] << std::endl;
-//      }
-//    }
-//  }
+  MPI_Bcast(&(shcoeffs_bytype[0][0]), nshtypes * numcoeffs, MPI_DOUBLE, 0, world);
+  MPI_Bcast(&(expfacts[0][0]), nshtypes * maxshexpan+1, MPI_DOUBLE, 0, world);
+  MPI_Bcast(&(maxrad), nshtypes, MPI_DOUBLE, 0, world);
 
   // delay setting up of fields until now
   setup_fields();
 
+  //  JUST FOR ELLIPSOID COMPARISON
+  memory->create(ellipsoidshape, nshtypes, 3, "AtomVecShperatom:ellipsoidshape");
+
+}
+
+//  JUST FOR ELLIPSOID COMPARISON
+void AtomVecShperatom::get_shape(int i, double &shapex, double &shapey, double &shapez)
+{
+
+  ellipsoidshape[0][0] = 0.5;
+  ellipsoidshape[0][1] = 0.5;
+  ellipsoidshape[0][2] = 2.5;
+
+  shapex = ellipsoidshape[shtype[i]][0];
+  shapey = ellipsoidshape[shtype[i]][1];
+  shapez = ellipsoidshape[shtype[i]][2];
+
+}
+
+void AtomVecShperatom::get_expfactors(int i, double *expfs)
+{
+  int type = shtype[i];
+
+  for (int j=0; j<=maxshexpan; j++) {
+    expfs[j] = expfacts[type][j];
+  }
+}
+
+void AtomVecShperatom::get_cut_global(double &cut_global)
+{
+  cut_global = maxrad;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -199,7 +242,8 @@ void AtomVecShperatom::grow_pointers()
 void AtomVecShperatom::create_atom_post(int ilocal)
 {
   radius[ilocal] = 0.5;
-  rmass[ilocal] = 4.0*MY_PI/3.0 * 0.5*0.5*0.5;
+//  rmass[ilocal] = 4.0*MY_PI/3.0 * 0.5*0.5*0.5;
+  rmass[ilocal] = 1.0;
   shtype[ilocal] = -1;
   quat[ilocal][0] = 1.0;
   quat[ilocal][1] = 0.0;
@@ -277,7 +321,7 @@ void AtomVecShperatom::set_properties(int ilocal)
     error->one(FLERR, "Spherical Harmonic atom sh type cannot exceed number of types");
   }
 
-  for (int i=0; i<2 * (maxshexpan + 1) * (maxshexpan + 1); i++) {
+  for (int i=0; i<numcoeffs; i++) {
     shcoeffs[ilocal][i] = shcoeffs_bytype[type][i];
   }
   for (int i=0; i<3; i++) {
@@ -336,6 +380,7 @@ void AtomVecShperatom::read_coeffs()
 {
 
   int m,n;
+  int mm, nn, entry;
   int max_exp;
   int early_exit=0;
 
@@ -419,9 +464,15 @@ void AtomVecShperatom::read_coeffs()
         early_exit = 1;
       }
       else {
-        shcoeffs_bytype[curfile][curentry] = utils::numeric(FLERR, larg[2], true, lmp);
-        shcoeffs_bytype[curfile][++curentry] = utils::numeric(FLERR, larg[3], true, lmp);
-        curentry++;
+        if (utils::inumeric(FLERR, larg[1], true, lmp) >= 0) {
+
+          nn = utils::numeric(FLERR, larg[0], true, lmp);
+          mm = utils::numeric(FLERR, larg[1], true, lmp);
+          entry = nn*(nn+1)+2*(nn-mm);
+          shcoeffs_bytype[curfile][entry] = utils::numeric(FLERR, larg[2], true, lmp);
+          shcoeffs_bytype[curfile][++entry] = utils::numeric(FLERR, larg[3], true, lmp);
+          curentry++;
+        }
       }
     }
     else{
@@ -664,9 +715,9 @@ double AtomVecShperatom::besseljzero(int k)
     double r = 1.0/z;
     double r2 = r*r;
     z = z + r*(0.125+r2*(-0.807291666666666666666666666667e-1+r2*(0.246028645833333333333333333333+r2*
-                                                                                                   (-1.82443876720610119047619047619+r2*(25.3364147973439050099206349206+r2*(-567.644412135183381139802038240+
-                                                                                                                                                                             r2*(18690.4765282320653831636345064+r2*(-8.49353580299148769921876983660e5+
-                                                                                                                                                                                                                     5.09225462402226769498681286758e7*r2))))))));
+            (-1.82443876720610119047619047619+r2*(25.3364147973439050099206349206+r2*(-567.644412135183381139802038240+
+            r2*(18690.4765282320653831636345064+r2*(-8.49353580299148769921876983660e5+
+            5.09225462402226769498681286758e7*r2))))))));
     return z;
   }
   else
@@ -684,10 +735,10 @@ double AtomVecShperatom::besselj1squared(int k)
     double x = 1.0/(k-0.25);
     double x2 = x*x;
     return x * (0.202642367284675542887758926420 + x2*x2*(-0.303380429711290253026202643516e-3 +
-                                                          x2*(0.198924364245969295201137972743e-3 + x2*(-0.228969902772111653038747229723e-3+x2*
-                                                                                                                                             (0.433710719130746277915572905025e-3+x2*(-0.123632349727175414724737657367e-2+x2*
-                                                                                                                                                                                                                           (0.496101423268883102872271417616e-2+x2*(-0.266837393702323757700998557826e-1+
-                                                                                                                                                                                                                                                                    .185395398206345628711318848386*x2))))))));
+      x2*(0.198924364245969295201137972743e-3 + x2*(-0.228969902772111653038747229723e-3+x2*
+      (0.433710719130746277915572905025e-3+x2*(-0.123632349727175414724737657367e-2+x2*
+      (0.496101423268883102872271417616e-2+x2*(-0.266837393702323757700998557826e-1+
+      .185395398206345628711318848386*x2))))))));
   }
   else
   {
@@ -877,6 +928,14 @@ void AtomVecShperatom::getI() {
     tensor[0][2] = tensor[2][0] = itensor[4];
     tensor[0][1] = tensor[1][0] = itensor[3];
 
+//    cout << endl;
+//    cout << "Inertia tensor:" << endl;
+//    cout << " | " << tensor[0][0] << " " << tensor[1][0] << " " << tensor[2][0] << " |" << endl;
+//    cout << " | " << tensor[0][1] << " " << tensor[1][1] << " " << tensor[2][1] << " |" << endl;
+//    cout << " | " << tensor[0][2] << " " << tensor[1][2] << " " << tensor[2][2] << " |" << endl;
+//    cout << endl;
+
+
     ierror = MathExtra::jacobi(tensor, inertia, evectors);
     if (ierror)
       error->all(FLERR,
@@ -1031,4 +1090,207 @@ void AtomVecShperatom::get_quadrature_values() {
     }
   }
 
+  std::cout<<std::endl;
+  std::cout<< "quad rad " <<quad_rads[0][0]<<std::endl;
+  std::cout<<std::endl;
+
+}
+
+
+void AtomVecShperatom::calcexpansionfactors()
+{
+
+//  double safety_factor = 1.01;
+  double safety_factor = 1.00;
+  double theta, phi, factor;
+  double rmax;
+  double x_val;
+  double mphi;
+  double P_n_m;
+  int nloc, loc;
+  std::vector<double> r_n, r_npo;
+  r_n.resize(num_quad2, 0.0);
+  r_npo.resize(num_quad2, 0.0);
+
+  std::vector<double> ratios, expfactors;
+  ratios.resize(num_quad2, 0.0);
+  expfactors.resize(maxshexpan + 1, 0.0);
+  expfactors[maxshexpan] = 1.0;
+  rmax = 0;
+
+  int k;
+  for (int n = 0; n <= maxshexpan; n++) { // For each harmonic n
+    nloc = n*(n+1);
+    k = 0;
+    for (int i = 0; i < num_quadrature; i++) { // For each theta value (k corresponds to angle pair)
+      theta = ((double)(i) * MY_PI) / ((double)(num_quadrature));
+      if (i == 0) theta = 0.001 * MY_PI;
+      if (i == num_quadrature - 1) theta = 0.999 * MY_PI;
+      x_val = cos(theta);
+      for (int j = 0; j < num_quadrature; j++) { // For each phi value (k corresponds to angle pair)
+        phi = (2.0 * MY_PI * (double)(j)) / ((double)((num_quadrature)));
+        loc = nloc;
+        P_n_m = plegendre(n, 0, x_val);
+        r_n[k] += shcoeffs_bytype[0][(n+1)*(n+2)-2]*P_n_m;
+        for (int m = n; m > 0; m--) { // For each m in current harmonic n
+          mphi = (double) m * phi;
+          P_n_m = plegendre(n, m, x_val);
+          r_n[k] += (shcoeffs_bytype[0][loc]*cos(mphi)-shcoeffs_bytype[0][loc+1]*sin(mphi)) * 2.0 * P_n_m;
+          loc+=2;
+        }
+
+        if (i==0 && j==0){
+          std::cout << n<<" "<< r_n[k] << " "<< shcoeffs_bytype[0][(n+1)*(n+2)-2] << std::endl;
+        }
+
+        if (r_n[k] > rmax) { //
+          rmax = r_n[k];
+        }
+        if (n <= maxshexpan - 1) {
+          r_npo[k] = r_n[k];
+          n++;
+          loc = n*(n+1);
+          P_n_m = plegendre(n, 0, x_val);
+          r_npo[k] += shcoeffs_bytype[0][(n+1)*(n+2)-2]*P_n_m;
+          for (int m = n; m > 0; m--) {
+            mphi = (double) m * phi;
+            P_n_m = plegendre(n, m, x_val);
+            r_npo[k] += (shcoeffs_bytype[0][loc]*cos(mphi)-shcoeffs_bytype[0][loc+1]*sin(mphi)) * 2.0 * P_n_m;
+            loc+=2;
+          }
+          n--;
+          ratios[k] = r_npo[k] / r_n[k];
+        }
+        k++;
+      }
+    }
+    if (n <= maxshexpan - 1) {
+      double max_val = 0;
+      for (int ii = 0; ii<k; ii++){
+        if (ratios[ii]>max_val){
+          max_val = ratios[ii];
+        }
+      }
+      expfactors[n] = max_val;
+      if (expfactors[n] < 1.0) {
+        expfactors[n] = 1.0;
+      }
+    }
+  }
+
+  factor = expfactors[maxshexpan];
+  for (int n = maxshexpan - 1; n >= 0; n--) {
+    factor *= expfactors[n] * safety_factor;
+    expfactors[n] = factor;
+    expfacts[0][n] = factor;  // NEED TO FIX THE INDEX HERE
+  }
+  expfacts[0][maxshexpan] = 1.0; // NEED TO FIX THE INDEX HERE
+  rmax *= safety_factor;
+
+
+  std::cout << "R_max for all harmonics " << rmax <<std::endl;
+  std::cout << "0th harmonic expansion factor " << expfacts[0][0] <<std::endl;
+  std::cout << "0th harmonic sphere radius " << shcoeffs_bytype[0][0]*std::sqrt(1.0/(4.0*MY_PI)) << std::endl;
+  std::cout << "expanded 0th harmonic sphere radius " << expfacts[0][0]*double (shcoeffs_bytype[0][0])*std::sqrt(1.0/(4.0*MY_PI)) << std::endl;
+
+
+  for (int n = 0; n <= maxshexpan; n++) {
+    std::cout << expfacts[0][n] << std::endl;
+  }
+
+}
+
+
+void AtomVecShperatom::calcexpansionfactors_gauss()
+{
+
+  double safety_factor = 1.01;
+  double theta, phi, factor;
+  double x_val, mphi;
+  double P_n_m;
+  int nloc, loc, k;
+  std::vector<double> r_n, r_npo;
+  std::vector<double> ratios, expfactors;
+  r_n.resize(num_quad2, 0.0);
+  r_npo.resize(num_quad2, 0.0);
+  ratios.resize(num_quad2, 0.0);
+  expfactors.resize(maxshexpan + 1, 0.0);
+  expfactors[maxshexpan] = 1.0;
+
+
+  for (int sht = 0; sht < nshtypes; sht++) {
+    for (int n = 0; n <= maxshexpan; n++) { // For each harmonic n
+      nloc = n * (n + 1);
+      k = 0;
+      for (int i = 0; i < num_quadrature; i++) { // For each theta value (k corresponds to angle pair)
+        for (int j = 0; j < num_quadrature; j++) { // For each phi value (k corresponds to angle pair)
+          theta = angles[0][k];
+          phi = angles[1][k];
+          x_val = cos(theta);
+          loc = nloc;
+          P_n_m = plegendre(n, 0, x_val);
+          r_n[k] += shcoeffs_bytype[sht][(n + 1) * (n + 2) - 2] * P_n_m;
+          for (int m = n; m > 0; m--) { // For each m in current harmonic n
+            mphi = (double) m * phi;
+            P_n_m = plegendre(n, m, x_val);
+            r_n[k] += (shcoeffs_bytype[sht][loc] * cos(mphi) - shcoeffs_bytype[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+            loc += 2;
+          }
+          if (n <= maxshexpan - 1) { // Get the ratios of radii between subsequent harmonics (except the final two)
+            r_npo[k] = r_n[k];
+            n++;
+            loc = n * (n + 1);
+            P_n_m = plegendre(n, 0, x_val);
+            r_npo[k] += shcoeffs_bytype[sht][(n + 1) * (n + 2) - 2] * P_n_m;
+            for (int m = n; m > 0; m--) {
+              mphi = (double) m * phi;
+              P_n_m = plegendre(n, m, x_val);
+              r_npo[k] += (shcoeffs_bytype[sht][loc] * cos(mphi) - shcoeffs_bytype[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+              loc += 2;
+            }
+            n--;
+            ratios[k] = r_npo[k] / r_n[k];
+          }
+          else { // Get the maximum radius at the final harmonic
+            if (r_n[k] > maxrad) {
+              maxrad = r_n[k];
+            }
+          }
+          k++;
+        }
+      }
+      if (n <= maxshexpan - 1) {
+        double max_val = 0;
+        for (int ii = 0; ii < k; ii++) {
+          if (ratios[ii] > max_val) {
+            max_val = ratios[ii];
+          }
+        }
+        expfactors[n] = max_val;
+        if (expfactors[n] < 1.0) {
+          expfactors[n] = 1.0;
+        }
+      }
+    }
+
+    factor = expfactors[maxshexpan];
+    for (int n = maxshexpan - 1; n >= 0; n--) {
+      factor *= expfactors[n] * safety_factor;
+      expfactors[n] = factor;
+      expfacts[sht][n] = factor;
+    }
+    expfacts[sht][maxshexpan] = 1.0;
+
+    std::cout << "R_max for final harmonic " << maxrad << std::endl;
+    std::cout << "0th harmonic expansion factor " << expfacts[0][0] << std::endl;
+    std::cout << "0th harmonic sphere radius " << shcoeffs_bytype[sht][0] * std::sqrt(1.0 / (4.0 * MY_PI)) << std::endl;
+    std::cout << "expanded 0th harmonic sphere radius "
+              << expfacts[0][0] * double(shcoeffs_bytype[sht][0]) * std::sqrt(1.0 / (4.0 * MY_PI)) << std::endl;
+
+
+    for (int n = 0; n <= maxshexpan; n++) {
+      std::cout << expfacts[0][n] << std::endl;
+    }
+  }
+  maxrad *= safety_factor;
 }

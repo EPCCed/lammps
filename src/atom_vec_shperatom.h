@@ -40,6 +40,11 @@ class AtomVecShperatom : public AtomVec {
   ~AtomVecShperatom();     // Destructor
   void set_properties(int);
   int num_sh_types();
+  void get_shape(int, double &, double &, double &);
+  void get_expfactors(int, double *);
+  void get_cut_global(double &);
+
+  // FOR ELLIPSOID TEST ONLY
 
  private:
 
@@ -71,12 +76,18 @@ class AtomVecShperatom : public AtomVec {
   int nshtypes;
   int num_quadrature;
   int num_quad2;
+  int numcoeffs;
+  double **expfacts;
+  double maxrad;
 
 
   int radvary;
   double radius_one,rmass_one;
   int me;                       // proc ID
 
+
+  // FOR ELLIPSOID TEST ONLY
+  double **ellipsoidshape;
 
   //----- Trying to integrate fastgl -------//
   // A struct for containing a Node-Weight pair
@@ -102,6 +113,8 @@ class AtomVecShperatom : public AtomVec {
   QuadPair GLPairTabulated(size_t, size_t);
   void get_quadrature_values();
   void getI();
+  void calcexpansionfactors();
+  void calcexpansionfactors_gauss();
 
   void read_coeffs(char *);// process an input file
   void read_coeffs();      // process all input

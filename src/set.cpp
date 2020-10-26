@@ -1315,6 +1315,7 @@ void Set::setrandom(int keyword)
       }
     }
 
+  // Spherical Harmonics
   // set atom sperical harmonic types to random values
 
   } else if (keyword == SH_TYPE_RANDOM) {
