@@ -247,6 +247,13 @@ namespace LAMMPS_NS {
      * command lines and similar text and not for time critical processing.
      * Use a tokenizer class for that.
      *
+\verbatim embed:rst
+
+*See also*
+   :cpp:class:`Tokenizer`, :cpp:class:`ValueTokenizer`
+
+\endverbatim
+     *
      * \param text string that should be split
      * \return STL vector with the words */
 
@@ -283,6 +290,13 @@ namespace LAMMPS_NS {
      * \return file name */
 
     std::string path_basename(const std::string &path);
+
+    /** Return the directory part of a path. Return "." if empty
+     *
+     * \param path file path
+     * \return directory name */
+
+    std::string path_dirname(const std::string &path);
 
     /** Join two pathname segments
      *

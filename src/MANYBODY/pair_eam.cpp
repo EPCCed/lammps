@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -506,7 +506,7 @@ void PairEAM::read_file(char *filename)
         for (int j = 1; j <= file->nr; ++j)
           file->zr[j] *= sqrt_conv;
       }
-    } catch (TokenizerException & e) {
+    } catch (TokenizerException &e) {
       error->one(FLERR, e.what());
     }
   }

@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -1091,7 +1091,7 @@ void DihedralTable::read_table(Table *tb, char *file, char *keyword)
         tb->efile[i] = values.next_double();
         tb->ffile[i] = values.next_double();
       }
-    } catch (TokenizerException & e) {
+    } catch (TokenizerException &e) {
       error->one(FLERR, e.what());
     }
   } //for (int i = 0; (i < tb->ninput) && fp; i++) {
@@ -1316,7 +1316,7 @@ void DihedralTable::param_extract(Table *tb, char *line)
       else error->one(FLERR,fmt::format("Invalid keyword in dihedral angle "
                                         "table parameters ({})", word));
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, e.what());
   }
 

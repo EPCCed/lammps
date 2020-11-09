@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -30,6 +30,8 @@
 #include "neighbor.h"
 #include "update.h"
 #include "variable.h"
+
+#include "library.h"
 
 #include <algorithm>
 #include <cstring>
@@ -1104,6 +1106,7 @@ void Atom::data_atoms(int n, char *buf, tagint id_offset, tagint mol_offset,
   // remap atom into simulation box
   // if atom is in my sub-domain, unpack its values
 
+  int flagx = 0, flagy = 0, flagz = 0;
   for (int i = 0; i < n; i++) {
     next = strchr(buf,'\n');
 
@@ -1116,15 +1119,16 @@ void Atom::data_atoms(int n, char *buf, tagint id_offset, tagint mol_offset,
         error->all(FLERR,"Incorrect atom format in data file");
     }
 
-    int imx = 0;
-    int imy = 0;
-    int imz = 0;
+    int imx = 0, imy = 0, imz = 0;
     if (imageflag) {
       imx = utils::inumeric(FLERR,values[iptr],false,lmp);
       imy = utils::inumeric(FLERR,values[iptr+1],false,lmp);
       imz = utils::inumeric(FLERR,values[iptr+2],false,lmp);
       if ((domain->dimension == 2) && (imz != 0))
         error->all(FLERR,"Z-direction image flag must be 0 for 2d-systems");
+      if ((!domain->xperiodic) && (imx != 0)) flagx = 1;
+      if ((!domain->yperiodic) && (imy != 0)) flagy = 1;
+      if ((!domain->zperiodic) && (imz != 0)) flagz = 1;
     }
     imagedata = ((imageint) (imx + IMGMAX) & IMGMASK) |
         (((imageint) (imy + IMGMAX) & IMGMASK) << IMGBITS) |
@@ -1159,6 +1163,19 @@ void Atom::data_atoms(int n, char *buf, tagint id_offset, tagint mol_offset,
     }
 
     buf = next + 1;
+  }
+
+  // warn if reading data with non-zero image flags for non-periodic boundaries.
+  // we may want to turn this into an error at some point, since this essentially
+  // creates invalid position information that works by accident most of the time.
+
+  if (comm->me == 0) {
+    if (flagx)
+      error->warning(FLERR,"Non-zero imageflag(s) in x direction for non-periodic boundary");
+    if (flagy)
+      error->warning(FLERR,"Non-zero imageflag(s) in y direction for non-periodic boundary");
+    if (flagz)
+      error->warning(FLERR,"Non-zero imageflag(s) in z direction for non-periodic boundary");
   }
 
   delete [] values;
@@ -1893,7 +1910,7 @@ void Atom::add_molecule_atom(Molecule *onemol, int iatom,
     onemol->avec_body->set_quat(ilocal,onemol->quat_external);
   }
 
-  if (molecular != 1) return;
+  if (molecular != Atom::MOLECULAR) return;
 
   // add bond topology info
   // for molecular atom styles, but not atom style template
@@ -2502,7 +2519,12 @@ length of the data area, and a short description.
      - 1
      - 1 if the particle is a body particle, 0 if not
 
+*See also*
+   :cpp:func:`lammps_extract_atom`
+
 \endverbatim
+ *
+ * \sa extract_datatype
  *
  * \param  name  string with the keyword of the desired property.
                  Typically the name of the pointer variable returned
@@ -2512,6 +2534,8 @@ void *Atom::extract(const char *name)
 {
   // --------------------------------------------------------------------
   // 4th customization section: customize by adding new variable name
+  // please see the following function to set the type of the data
+  // so that programs can detect it dynamically at run time.
 
   /* NOTE: this array is only of length ntypes+1 */
   if (strcmp(name,"mass") == 0) return (void *) mass;
@@ -2578,6 +2602,89 @@ void *Atom::extract(const char *name)
   // --------------------------------------------------------------------
 
   return nullptr;
+}
+
+
+/** Provide data type info about internal data of the Atom class
+ *
+\verbatim embed:rst
+
+.. versionadded:: 18Sep2020
+
+\endverbatim
+ *
+ * \sa extract
+ *
+ * \param  name  string with the keyword of the desired property.
+ * \return       data type constant for desired property or -1 */
+
+int Atom::extract_datatype(const char *name)
+{
+  // --------------------------------------------------------------------
+  // 5th customization section: customize by adding new variable name
+
+  if (strcmp(name,"mass") == 0) return LAMMPS_DOUBLE;
+
+  if (strcmp(name,"id") == 0) return LAMMPS_TAGINT;
+  if (strcmp(name,"type") == 0) return LAMMPS_INT;
+  if (strcmp(name,"mask") == 0) return LAMMPS_INT;
+  if (strcmp(name,"image") == 0) return LAMMPS_TAGINT;
+  if (strcmp(name,"x") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name,"v") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name,"f") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name,"molecule") == 0) return LAMMPS_TAGINT;
+  if (strcmp(name,"q") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"mu") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name,"omega") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name,"angmom") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name,"torque") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name,"radius") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"rmass") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"ellipsoid") == 0) return LAMMPS_INT;
+  if (strcmp(name,"line") == 0) return LAMMPS_INT;
+  if (strcmp(name,"tri") == 0) return LAMMPS_INT;
+  if (strcmp(name,"body") == 0) return LAMMPS_INT;
+
+  if (strcmp(name,"vfrac") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"s0") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"x0") == 0) return LAMMPS_DOUBLE_2D;
+
+  if (strcmp(name,"spin") == 0) return LAMMPS_INT;
+  if (strcmp(name,"eradius") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"ervel") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"erforce") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"ervelforce") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"cs") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name,"csforce") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name,"vforce") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name,"etag") == 0) return LAMMPS_INT;
+
+  if (strcmp(name,"rho") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"drho") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"esph") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"desph") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"cv") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"vest") == 0) return LAMMPS_DOUBLE_2D;
+
+  // USER-MESONT package
+  if (strcmp(name,"length") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"buckling") == 0) return LAMMPS_INT;
+  if (strcmp(name,"bond_nt") == 0) return  LAMMPS_TAGINT_2D;
+
+  if (strcmp(name, "contact_radius") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name, "smd_data_9") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name, "smd_stress") == 0) return LAMMPS_DOUBLE_2D;
+  if (strcmp(name, "eff_plastic_strain") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name, "eff_plastic_strain_rate") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name, "damage") == 0) return LAMMPS_DOUBLE;
+
+  if (strcmp(name,"dpdTheta") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name,"edpd_temp") == 0) return LAMMPS_DOUBLE;
+
+  // end of customization section
+  // --------------------------------------------------------------------
+
+  return -1;
 }
 
 /* ----------------------------------------------------------------------

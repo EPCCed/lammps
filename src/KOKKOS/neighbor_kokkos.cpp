@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -316,7 +316,7 @@ void NeighborKokkos::build_kokkos(int topoflag)
 
   // build topology lists for bonds/angles/etc
 
-  if (atom->molecular && topoflag) build_topology();
+  if ((atom->molecular != Atom::ATOMIC) && topoflag) build_topology();
 }
 
 template<class DeviceType>

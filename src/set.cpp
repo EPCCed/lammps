@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -1351,17 +1351,10 @@ void Set::topology(int keyword)
 
 /* ---------------------------------------------------------------------- */
 
-void Set::varparse(char *name, int m)
+void Set::varparse(const char *name, int m)
 {
   varflag = 1;
-
-  name = &name[2];
-  int n = strlen(name) + 1;
-  char *str = new char[n];
-  strcpy(str,name);
-
-  int ivar = input->variable->find(str);
-  delete [] str;
+  int ivar = input->variable->find(name+2);
 
   if (ivar < 0)
     error->all(FLERR,"Variable name for set command does not exist");

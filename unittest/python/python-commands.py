@@ -43,47 +43,90 @@ create_atoms 1 single &
     ##############################
     def testFile(self):
         """Test reading commands from a file"""
-        natoms = int(self.lmp.get_natoms())
+        natoms = self.lmp.get_natoms()
         self.assertEqual(natoms,0)
         self.lmp.file(self.demo_file)
-        natoms = int(self.lmp.get_natoms())
+        natoms = self.lmp.get_natoms()
         self.assertEqual(natoms,1)
         self.lmp.file(self.cont_file)
-        natoms = int(self.lmp.get_natoms())
+        natoms = self.lmp.get_natoms()
         self.assertEqual(natoms,2)
 
     def testNoFile(self):
         """Test (not) reading commands from no file"""
         self.lmp.file(None)
-        natoms = int(self.lmp.get_natoms())
+        natoms = self.lmp.get_natoms()
         self.assertEqual(natoms,0)
 
     def testCommand(self):
         """Test executing individual commands"""
-        natoms = int(self.lmp.get_natoms())
+        natoms = self.lmp.get_natoms()
         self.assertEqual(natoms,0)
         cmds = self.demo_input.splitlines()
         for cmd in cmds:
             self.lmp.command(cmd)
-        natoms = int(self.lmp.get_natoms())
+        natoms = self.lmp.get_natoms()
         self.assertEqual(natoms,1)
 
     def testCommandsList(self):
         """Test executing commands from list of strings"""
-        natoms = int(self.lmp.get_natoms())
+        natoms = self.lmp.get_natoms()
         self.assertEqual(natoms,0)
         cmds = self.demo_input.splitlines()+self.cont_input.splitlines()
         self.lmp.commands_list(cmds)
-        natoms = int(self.lmp.get_natoms())
+        natoms = self.lmp.get_natoms()
         self.assertEqual(natoms,2)
 
     def testCommandsString(self):
         """Test executing block of commands from string"""
-        natoms = int(self.lmp.get_natoms())
+        natoms = self.lmp.get_natoms()
         self.assertEqual(natoms,0)
         self.lmp.commands_string(self.demo_input+self.cont_input)
-        natoms = int(self.lmp.get_natoms())
+        natoms = self.lmp.get_natoms()
         self.assertEqual(natoms,2)
+
+    def testNeighborList(self):
+        self.lmp.command("units lj")
+        self.lmp.command("atom_style atomic")
+        self.lmp.command("atom_modify map array")
+        self.lmp.command("boundary f f f")
+        self.lmp.command("region box block 0 2 0 2 0 2")
+        self.lmp.command("create_box 1 box")
+
+        x = [
+          1.0, 1.0, 1.0,
+          1.0, 1.0, 1.5
+        ]
+
+        types = [1, 1]
+
+        self.assertEqual(self.lmp.create_atoms(2, id=None, type=types, x=x), 2)
+        nlocal = self.lmp.extract_global("nlocal")
+        self.assertEqual(nlocal, 2)
+
+        self.lmp.command("mass 1 1.0")
+        self.lmp.command("velocity all create 3.0 87287")
+        self.lmp.command("pair_style lj/cut 2.5")
+        self.lmp.command("pair_coeff 1 1 1.0 1.0 2.5")
+        self.lmp.command("neighbor 0.1 bin")
+        self.lmp.command("neigh_modify every 20 delay 0 check no")
+
+        self.lmp.command("run 0")
+
+        self.assertEqual(self.lmp.find_pair_neighlist("lj/cut"), 0)
+        nlist = self.lmp.get_neighlist(0)
+        self.assertEqual(len(nlist), 2)
+        atom_i, numneigh_i, neighbors_i = nlist[0]
+        atom_j, numneigh_j, _ = nlist[1]
+
+        self.assertEqual(atom_i, 0)
+        self.assertEqual(atom_j, 1)
+
+        self.assertEqual(numneigh_i, 1)
+        self.assertEqual(numneigh_j, 0)
+
+        self.assertEqual(1, neighbors_i[0])
+
 
 ##############################
 if __name__ == "__main__":

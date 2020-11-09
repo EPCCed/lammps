@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -1296,7 +1296,7 @@ void Neighbor::init_topology()
 {
   int i,m;
 
-  if (!atom->molecular) return;
+  if (atom->molecular == Atom::ATOMIC) return;
 
   // set flags that determine which topology neighbor classes to use
   // these settings could change from run to run, depending on fixes defined
@@ -1811,7 +1811,7 @@ int Neighbor::choose_pair(NeighRequest *rq)
 
     if (molecular != Atom::ATOMIC) {
       if (mask & NP_ATOMONLY) continue;
-    } else if (!molecular) {
+    } else if (molecular == Atom::ATOMIC) {
       if (mask & NP_MOLONLY) continue;
     }
 
@@ -2109,7 +2109,7 @@ void Neighbor::build(int topoflag)
 
   // build topology lists for bonds/angles/etc
 
-  if (atom->molecular && topoflag) build_topology();
+  if ((atom->molecular != Atom::ATOMIC) && topoflag) build_topology();
 }
 
 /* ----------------------------------------------------------------------

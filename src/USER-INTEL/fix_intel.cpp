@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -160,9 +160,9 @@ FixIntel::FixIntel(LAMMPS *lmp, int narg, char **arg) :  Fix(lmp, narg, arg)
 
   // if using LRT mode, create the integrate style
   if (_lrt) {
-    char *str;
-    str = (char *) "verlet/lrt/intel";
-    update->create_integrate(1,&str,0);
+    char *cmd[1];
+    cmd[0] = (char *) "verlet/lrt/intel";
+    update->create_integrate(1,cmd,0);
   }
 
   // error check
@@ -441,7 +441,7 @@ void FixIntel::pair_init_check(const bool cdmessage)
   }
 
   #ifndef LMP_INTEL_NBOR_COMPAT
-  if (force->pair->manybody_flag && atom->molecular) {
+  if (force->pair->manybody_flag && (atom->molecular != Atom::ATOMIC)) {
     int flag = 0;
     if (atom->nbonds > 0 && force->special_lj[1] == 0.0 &&
         force->special_coul[1] == 0.0) flag = 1;
@@ -456,7 +456,7 @@ void FixIntel::pair_init_check(const bool cdmessage)
   #endif
 
   int need_tag = 0;
-  if (atom->molecular) need_tag = 1;
+  if (atom->molecular != Atom::ATOMIC) need_tag = 1;
 
   // Clear buffers used for pair style
   char kmode[80];
@@ -507,8 +507,8 @@ void FixIntel::pair_init_check(const bool cdmessage)
 
 void FixIntel::bond_init_check()
 {
-  if (_offload_balance != 0.0 && atom->molecular &&
-      force->newton_pair != force->newton_bond)
+  if ((_offload_balance != 0.0) && (atom->molecular != Atom::ATOMIC)
+      && (force->newton_pair != force->newton_bond))
     error->all(FLERR,
       "USER-INTEL package requires same setting for newton bond and non-bond.");
 

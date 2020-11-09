@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -1071,7 +1071,7 @@ EIMPotentialFileReader::EIMPotentialFileReader(LAMMPS *lmp,
   fclose(fp);
 }
 
-std::pair<std::string, std::string> EIMPotentialFileReader::get_pair(const std::string & a, const std::string & b) {
+std::pair<std::string, std::string> EIMPotentialFileReader::get_pair(const std::string &a, const std::string &b) {
   if (a < b) {
     return std::make_pair(a, b);
   }

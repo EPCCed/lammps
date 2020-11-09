@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -402,7 +402,7 @@ void PairTable::read_table(Table *tb, char *file, char *keyword)
       rfile = values.next_double();
       tb->efile[i] = conversion_factor * values.next_double();
       tb->ffile[i] = conversion_factor * values.next_double();
-    } catch (TokenizerException & e) {
+    } catch (TokenizerException &e) {
       ++cerror;
     }
 
@@ -571,7 +571,7 @@ void PairTable::param_extract(Table *tb, char *line)
         error->one(FLERR,fmt::format("Invalid keyword {} in pair table parameters", word).c_str());
       }
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, e.what());
   }
 

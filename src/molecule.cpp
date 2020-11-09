@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -54,9 +54,6 @@ Molecule::Molecule(LAMMPS *lmp, int narg, char **arg, int &index) :
   me = comm->me;
 
   if (index >= narg) error->all(FLERR,"Illegal molecule command");
-
-  if (domain->box_exist == 0)
-    error->all(FLERR,"Molecule command before simulation box is defined");
 
   int n = strlen(arg[0]) + 1;
   id = new char[n];
@@ -492,7 +489,7 @@ void Molecule::read(int flag)
 
       if (nmatch != nwant)
         error->one(FLERR,"Invalid header in molecule file");
-    } catch (TokenizerException & e) {
+    } catch (TokenizerException &e) {
       error->one(FLERR, fmt::format("Invalid header in molecule file\n"
                                     "{}", e.what()));
     }
@@ -535,6 +532,8 @@ void Molecule::read(int flag)
       if (flag) molecules(line);
       else skip_lines(natoms,line);
     } else if (strcmp(keyword,"Fragments") == 0) {
+      if (nfragments == 0)
+        error->all(FLERR,"Molecule file has fragments but no nfragments setting");
       fragmentflag = 1;
       if (flag) fragments(line);
       else skip_lines(nfragments,line);
@@ -634,6 +633,8 @@ void Molecule::read(int flag)
       error->all(FLERR,"Molecule file has no Body Integers section");
     if (bodyflag && ndbody && dbodyflag == 0)
       error->all(FLERR,"Molecule file has no Body Doubles section");
+    if (nfragments > 0 && !fragmentflag)
+      error->all(FLERR,"Molecule file has no Fragments section");
   }
 
   // auto-generate special bonds if needed and not in file
@@ -688,7 +689,7 @@ void Molecule::coords(char *line)
       x[i][1] *= sizescale;
       x[i][2] *= sizescale;
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid Coords section in molecule file\n"
                                   "{}", e.what()));
   }
@@ -718,13 +719,13 @@ void Molecule::types(char *line)
       type[i] = values.next_int();
       type[i] += toffset;
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid Types section in molecule file\n"
                                   "{}", e.what()));
   }
 
   for (int i = 0; i < natoms; i++)
-    if (type[i] <= 0 || type[i] > atom->ntypes)
+    if ((type[i] <= 0) || (domain->box_exist && (type[i] > atom->ntypes)))
       error->all(FLERR,"Invalid atom type in molecule file");
 
   for (int i = 0; i < natoms; i++)
@@ -748,7 +749,7 @@ void Molecule::molecules(char *line)
       molecule[i] = values.next_int();
       // molecule[i] += moffset; // placeholder for possible molecule offset
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid Molecules section in molecule file\n"
                                   "{}", e.what()));
   }
@@ -785,7 +786,7 @@ void Molecule::fragments(char *line)
         fragmentmask[i][atomID-1] = 1;
       }
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid atom ID in Fragments section of molecule file\n"
                                   "{}", e.what()));
   }
@@ -802,12 +803,12 @@ void Molecule::charges(char *line)
       readline(line);
 
       ValueTokenizer values(line);
-      if (values.count() != 2) error->one(FLERR,"Invalid Charges section in molecule file");
+      if ((int)values.count() != 2) error->one(FLERR,"Invalid Charges section in molecule file");
 
       values.next_int();
       q[i] = values.next_double();
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid Charges section in molecule file\n"
                                   "{}", e.what()));
   }
@@ -833,7 +834,7 @@ void Molecule::diameters(char *line)
       radius[i] *= 0.5;
       maxradius = MAX(maxradius,radius[i]);
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid Diameters section in molecule file\n"
                                   "{}", e.what()));
   }
@@ -860,7 +861,7 @@ void Molecule::masses(char *line)
       rmass[i] = values.next_double();
       rmass[i] *= sizescale*sizescale*sizescale;
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid Masses section in molecule file\n"
                                   "{}", e.what()));
   }
@@ -898,7 +899,7 @@ void Molecule::bonds(int flag, char *line)
       itype = values.next_int();
       atom1 = values.next_tagint();
       atom2 = values.next_tagint();
-    } catch (TokenizerException & e) {
+    } catch (TokenizerException &e) {
       error->one(FLERR, fmt::format("Invalid Bonds section in molecule file\n"
                                     "{}", e.what()));
     }
@@ -908,7 +909,7 @@ void Molecule::bonds(int flag, char *line)
     if ((atom1 <= 0) || (atom1 > natoms) ||
         (atom2 <= 0) || (atom2 > natoms) || (atom1 == atom2))
       error->one(FLERR,"Invalid atom ID in Bonds section of molecule file");
-    if (itype <= 0 || itype > atom->nbondtypes)
+    if ((itype <= 0) || (domain->box_exist && (itype > atom->nbondtypes)))
       error->one(FLERR,"Invalid bond type in Bonds section of molecule file");
 
     if (flag) {
@@ -967,7 +968,7 @@ void Molecule::angles(int flag, char *line)
       atom1 = values.next_tagint();
       atom2 = values.next_tagint();
       atom3 = values.next_tagint();
-    } catch (TokenizerException & e) {
+    } catch (TokenizerException &e) {
       error->one(FLERR, fmt::format("Invalid Angles section in molecule file\n"
                                     "{}", e.what()));
     }
@@ -979,7 +980,7 @@ void Molecule::angles(int flag, char *line)
         (atom3 <= 0) || (atom3 > natoms) ||
         (atom1 == atom2) || (atom1 == atom3) || (atom2 == atom3))
       error->one(FLERR,"Invalid atom ID in Angles section of molecule file");
-    if (itype <= 0 || itype > atom->nangletypes)
+    if ((itype <= 0) || (domain->box_exist && (itype > atom->nangletypes)))
       error->one(FLERR,"Invalid angle type in Angles section of molecule file");
 
     if (flag) {
@@ -1052,7 +1053,7 @@ void Molecule::dihedrals(int flag, char *line)
       atom2 = values.next_tagint();
       atom3 = values.next_tagint();
       atom4 = values.next_tagint();
-    } catch (TokenizerException & e) {
+    } catch (TokenizerException &e) {
       error->one(FLERR, fmt::format("Invalid Dihedrals section in molecule file\n"
                                     "{}", e.what()));
     }
@@ -1067,9 +1068,8 @@ void Molecule::dihedrals(int flag, char *line)
         (atom2 == atom3) || (atom2 == atom4) || (atom3 == atom4))
       error->one(FLERR,
                  "Invalid atom ID in dihedrals section of molecule file");
-    if (itype <= 0 || itype > atom->ndihedraltypes)
-      error->one(FLERR,
-                 "Invalid dihedral type in dihedrals section of molecule file");
+    if ((itype <= 0) || (domain->box_exist && (itype > atom->ndihedraltypes)))
+      error->one(FLERR,"Invalid dihedral type in Dihedrals section of molecule file");
 
     if (flag) {
       m = atom2-1;
@@ -1152,7 +1152,7 @@ void Molecule::impropers(int flag, char *line)
       atom2 = values.next_tagint();
       atom3 = values.next_tagint();
       atom4 = values.next_tagint();
-    } catch (TokenizerException & e) {
+    } catch (TokenizerException &e) {
       error->one(FLERR, fmt::format("Invalid Impropers section in molecule file\n"
                                     "{}", e.what()));
     }
@@ -1167,9 +1167,8 @@ void Molecule::impropers(int flag, char *line)
         (atom2 == atom3) || (atom2 == atom4) || (atom3 == atom4))
       error->one(FLERR,
                  "Invalid atom ID in impropers section of molecule file");
-    if (itype <= 0 || itype > atom->nimpropertypes)
-      error->one(FLERR,
-                 "Invalid improper type in impropers section of molecule file");
+    if ((itype <= 0) || (domain->box_exist && (itype > atom->nimpropertypes)))
+      error->one(FLERR,"Invalid improper type in Impropers section of molecule file");
 
     if (flag) {
       m = atom2-1;
@@ -1244,7 +1243,7 @@ void Molecule::nspecial_read(int flag, char *line)
       c1 = values.next_tagint();
       c2 = values.next_tagint();
       c3 = values.next_tagint();
-    } catch (TokenizerException & e) {
+    } catch (TokenizerException &e) {
       error->one(FLERR, fmt::format("Invalid Special Bond Counts section in molecule file\n"
                                     "{}", e.what()));
     }
@@ -1283,7 +1282,7 @@ void Molecule::special_read(char *line)
           error->one(FLERR,"Invalid special atom index in molecule file");
       }
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid Molecule file special list\n"
                                   "{}", e.what()));
   }
@@ -1415,7 +1414,7 @@ void Molecule::shakeflag_read(char *line)
       values.next_int();
       shake_flag[i] = values.next_int();
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid Shake Flags section in molecule file\n"
                                   "{}", e.what()));
   }
@@ -1472,6 +1471,11 @@ void Molecule::shakeatom_read(char *line)
           nwant = 5;
           break;
 
+        case 0:
+          values.next_int();
+          nwant = 1;
+          break;
+
         default:
           error->one(FLERR,"Invalid shake atom in molecule file");
       }
@@ -1480,7 +1484,7 @@ void Molecule::shakeatom_read(char *line)
         error->one(FLERR,"Invalid shake atom in molecule file");
     }
 
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR,fmt::format("Invalid shake atom in molecule file\n"
                                  "{}", e.what()));
   }
@@ -1538,6 +1542,11 @@ void Molecule::shaketype_read(char *line)
           nwant = 4;
           break;
 
+        case 0:
+          values.next_int();
+          nwant = 1;
+          break;
+
         default:
           error->one(FLERR,"Invalid shake type data in molecule file");
       }
@@ -1545,7 +1554,7 @@ void Molecule::shaketype_read(char *line)
       if (nmatch != nwant)
         error->one(FLERR,"Invalid shake type data in molecule file");
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid shake type data in molecule file\n",
                                   "{}", e.what()));
   }
@@ -1598,7 +1607,7 @@ void Molecule::body(int flag, int pflag, char *line)
         }
       } else nword += ncount;
     }
-  } catch (TokenizerException & e) {
+  } catch (TokenizerException &e) {
     error->one(FLERR, fmt::format("Invalid body params in molecule file\n",
                                   "{}", e.what()));
   }
@@ -1691,6 +1700,7 @@ void Molecule::initialize()
   nmolecules = 1;
   nbondtypes = nangletypes = ndihedraltypes = nimpropertypes = 0;
   nibody = ndbody = 0;
+  nfragments = 0;
 
   bond_per_atom = angle_per_atom = dihedral_per_atom = improper_per_atom = 0;
   maxspecial = 0;

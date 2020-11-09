@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -424,7 +424,7 @@ void WriteRestart::write(std::string file)
 
 void WriteRestart::header()
 {
-  write_string(VERSION,universe->version);
+  write_string(VERSION,lmp->version);
   write_int(SMALLINT,sizeof(smallint));
   write_int(IMAGEINT,sizeof(imageint));
   write_int(TAGINT,sizeof(tagint));

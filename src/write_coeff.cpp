@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -95,7 +95,7 @@ void WriteCoeff::command(int narg, char **arg)
                                    file+4, utils::getsyserror()));
 
     fprintf(two,"# LAMMPS coeff file via write_coeff, version %s\n",
-            universe->version);
+            lmp->version);
 
     while(1) {
       int coeff_mode = REGULAR_MODE;
