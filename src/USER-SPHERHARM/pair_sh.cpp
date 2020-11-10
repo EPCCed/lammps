@@ -41,7 +41,7 @@ using namespace MathConst;
 
 PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
 {
-  respa_enable = 0;
+  respa_enable = 1;
   writedata = 1;
   centroidstressflag = 1;
 
@@ -52,8 +52,7 @@ PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
   single_enable = 0;
   restartinfo = 0; // Not figured out how to do this yet
   writedata = 0; // Ditto
-
-
+  respa_enable = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -155,18 +154,40 @@ void PairSH::compute(int eflag, int vflag)
    allocate all arrays
 ------------------------------------------------------------------------- */
 
+//void PairSH::allocate()
+//{
+//  allocated = 1;
+//  int n = atom->ntypes;
+//
+//  memory->create(setflag,n+1,n+1,"pair:setflag");
+//  for (int i = 1; i <= n; i++)
+//    for (int j = i; j <= n; j++)
+//      setflag[i][j] = 0;
+//
+//  memory->create(cutsq,n+1,n+1,"pair:cutsq");
+//  memory->create(cut,n+1,n+1,"pair:cut");
+//}
+
 void PairSH::allocate()
 {
-  allocated = 1;
-  int n = atom->ntypes;
+    allocated = 1;
+    int n = atom->ntypes;
 
-  memory->create(setflag,n+1,n+1,"pair:setflag");
-  for (int i = 1; i <= n; i++)
-    for (int j = i; j <= n; j++)
-      setflag[i][j] = 0;
+    memory->create(setflag,n+1,n+1,"pair:setflag");
+    for (int i = 1; i <= n; i++)
+        for (int j = i; j <= n; j++)
+            setflag[i][j] = 0;
 
-  memory->create(cutsq,n+1,n+1,"pair:cutsq");
-  memory->create(cut,n+1,n+1,"pair:cut");
+    memory->create(cutsq,n+1,n+1,"pair:cutsq");
+
+    memory->create(cut,n+1,n+1,"pair:cut");
+    memory->create(epsilon,n+1,n+1,"pair:epsilon");
+    memory->create(sigma,n+1,n+1,"pair:sigma");
+    memory->create(lj1,n+1,n+1,"pair:lj1");
+    memory->create(lj2,n+1,n+1,"pair:lj2");
+    memory->create(lj3,n+1,n+1,"pair:lj3");
+    memory->create(lj4,n+1,n+1,"pair:lj4");
+    memory->create(offset,n+1,n+1,"pair:offset");
 }
 
 /* ----------------------------------------------------------------------
@@ -187,7 +208,7 @@ void PairSH::settings(int narg, char **arg) {
 
 void PairSH::coeff(int narg, char **arg)
 {
-  if (narg < 2 || narg > 2)
+  if (narg != 2)
     error->all(FLERR,"Incorrect args for pair coefficients");
   if (!allocated) allocate();
 
@@ -216,24 +237,26 @@ void PairSH::coeff(int narg, char **arg)
 
 void PairSH::init_style()
 {
-  // error and warning checks
-
   avec = (AtomVecShperatom *) atom->style_match("shperatom");
   if (!avec) error->all(FLERR,"Pair SH requires atom style shperatom");
 
+  neighbor->request(this,instance_me);
+  cut_respa = NULL;
 }
 
 /* ----------------------------------------------------------------------
    init for one type pair i,j and corresponding j,i
+   JY - Need to set up for different types, although both types must use the
+   spherical harmonic atom style. Both would share the same cut so no mixing
+   would be required here. The only mixing would be in the coefficients used
+   in the contact model, i.e stiffness, but this will need to be explored later
 ------------------------------------------------------------------------- */
 
 double PairSH::init_one(int i, int j)
 {
+  // No epsilon and no sigma used for the spherical harmonic atom style
   if (setflag[i][j] == 0) {
-    epsilon[i][j] = mix_energy(epsilon[i][i],epsilon[j][j],
-                               sigma[i][i],sigma[j][j]);
-    sigma[i][j] = mix_distance(sigma[i][i],sigma[j][j]);
-    cut[i][j] = mix_distance(cut[i][i],cut[j][j]);
+    cut[i][j] = cut_global;
   }
 
   lj1[i][j] = 48.0 * epsilon[i][j] * pow(sigma[i][j],12.0);
@@ -241,10 +264,14 @@ double PairSH::init_one(int i, int j)
   lj3[i][j] = 4.0 * epsilon[i][j] * pow(sigma[i][j],12.0);
   lj4[i][j] = 4.0 * epsilon[i][j] * pow(sigma[i][j],6.0);
 
-  if (offset_flag && (cut[i][j] > 0.0)) {
-    double ratio = sigma[i][j] / cut[i][j];
-    offset[i][j] = 4.0 * epsilon[i][j] * (pow(ratio,12.0) - pow(ratio,6.0));
-  } else offset[i][j] = 0.0;
+ // Offset_flag is true if shift value = yes in the pair_modify command. "The
+ // shift keyword determines whether a Lennard-Jones potential is shifted at
+ // its cutoff to 0.0". Not applicable for this pairstyle
+//  if (offset_flag && (cut[i][j] > 0.0)) {
+//    double ratio = sigma[i][j] / cut[i][j];
+//    offset[i][j] = 4.0 * epsilon[i][j] * (pow(ratio,12.0) - pow(ratio,6.0));
+//  } else offset[i][j] = 0.0;
+  offset[i][j] = 0.0;
 
   lj1[j][i] = lj1[i][j];
   lj2[j][i] = lj2[i][j];
@@ -254,162 +281,46 @@ double PairSH::init_one(int i, int j)
 
   // check interior rRESPA cutoff
 
-  if (cut_respa && cut[i][j] < cut_respa[3])
-    error->all(FLERR,"Pair cutoff < Respa interior cutoff");
+//  if (cut_respa && cut[i][j] < cut_respa[3])
+//    error->all(FLERR,"Pair cutoff < Respa interior cutoff");
 
   // compute I,J contribution to long-range tail correction
   // count total # of atoms of type I and J via Allreduce
 
-  if (tail_flag) {
-    int *type = atom->type;
-    int nlocal = atom->nlocal;
+//    When the tail keyword is set to yes, certain pair styles will add a long-range
+//    VanderWaals tail “correction” to the energy and pressure. These corrections are
+//    bookkeeping terms which do not affect dynamics, unless a constant-pressure simulation
+//    is being performed. See the doc page for individual styles to see which support this option.
+//    These corrections are included in the calculation and printing of thermodynamic
+//    quantities (see the thermo_style command). Their effect will also be included in
+//    constant NPT or NPH simulations where the pressure influences the simulation box
+//    dimensions (e.g. the fix npt and fix nph commands). The formulas used for the
+//    long-range corrections come from equation 5 of (Sun).
 
-    double count[2],all[2];
-    count[0] = count[1] = 0.0;
-    for (int k = 0; k < nlocal; k++) {
-      if (type[k] == i) count[0] += 1.0;
-      if (type[k] == j) count[1] += 1.0;
-    }
-    MPI_Allreduce(count,all,2,MPI_DOUBLE,MPI_SUM,world);
-
-    double sig2 = sigma[i][j]*sigma[i][j];
-    double sig6 = sig2*sig2*sig2;
-    double rc3 = cut[i][j]*cut[i][j]*cut[i][j];
-    double rc6 = rc3*rc3;
-    double rc9 = rc3*rc6;
-    etail_ij = 8.0*MY_PI*all[0]*all[1]*epsilon[i][j] *
-      sig6 * (sig6 - 3.0*rc6) / (9.0*rc9);
-    ptail_ij = 16.0*MY_PI*all[0]*all[1]*epsilon[i][j] *
-      sig6 * (2.0*sig6 - 3.0*rc6) / (9.0*rc9);
-  }
+//  if (tail_flag) {
+//    int *type = atom->type;
+//    int nlocal = atom->nlocal;
+//
+//    double count[2],all[2];
+//    count[0] = count[1] = 0.0;
+//    for (int k = 0; k < nlocal; k++) {
+//      if (type[k] == i) count[0] += 1.0;
+//      if (type[k] == j) count[1] += 1.0;
+//    }
+//    MPI_Allreduce(count,all,2,MPI_DOUBLE,MPI_SUM,world);
+//
+//    double sig2 = sigma[i][j]*sigma[i][j];
+//    double sig6 = sig2*sig2*sig2;
+//    double rc3 = cut[i][j]*cut[i][j]*cut[i][j];
+//    double rc6 = rc3*rc3;
+//    double rc9 = rc3*rc6;
+//    etail_ij = 8.0*MY_PI*all[0]*all[1]*epsilon[i][j] *
+//      sig6 * (sig6 - 3.0*rc6) / (9.0*rc9);
+//    ptail_ij = 16.0*MY_PI*all[0]*all[1]*epsilon[i][j] *
+//      sig6 * (2.0*sig6 - 3.0*rc6) / (9.0*rc9);
+//  }
 
   return cut[i][j];
 }
 
-/* ----------------------------------------------------------------------
-   proc 0 writes to restart file
-------------------------------------------------------------------------- */
 
-void PairSH::write_restart(FILE *fp)
-{
-  write_restart_settings(fp);
-
-  int i,j;
-  for (i = 1; i <= atom->ntypes; i++)
-    for (j = i; j <= atom->ntypes; j++) {
-      fwrite(&setflag[i][j],sizeof(int),1,fp);
-      if (setflag[i][j]) {
-        fwrite(&epsilon[i][j],sizeof(double),1,fp);
-        fwrite(&sigma[i][j],sizeof(double),1,fp);
-        fwrite(&cut[i][j],sizeof(double),1,fp);
-      }
-    }
-}
-
-/* ----------------------------------------------------------------------
-   proc 0 reads from restart file, bcasts
-------------------------------------------------------------------------- */
-
-void PairSH::read_restart(FILE *fp)
-{
-  read_restart_settings(fp);
-  allocate();
-
-  int i,j;
-  int me = comm->me;
-  for (i = 1; i <= atom->ntypes; i++)
-    for (j = i; j <= atom->ntypes; j++) {
-      if (me == 0) utils::sfread(FLERR,&setflag[i][j],sizeof(int),1,fp,NULL,error);
-      MPI_Bcast(&setflag[i][j],1,MPI_INT,0,world);
-      if (setflag[i][j]) {
-        if (me == 0) {
-          utils::sfread(FLERR,&epsilon[i][j],sizeof(double),1,fp,NULL,error);
-          utils::sfread(FLERR,&sigma[i][j],sizeof(double),1,fp,NULL,error);
-          utils::sfread(FLERR,&cut[i][j],sizeof(double),1,fp,NULL,error);
-        }
-        MPI_Bcast(&epsilon[i][j],1,MPI_DOUBLE,0,world);
-        MPI_Bcast(&sigma[i][j],1,MPI_DOUBLE,0,world);
-        MPI_Bcast(&cut[i][j],1,MPI_DOUBLE,0,world);
-      }
-    }
-}
-
-/* ----------------------------------------------------------------------
-   proc 0 writes to restart file
-------------------------------------------------------------------------- */
-
-void PairSH::write_restart_settings(FILE *fp)
-{
-  fwrite(&cut_global,sizeof(double),1,fp);
-  fwrite(&offset_flag,sizeof(int),1,fp);
-  fwrite(&mix_flag,sizeof(int),1,fp);
-  fwrite(&tail_flag,sizeof(int),1,fp);
-}
-
-/* ----------------------------------------------------------------------
-   proc 0 reads from restart file, bcasts
-------------------------------------------------------------------------- */
-
-void PairSH::read_restart_settings(FILE *fp)
-{
-  int me = comm->me;
-  if (me == 0) {
-    utils::sfread(FLERR,&cut_global,sizeof(double),1,fp,NULL,error);
-    utils::sfread(FLERR,&offset_flag,sizeof(int),1,fp,NULL,error);
-    utils::sfread(FLERR,&mix_flag,sizeof(int),1,fp,NULL,error);
-    utils::sfread(FLERR,&tail_flag,sizeof(int),1,fp,NULL,error);
-  }
-  MPI_Bcast(&cut_global,1,MPI_DOUBLE,0,world);
-  MPI_Bcast(&offset_flag,1,MPI_INT,0,world);
-  MPI_Bcast(&mix_flag,1,MPI_INT,0,world);
-  MPI_Bcast(&tail_flag,1,MPI_INT,0,world);
-}
-
-/* ----------------------------------------------------------------------
-   proc 0 writes to data file
-------------------------------------------------------------------------- */
-
-void PairSH::write_data(FILE *fp)
-{
-  for (int i = 1; i <= atom->ntypes; i++)
-    fprintf(fp,"%d %g %g\n",i,epsilon[i][i],sigma[i][i]);
-}
-
-/* ----------------------------------------------------------------------
-   proc 0 writes all pairs to data file
-------------------------------------------------------------------------- */
-
-void PairSH::write_data_all(FILE *fp)
-{
-  for (int i = 1; i <= atom->ntypes; i++)
-    for (int j = i; j <= atom->ntypes; j++)
-      fprintf(fp,"%d %d %g %g %g\n",i,j,epsilon[i][j],sigma[i][j],cut[i][j]);
-}
-
-/* ---------------------------------------------------------------------- */
-
-double PairSH::single(int /*i*/, int /*j*/, int itype, int jtype, double rsq,
-                         double /*factor_coul*/, double factor_lj,
-                         double &fforce)
-{
-  double r2inv,r6inv,forcelj,philj;
-
-  r2inv = 1.0/rsq;
-  r6inv = r2inv*r2inv*r2inv;
-  forcelj = r6inv * (lj1[itype][jtype]*r6inv - lj2[itype][jtype]);
-  fforce = factor_lj*forcelj*r2inv;
-
-  philj = r6inv*(lj3[itype][jtype]*r6inv-lj4[itype][jtype]) -
-    offset[itype][jtype];
-  return factor_lj*philj;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void *PairSH::extract(const char *str, int &dim)
-{
-  dim = 2;
-  if (strcmp(str,"epsilon") == 0) return (void *) epsilon;
-  if (strcmp(str,"sigma") == 0) return (void *) sigma;
-  return NULL;
-}

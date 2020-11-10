@@ -197,7 +197,12 @@ void AtomVecShperatom::get_expfactors(int i, double *expfs)
 
 void AtomVecShperatom::get_cut_global(double &cut_global)
 {
-  cut_global = maxrad;
+//    JY - This failed before, might be because some processors didn't have maxrad
+//  cut_global = maxrad;
+
+// JY TEMP FOR TESTING
+  cut_global = 2.5;
+
 }
 
 /* ---------------------------------------------------------------------- */
