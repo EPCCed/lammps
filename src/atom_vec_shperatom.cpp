@@ -96,7 +96,7 @@ AtomVecShperatom::~AtomVecShperatom()
 
 /* ----------------------------------------------------------------------
    process sub-style args
-   optional arg = 0/1 for static/dynamic particle radii
+   args = 0/1 for static/dynamic particle radii, SH file to read
 ------------------------------------------------------------------------- */
 
 void AtomVecShperatom::process_args(int narg, char **arg) {
@@ -186,6 +186,11 @@ void AtomVecShperatom::get_shape(int i, double &shapex, double &shapey, double &
 
 }
 
+/* ----------------------------------------------------------------------
+   Required by the pair_style for contact detection. Returns the expansion
+   factors for the Spherical Harmonic Particle type i
+------------------------------------------------------------------------- */
+
 void AtomVecShperatom::get_expfactors(int i, double *expfs)
 {
   int type = shtype[i];
@@ -194,6 +199,13 @@ void AtomVecShperatom::get_expfactors(int i, double *expfs)
     expfs[j] = expfacts[type][j];
   }
 }
+
+/* ----------------------------------------------------------------------
+   Required by the pair_style for caclulating neighbour lists. Returns the
+   maximum particle radius at the final term in the Spherical Harmonic Expansion
+   of all the SH particle types. (i.e. the grid size will be set by the largest
+   radius)
+------------------------------------------------------------------------- */
 
 void AtomVecShperatom::get_cut_global(double &cut_global)
 {
@@ -312,7 +324,11 @@ void AtomVecShperatom::pack_data_post(int ilocal)
 }
 
 /* ----------------------------------------------------------------------
-   used by the set command to associate an atom with a sh type
+   The Set Command can be used to give an atom a SH type. Once done, this
+   method sets the atom properties to the corresponding SH type (i.e. the
+   SH coefficients, inerta, and initial quaternion of that SH type). Currently
+   duplicating data (i.e. per_atom), would be better to avoid this altogether
+   and just point to the relevant memory as required.
 ------------------------------------------------------------------------- */
 
 void AtomVecShperatom::set_properties(int ilocal)
@@ -339,6 +355,7 @@ void AtomVecShperatom::set_properties(int ilocal)
 
 /* ----------------------------------------------------------------------
    return the number of spherical harmonic particle types
+   Could make this a property in the base atom class.
 ------------------------------------------------------------------------- */
 
 int AtomVecShperatom::num_sh_types()
@@ -380,7 +397,10 @@ void AtomVecShperatom::read_coeffs(char *filename)
   }
 }
 
-
+/* ----------------------------------------------------------------------
+   following methods are used for reading in files that contain the
+   sh coefficients
+------------------------------------------------------------------------- */
 void AtomVecShperatom::read_coeffs()
 {
 
@@ -646,6 +666,10 @@ char *AtomVecShperatom::nextword(char *str, char **next)
   return start;
 }
 
+/* ----------------------------------------------------------------------
+  Following methods are used for calculating the Associated Legendre polynomials
+  (generic)
+------------------------------------------------------------------------- */
 
 double AtomVecShperatom::plegendre(const int l, const int m, const double x) {
 
@@ -685,7 +709,10 @@ double AtomVecShperatom::plegendre(const int l, const int m, const double x) {
   }
 }
 
-
+/* ----------------------------------------------------------------------
+  Following methods are used for calculating the Associated Legendre polynomials
+  (when n=m)
+------------------------------------------------------------------------- */
 double AtomVecShperatom::plegendre_nn(const int l, const double x, const double Pnm_nn) {
 
   double ll, llm1, fact;
@@ -698,7 +725,10 @@ double AtomVecShperatom::plegendre_nn(const int l, const double x, const double 
   return -sqrt(1.0-(x*x)) * fact * Pnm_nn;
 }
 
-
+/* ----------------------------------------------------------------------
+  Following methods are used for calculating the Associated Legendre polynomials
+  (recursion)
+------------------------------------------------------------------------- */
 double AtomVecShperatom::plegendre_recycle(const int l, const int m, const double x, const double pnm_m1, const double pnm_m2) {
 
   double fact,oldfact, ll, mm, pmn;
@@ -711,6 +741,10 @@ double AtomVecShperatom::plegendre_recycle(const int l, const int m, const doubl
   return pmn;
 }
 
+/* ----------------------------------------------------------------------
+  Following methods are used for calculating the nodes and weights of
+  Gaussian Quadrature
+------------------------------------------------------------------------- */
 // This function computes the kth zero of the BesselJ(0,x)
 double AtomVecShperatom::besseljzero(int k)
 {
@@ -848,7 +882,9 @@ AtomVecShperatom::QuadPair AtomVecShperatom::GLPair(size_t n, size_t k)
   }
 }
 
-
+/* ----------------------------------------------------------------------
+ Calculate the inertia of all SH particle types
+------------------------------------------------------------------------- */
 void AtomVecShperatom::getI() {
 
   using std::cout;
@@ -999,7 +1035,10 @@ void AtomVecShperatom::getI() {
   }
 }
 
-
+/* ----------------------------------------------------------------------
+  Calculate the radi at the points of quadrature using the Spherical Harmonic
+  expansion
+------------------------------------------------------------------------- */
 void AtomVecShperatom::get_quadrature_values() {
 
   // Fixed properties
@@ -1101,7 +1140,10 @@ void AtomVecShperatom::get_quadrature_values() {
 
 }
 
-
+/* ----------------------------------------------------------------------
+  Calculate the expansion factors for all SH particles using a grid of points
+  (clustering at poles, spreading at the equator)
+------------------------------------------------------------------------- */
 void AtomVecShperatom::calcexpansionfactors()
 {
 
@@ -1205,7 +1247,10 @@ void AtomVecShperatom::calcexpansionfactors()
 
 }
 
-
+/* ----------------------------------------------------------------------
+  Calculate the expansion factors for all particles using the points of Gaussian quadrature
+  (clustering at poles, spreading at the equator)
+------------------------------------------------------------------------- */
 void AtomVecShperatom::calcexpansionfactors_gauss()
 {
 
