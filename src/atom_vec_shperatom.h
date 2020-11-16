@@ -39,12 +39,17 @@ class AtomVecShperatom : public AtomVec {
 
   ~AtomVecShperatom();     // Destructor
   void set_properties(int);
-  int num_sh_types();
-  void get_shape(int, double &, double &, double &);
   void get_expfactors(int, double *);
-  void get_cut_global(double &);
+  double** get_quadrature_rads(int &in_num_quad2){
+    in_num_quad2 = num_quad2;
+    return &quad_rads[0];
+  }
+  double** get_quadrature_angs(){return &angles[0];}
+  double* get_max_rads(){return &maxrad[0];}
+  int check_contact(int, double, double, double, double &);
 
   // FOR ELLIPSOID TEST ONLY
+  void get_shape(int, double &, double &, double &);
 
  private:
 
@@ -78,7 +83,7 @@ class AtomVecShperatom : public AtomVec {
   int num_quad2;
   int numcoeffs;
   double **expfacts;
-  double maxrad;
+  double *maxrad;
 
 
   int radvary;

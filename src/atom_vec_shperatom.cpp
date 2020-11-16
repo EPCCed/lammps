@@ -92,6 +92,7 @@ AtomVecShperatom::~AtomVecShperatom()
   memory->sfree(weights);
   memory->sfree(quad_rads);
   memory->sfree(expfacts);
+  memory->sfree(maxrad);
 }
 
 /* ----------------------------------------------------------------------
@@ -118,9 +119,13 @@ void AtomVecShperatom::process_args(int narg, char **arg) {
   num_quadrature = utils::numeric(FLERR, arg[1], true, lmp);
 
   nshtypes = narg - 2;
+  atom -> nshtypes = nshtypes;
+
+  std::cout << "No SH TYPES = " << nshtypes << std::endl;
+  std::cout << "No SH TYPES = " << atom->nshtypes << std::endl;
+
   num_quad2 = num_quadrature*num_quadrature;
   numcoeffs = 2*((maxshexpan*maxshexpan)-1);
-  maxrad = 0;
 
   memory->create(angles, 2, num_quad2, "AtomVecShperatom:angles");
   memory->create(weights, num_quadrature, "AtomVecShperatom:weights");
@@ -129,8 +134,10 @@ void AtomVecShperatom::process_args(int narg, char **arg) {
   memory->create(orient_bytype, nshtypes, 9, "AtomVecShperatom:orient");
   memory->create(shcoeffs_bytype, nshtypes, numcoeffs, "AtomVecShperatom:shcoeff");
   memory->create(expfacts, nshtypes, maxshexpan+1, "AtomVecShperatom:expfacts");
+  memory->create(maxrad, nshtypes, "AtomVecShperatom:maxrad");
 
   for (int type=0; type<nshtypes; type++) {
+    maxrad[type] = 0.0;
     for (int i=0; i<numcoeffs; i++) {
       shcoeffs_bytype[type][i] = 0.0;
     }
@@ -162,7 +169,7 @@ void AtomVecShperatom::process_args(int narg, char **arg) {
   MPI_Bcast(&(orient_bytype[0][0]), nshtypes * 9, MPI_DOUBLE, 0, world);
   MPI_Bcast(&(shcoeffs_bytype[0][0]), nshtypes * numcoeffs, MPI_DOUBLE, 0, world);
   MPI_Bcast(&(expfacts[0][0]), nshtypes * maxshexpan+1, MPI_DOUBLE, 0, world);
-  MPI_Bcast(&(maxrad), nshtypes, MPI_DOUBLE, 0, world);
+  MPI_Bcast(&(maxrad[0]), nshtypes, MPI_DOUBLE, 0, world);
 
   // delay setting up of fields until now
   setup_fields();
@@ -200,25 +207,6 @@ void AtomVecShperatom::get_expfactors(int i, double *expfs)
   }
 }
 
-/* ----------------------------------------------------------------------
-   Required by the pair_style for caclulating neighbour lists. Returns the
-   maximum particle radius at the final term in the Spherical Harmonic Expansion
-   of all the SH particle types. (i.e. the grid size will be set by the largest
-   radius)
-------------------------------------------------------------------------- */
-
-void AtomVecShperatom::get_cut_global(double &cut_global)
-{
-//    JY - This failed before, might be because some processors didn't have maxrad
-//  cut_global = maxrad;
-
-// JY TEMP FOR TESTING
-  cut_global = 2.5;
-
-}
-
-/* ---------------------------------------------------------------------- */
-
 void AtomVecShperatom::init()
 {
   AtomVec::init();
@@ -239,17 +227,16 @@ void AtomVecShperatom::init()
    needed in replicate when 2 atom classes exist and it calls pack_restart()
 ------------------------------------------------------------------------- */
 
-void AtomVecShperatom::grow_pointers()
-{
+void AtomVecShperatom::grow_pointers() {
   radius = atom->radius;
   rmass = atom->rmass;
   omega = atom->omega;
   shtype = atom->shtype;
-  angmom = atom -> angmom;
-  inertia = atom -> inertia;
-  quat = atom -> quat;
-  quatinit = atom -> quatinit;
-  shcoeffs = atom -> shcoeffs;
+  angmom = atom->angmom;
+  inertia = atom->inertia;
+  quat = atom->quat;
+  quatinit = atom->quatinit;
+  shcoeffs = atom->shcoeffs;
 }
 
 /* ----------------------------------------------------------------------
@@ -351,16 +338,7 @@ void AtomVecShperatom::set_properties(int ilocal)
   }
   quatinit[ilocal][3] = orient_bytype[type][3];
 
-}
-
-/* ----------------------------------------------------------------------
-   return the number of spherical harmonic particle types
-   Could make this a property in the base atom class.
-------------------------------------------------------------------------- */
-
-int AtomVecShperatom::num_sh_types()
-{
-  return nshtypes;
+  radius[ilocal] = maxrad[type];
 }
 
 /* ----------------------------------------------------------------------
@@ -1133,11 +1111,6 @@ void AtomVecShperatom::get_quadrature_values() {
       quad_rads[sht][k] = rad_val;
     }
   }
-
-  std::cout<<std::endl;
-  std::cout<< "quad rad " <<quad_rads[0][0]<<std::endl;
-  std::cout<<std::endl;
-
 }
 
 /* ----------------------------------------------------------------------
@@ -1269,6 +1242,9 @@ void AtomVecShperatom::calcexpansionfactors_gauss()
 
 
   for (int sht = 0; sht < nshtypes; sht++) {
+
+    std::fill(r_n.begin(), r_n.end(), 0.0);
+
     for (int n = 0; n <= maxshexpan; n++) { // For each harmonic n
       nloc = n * (n + 1);
       k = 0;
@@ -1302,8 +1278,8 @@ void AtomVecShperatom::calcexpansionfactors_gauss()
             ratios[k] = r_npo[k] / r_n[k];
           }
           else { // Get the maximum radius at the final harmonic
-            if (r_n[k] > maxrad) {
-              maxrad = r_n[k];
+            if (r_n[k] > maxrad[sht]) {
+              maxrad[sht] = r_n[k];
             }
           }
           k++;
@@ -1331,8 +1307,8 @@ void AtomVecShperatom::calcexpansionfactors_gauss()
     }
     expfacts[sht][maxshexpan] = 1.0;
 
-    std::cout << "R_max for final harmonic " << maxrad << std::endl;
-    std::cout << "0th harmonic expansion factor " << expfacts[0][0] << std::endl;
+    std::cout << "R_max for final harmonic " << maxrad[sht] << std::endl;
+    std::cout << "0th harmonic expansion factor " << expfacts[sht][0] << std::endl;
     std::cout << "0th harmonic sphere radius " << shcoeffs_bytype[sht][0] * std::sqrt(1.0 / (4.0 * MY_PI)) << std::endl;
     std::cout << "expanded 0th harmonic sphere radius "
               << expfacts[0][0] * double(shcoeffs_bytype[sht][0]) * std::sqrt(1.0 / (4.0 * MY_PI)) << std::endl;
@@ -1341,6 +1317,96 @@ void AtomVecShperatom::calcexpansionfactors_gauss()
     for (int n = 0; n <= maxshexpan; n++) {
       std::cout << expfacts[0][n] << std::endl;
     }
+    maxrad[sht] *= safety_factor;
   }
-  maxrad *= safety_factor;
+}
+
+
+int AtomVecShperatom::check_contact(int sht, double phi_proj, double theta_proj, double outerdist, double &finalrad) {
+
+  double rad_val = shcoeffs_bytype[sht][0] * std::sqrt(1.0 / (4.0 * MY_PI));
+  double sh_dist = expfacts[sht][0] * rad_val;
+
+  if (outerdist > sh_dist) {
+    return 0;
+  }
+
+  bool next_harmonic;
+  int n, nloc, loc;
+  double P_n_m, x_val, mphi, Pnm_nn;
+  std::vector<double> Pnm_m2, Pnm_m1;
+
+  next_harmonic = true;
+  Pnm_m2.resize(maxshexpan+1, 0.0);
+  Pnm_m1.resize(maxshexpan+1, 0.0);
+  x_val = std::cos(theta_proj);
+  n = 1;
+  x_val = std::cos(theta_proj);
+  while (next_harmonic) {
+    nloc = n * (n + 1);
+    if (n == 1) {
+      P_n_m = plegendre(1, 0, x_val);
+      Pnm_m2[0] = P_n_m;
+      rad_val += shcoeffs_bytype[sht][4] * P_n_m;
+      P_n_m = plegendre(1, 1, x_val);
+      Pnm_m2[1] = P_n_m;
+      mphi = 1.0 * phi_proj;
+      rad_val += (shcoeffs_bytype[sht][2] * cos(mphi) - shcoeffs_bytype[sht][3] * sin(mphi)) * 2.0 * P_n_m;
+    } else if (n == 2) {
+      P_n_m = plegendre(2, 0, x_val);
+      Pnm_m1[0] = P_n_m;
+      rad_val += shcoeffs_bytype[sht][10] * P_n_m;
+      for (int m = 2; m >= 1; m--) {
+        P_n_m = plegendre(2, m, x_val);
+        Pnm_m1[m] = P_n_m;
+        mphi = (double) m * phi_proj;
+        rad_val += (shcoeffs_bytype[sht][nloc] * cos(mphi) - shcoeffs_bytype[sht][nloc + 1] * sin(mphi)) * 2.0 * P_n_m;
+        nloc += 2;
+      }
+      Pnm_nn = Pnm_m1[2];
+    } else {
+      P_n_m = plegendre_recycle(n, 0, x_val, Pnm_m1[0], Pnm_m2[0]);
+      Pnm_m2[0] = Pnm_m1[0];
+      Pnm_m1[0] = P_n_m;
+      loc = (n + 1) * (n + 2) - 2;
+      rad_val += shcoeffs_bytype[sht][loc] * P_n_m;
+      loc -= 2;
+      for (int m = 1; m < n - 1; m++) {
+        P_n_m = plegendre_recycle(n, m, x_val, Pnm_m1[m], Pnm_m2[m]);
+        Pnm_m2[m] = Pnm_m1[m];
+        Pnm_m1[m] = P_n_m;
+        mphi = (double) m * phi_proj;
+        rad_val += (shcoeffs_bytype[sht][loc] * cos(mphi) - shcoeffs_bytype[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+        loc -= 2;
+      }
+
+      P_n_m = x_val * std::sqrt((2.0 * ((double) n - 1.0)) + 3.0) * Pnm_nn;
+      Pnm_m2[n - 1] = Pnm_m1[n - 1];
+      Pnm_m1[n - 1] = P_n_m;
+      mphi = (double) (n - 1) * phi_proj;
+      rad_val += (shcoeffs_bytype[sht][loc] * cos(mphi) - shcoeffs_bytype[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+      loc -= 2;
+
+      P_n_m = plegendre_nn(n, x_val, Pnm_nn);
+      Pnm_nn = P_n_m;
+      Pnm_m1[n] = P_n_m;
+      mphi = (double) n * phi_proj;
+      rad_val += (shcoeffs_bytype[sht][loc] * cos(mphi) - shcoeffs_bytype[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+    }
+
+    sh_dist = expfacts[sht][n]*(rad_val);
+
+    if (outerdist > sh_dist) {
+      next_harmonic = false;
+    } else {
+      if (++n > maxshexpan) {
+        next_harmonic = false;
+        if (outerdist <= sh_dist) {
+          finalrad = rad_val;
+          return 1;
+        }
+      }
+    }
+  }
+
 }

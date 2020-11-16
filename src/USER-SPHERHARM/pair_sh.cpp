@@ -19,6 +19,7 @@
 #include <mpi.h>
 #include <cmath>
 #include <cstring>
+#include <iostream>
 #include "atom.h"
 #include "comm.h"
 #include "force.h"
@@ -31,6 +32,7 @@
 #include "memory.h"
 #include "error.h"
 #include "utils.h"
+#include "math_extra.h"
 
 #include "atom_vec_shperatom.h"
 
@@ -53,6 +55,8 @@ PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
   restartinfo = 0; // Not figured out how to do this yet
   writedata = 0; // Ditto
   respa_enable = 0;
+
+  matchtypes = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -71,27 +75,120 @@ PairSH::~PairSH()
     memory->destroy(lj3);
     memory->destroy(lj4);
     memory->destroy(offset);
+
+    memory->destroy(normal_coeffs);
+    memory->destroy(typetosh);
   }
 }
 
 /* ---------------------------------------------------------------------- */
 
+//void PairSH::compute(int eflag, int vflag)
+//{
+//  int i,j,ii,jj,inum,jnum,itype,jtype;
+//  double xtmp,ytmp,ztmp,delx,dely,delz,evdwl,fpair;
+//  double rsq,r2inv,r6inv,forcelj,factor_lj;
+//  int *ilist,*jlist,*numneigh,**firstneigh;
+//
+//  evdwl = 0.0;
+//  ev_init(eflag,vflag);
+//
+//  double **x = atom->x;
+//  double **f = atom->f;
+//  int *type = atom->type;
+//  int nlocal = atom->nlocal;
+//  double *special_lj = force->special_lj;
+//  int newton_pair = force->newton_pair;
+//
+//  inum = list->inum;
+//  ilist = list->ilist;
+//  numneigh = list->numneigh;
+//  firstneigh = list->firstneigh;
+//
+//  // loop over neighbors of my atoms
+//
+//  for (ii = 0; ii < inum; ii++) {
+//    i = ilist[ii];
+//    xtmp = x[i][0];
+//    ytmp = x[i][1];
+//    ztmp = x[i][2];
+//    itype = type[i];
+//    jlist = firstneigh[i];
+//    jnum = numneigh[i];
+//
+//    for (jj = 0; jj < jnum; jj++) {
+//      j = jlist[jj];
+//      factor_lj = special_lj[sbmask(j)];
+//      j &= NEIGHMASK;
+//
+//      delx = xtmp - x[j][0];
+//      dely = ytmp - x[j][1];
+//      delz = ztmp - x[j][2];
+//      rsq = delx*delx + dely*dely + delz*delz;
+//      jtype = type[j];
+//
+//      if (rsq < cutsq[itype][jtype]) {
+//        r2inv = 1.0/rsq;
+//        r6inv = r2inv*r2inv*r2inv;
+//        forcelj = r6inv * (lj1[itype][jtype]*r6inv - lj2[itype][jtype]);
+//        fpair = factor_lj*forcelj*r2inv;
+//
+//        f[i][0] += delx*fpair;
+//        f[i][1] += dely*fpair;
+//        f[i][2] += delz*fpair;
+//        if (newton_pair || j < nlocal) {
+//          f[j][0] -= delx*fpair;
+//          f[j][1] -= dely*fpair;
+//          f[j][2] -= delz*fpair;
+//        }
+//
+//        if (eflag) {
+//          evdwl = r6inv*(lj3[itype][jtype]*r6inv-lj4[itype][jtype]) -
+//            offset[itype][jtype];
+//          evdwl *= factor_lj;
+//        }
+//
+//        if (evflag) ev_tally(i,j,nlocal,newton_pair,
+//                             evdwl,0.0,fpair,delx,dely,delz);
+//      }
+//    }
+//  }
+//
+//  if (vflag_fdotr) virial_fdotr_compute();
+//}
+
 void PairSH::compute(int eflag, int vflag)
 {
-  int i,j,ii,jj,inum,jnum,itype,jtype;
-  double xtmp,ytmp,ztmp,delx,dely,delz,evdwl,fpair;
-  double rsq,r2inv,r6inv,forcelj,factor_lj;
+  int i,j,ii,jj,ll,inum,jnum,itype,jtype;
+  double xtmp,ytmp,ztmp,delx,dely,delz,fpair;
+  double radi,radj,radsum,r,rsq;
   int *ilist,*jlist,*numneigh,**firstneigh;
+  int ishtype, jshtype;
+  double irot[3][3], jrot[3][3];
+  double ixquadbf[3],jxquadbf[3];
+  double ixquadsf[3],jxquadsf[3];
+  double xgauss[3], xgaussproj[3];
+  double dtemp, phi_proj, theta_proj, finalrad;
+  double phi, theta;
+  double overlap[3];
 
-  evdwl = 0.0;
   ev_init(eflag,vflag);
 
   double **x = atom->x;
   double **f = atom->f;
   int *type = atom->type;
-  int nlocal = atom->nlocal;
-  double *special_lj = force->special_lj;
-  int newton_pair = force->newton_pair;
+  double *radius = atom->radius;
+  int *shtype = atom->shtype;
+  double **quat = atom->quat;
+  double **quatinit = atom->quatinit;
+
+  double iquat_delta[4];
+  double jquat_delta[4];
+  double quat_temp[4];
+
+  int num_quad2;
+  double **quad_rads = avec->get_quadrature_rads(num_quad2);
+  double **angles = avec->get_quadrature_angs();
 
   inum = list->inum;
   ilist = list->ilist;
@@ -106,67 +203,150 @@ void PairSH::compute(int eflag, int vflag)
     ytmp = x[i][1];
     ztmp = x[i][2];
     itype = type[i];
+    ishtype = shtype[i];
     jlist = firstneigh[i];
     jnum = numneigh[i];
+    radi = radius[i];
+
+    // Unrolling the initial quat (Unit quaternion - inverse = conjugate)
+    MathExtra::qconjugate(quatinit[i],quat_temp);
+    // Calculating the quat to rotate the particles to new position (q_delta = q_target * q_current^-1)
+    MathExtra::quatquat(quat[i],quat_temp,iquat_delta);
+    MathExtra::qnormalize(iquat_delta);
+    // Calculate the rotation matrix for the quaternion for atom i
+    MathExtra::quat_to_mat(iquat_delta,irot);
 
     for (jj = 0; jj < jnum; jj++) {
       j = jlist[jj];
-      factor_lj = special_lj[sbmask(j)];
       j &= NEIGHMASK;
 
       delx = xtmp - x[j][0];
       dely = ytmp - x[j][1];
       delz = ztmp - x[j][2];
+      radj = radius[j];
+      radsum = radi + radj;
       rsq = delx*delx + dely*dely + delz*delz;
+      r = sqrt(rsq);
       jtype = type[j];
+      jshtype = shtype[j];
 
-      if (rsq < cutsq[itype][jtype]) {
-        r2inv = 1.0/rsq;
-        r6inv = r2inv*r2inv*r2inv;
-        forcelj = r6inv * (lj1[itype][jtype]*r6inv - lj2[itype][jtype]);
-        fpair = factor_lj*forcelj*r2inv;
-
-        f[i][0] += delx*fpair;
-        f[i][1] += dely*fpair;
-        f[i][2] += delz*fpair;
-        if (newton_pair || j < nlocal) {
-          f[j][0] -= delx*fpair;
-          f[j][1] -= dely*fpair;
-          f[j][2] -= delz*fpair;
+      if (r < radsum) {
+        std::cout << "ij: " <<i<<j<< " r: "<< r  << "  radsum: " << radsum << std::endl;
+//        std::cout << "xi : " << x[i][0] << " " << x[i][1] << " "<< x[i][2] << std::endl;
+//        std::cout << "xj : " << x[j][0] << " " << x[j][1] << " "<< x[j][2] << std::endl;
+        if (r < MAX(radi, radj)){
+//          std::cout << std::endl;
+//          std::cout << radi << " " << radj << " " << r << std::endl;
+//          std::cout << std::endl;
+          error->all(FLERR,"Error, centre within radius!");
         }
 
-        if (eflag) {
-          evdwl = r6inv*(lj3[itype][jtype]*r6inv-lj4[itype][jtype]) -
-            offset[itype][jtype];
-          evdwl *= factor_lj;
+        // Unrolling the initial quat (Unit quaternion - inverse = conjugate)
+        MathExtra::qconjugate(quatinit[j],quat_temp);
+        // Calculating the quat to rotate the particles to new position (q_delta = q_target * q_current^-1)(space frame)
+        MathExtra::quatquat(quat[j],quat_temp,jquat_delta);
+        MathExtra::qnormalize(jquat_delta);
+        // Calculate the rotation matrix for the quaternion for atom j
+        MathExtra::quat_to_mat(jquat_delta,jrot);
+
+        // Compare all points of guassian quadrature on atom i against the projected point on atom j
+        for (ll=0; ll<num_quad2; ll++) {
+          // Point of gaussian quadrature in body frame
+          ixquadbf[0] = quad_rads[ishtype][ll] * sin(angles[0][ll]) * cos(angles[1][ll]);
+          ixquadbf[1] = quad_rads[ishtype][ll] * sin(angles[0][ll]) * sin(angles[1][ll]);
+          ixquadbf[2] = quad_rads[ishtype][ll] * cos(angles[0][ll]);
+          // Point of gaussian quadrature in space frame
+          MathExtra::matvec(irot,ixquadbf,ixquadsf);
+          // Translating by current location of particle i's centre
+          ixquadsf[0] += xtmp;
+          ixquadsf[1] += ytmp;
+          ixquadsf[2] += ztmp;
+          // vector distance from gauss point on atom i to COG of atom j (in space frame)
+          MathExtra::sub3(ixquadsf, x[j], xgauss);
+          // scalar distance
+          dtemp = MathExtra::len3(xgauss);
+          // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
+          MathExtra::transpose_matvec(jrot,xgauss,xgaussproj);
+          // Get projected phi and theta angle of gauss point in atom j's body frame
+          phi_proj = std::atan2(xgaussproj[1], xgaussproj[0]);
+          theta_proj = std::acos(xgaussproj[2] / dtemp);
+          // Check for contact
+          if(avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)){
+            // Get the phi and thea angles as project from the gauss point in the space frame for both particle i and j
+            phi = std::atan2(xgauss[1], xgauss[0]);
+            theta = std::acos(xgauss[2] / dtemp);
+            // Get the space frame vector of the radius
+            jxquadsf[0] = finalrad * sin(phi) * cos(theta);
+            jxquadsf[1] = finalrad * sin(phi) * sin(theta);
+            jxquadsf[2] = finalrad * cos(phi);
+            // Translating by current location of particle j's centre
+            jxquadsf[0] += x[j][0];
+            jxquadsf[1] += x[j][1];
+            jxquadsf[2] += x[j][2];
+            // Getting the overlap vector in the space frame, acting towards the COG of particle j
+            MathExtra::sub3(jxquadsf, ixquadsf, overlap);
+            // Using a F=-kx force for testing.
+            fpair = normal_coeffs[itype][jtype][0];
+            f[j][0] += overlap[0]*fpair;
+            f[j][1] += overlap[1]*fpair;
+            f[j][2] += overlap[2]*fpair;
+          }
         }
 
-        if (evflag) ev_tally(i,j,nlocal,newton_pair,
-                             evdwl,0.0,fpair,delx,dely,delz);
+        // Compare all points of guassian quadrature on atom j against the projected point on atom i
+        for (ll=0; ll<num_quad2; ll++) {
+          // Point of gaussian quadrature in body frame
+          jxquadbf[0] = quad_rads[jshtype][ll] * sin(angles[0][ll]) * cos(angles[1][ll]);
+          jxquadbf[1] = quad_rads[jshtype][ll] * sin(angles[0][ll]) * sin(angles[1][ll]);
+          jxquadbf[2] = quad_rads[jshtype][ll] * cos(angles[0][ll]);
+          // Point of gaussian quadrature in space frame
+          MathExtra::matvec(jrot,jxquadbf,jxquadsf);
+          // Translating by current location of particle j's centre
+          jxquadsf[0] += x[j][0];
+          jxquadsf[1] += x[j][1];
+          jxquadsf[2] += x[j][2];
+          // vector distance from gauss point on atom j to COG of atom i (in space frame)
+          MathExtra::sub3(jxquadsf, x[i], xgauss);
+          // scalar distance
+          dtemp = MathExtra::len3(xgauss);
+          // Rotating the projected point into atom i's body frame (rotation matrix transpose = inverse)
+          MathExtra::transpose_matvec(irot,xgauss,xgaussproj);
+          // Get projected phi and theta angle of gauss point in atom i's body frame
+          phi_proj = std::atan2(xgaussproj[1], xgaussproj[0]);
+          theta_proj = std::acos(xgaussproj[2] / dtemp);
+          // Check for contact
+          if(avec->check_contact(ishtype, phi_proj, theta_proj, dtemp, finalrad)){
+            // Get the phi and thea angles as project from the gauss point in the space frame for both particle i and j
+            phi = std::atan2(xgauss[1], xgauss[0]);
+            theta = std::acos(xgauss[2] / dtemp);
+            // Get the space frame vector of the radius
+            ixquadsf[0] = finalrad * sin(phi) * cos(theta);
+            ixquadsf[1] = finalrad * sin(phi) * sin(theta);
+            ixquadsf[2] = finalrad * cos(phi);
+            // Translating by current location of particle i's centre
+            ixquadsf[0] += xtmp;
+            ixquadsf[1] += ytmp;
+            ixquadsf[2] += ztmp;
+            // Getting the overlap vector in the space frame, acting towards the COG of particle i
+            MathExtra::sub3(ixquadsf, jxquadsf, overlap);
+            // Using a F=-kx force for testing.
+            fpair = normal_coeffs[itype][jtype][0];
+            f[i][0] += overlap[0]*fpair;
+            f[i][1] += overlap[1]*fpair;
+            f[i][2] += overlap[2]*fpair;
+          }
+        }
+
       }
     }
   }
 
-  if (vflag_fdotr) virial_fdotr_compute();
 }
+
 
 /* ----------------------------------------------------------------------
    allocate all arrays
 ------------------------------------------------------------------------- */
-
-//void PairSH::allocate()
-//{
-//  allocated = 1;
-//  int n = atom->ntypes;
-//
-//  memory->create(setflag,n+1,n+1,"pair:setflag");
-//  for (int i = 1; i <= n; i++)
-//    for (int j = i; j <= n; j++)
-//      setflag[i][j] = 0;
-//
-//  memory->create(cutsq,n+1,n+1,"pair:cutsq");
-//  memory->create(cut,n+1,n+1,"pair:cut");
-//}
 
 void PairSH::allocate()
 {
@@ -188,6 +368,9 @@ void PairSH::allocate()
     memory->create(lj3,n+1,n+1,"pair:lj3");
     memory->create(lj4,n+1,n+1,"pair:lj4");
     memory->create(offset,n+1,n+1,"pair:offset");
+
+    memory->create(normal_coeffs,n+1,n+1,1,"pair:normal_coeffs");
+    memory->create(typetosh,n+1,"pair:typetosh");
 }
 
 /* ----------------------------------------------------------------------
@@ -198,6 +381,10 @@ void PairSH::allocate()
 
 void PairSH::settings(int narg, char **arg) {
   if (narg != 0) error->all(FLERR, "Illegal pair_style command");
+
+  avec = (AtomVecShperatom *) atom->style_match("shperatom");
+  if (!avec) error->all(FLERR,"Pair SH requires atom style shperatom");
+
 }
 
 /* ----------------------------------------------------------------------
@@ -208,27 +395,65 @@ void PairSH::settings(int narg, char **arg) {
 
 void PairSH::coeff(int narg, char **arg)
 {
-  if (narg != 2)
+  if (narg != 3)
     error->all(FLERR,"Incorrect args for pair coefficients");
   if (!allocated) allocate();
 
   int ilo,ihi,jlo,jhi;
+  double normal_coeffs_one;
   force->bounds(FLERR,arg[0],atom->ntypes,ilo,ihi);
   force->bounds(FLERR,arg[1],atom->ntypes,jlo,jhi);
+  normal_coeffs_one = force->numeric(FLERR,arg[2]); // kn
 
-  double cut_one = cut_global;
-  avec->get_cut_global(cut_one);
+  // Linking the Types to the SH Types, needed for finding the cut per Type
+  if (!matchtypes) matchtype();
 
   int count = 0;
+  int shi, shj;
+  double *max_rad = avec->get_max_rads();
+
   for (int i = ilo; i <= ihi; i++) {
     for (int j = MAX(jlo,i); j <= jhi; j++) {
-      cut[i][j] = cut_one;
+      shi = typetosh[i];
+      shj = typetosh[j];
+      cut[i][j] = MAX(max_rad[shi], max_rad[shj]);
       setflag[i][j] = 1;
+      normal_coeffs[i][j][0] = normal_coeffs_one;
       count++;
     }
   }
 
   if (count == 0) error->all(FLERR,"Incorrect args for pair coefficients");
+
+}
+
+/* ----------------------------------------------------------------------
+   JY - Each type can only use one Spherical Harmonic Particle type. This
+   method associates a SH particle type with the atom->types. Required for
+   finding the cut[i][j] between types which is then used in the neighbour
+   searching.
+------------------------------------------------------------------------- */
+void PairSH::matchtype()
+{
+
+  matchtypes = 1;
+
+  int nlocal = atom->nlocal;
+  int *shtype = atom->shtype;
+  int *type = atom->type;
+
+  for (int i = 0; i <= atom->ntypes; i++) {
+    typetosh[i] = -1;
+  }
+
+  for (int i = 0; i < nlocal; i++) {
+    if (typetosh[type[i]]==-1) {
+      typetosh[type[i]] = shtype[i];
+    }
+    else if(typetosh[type[i]] != shtype[i]){
+      error->all(FLERR,"Types must have same Spherical Harmonic particle type");
+    }
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -237,9 +462,6 @@ void PairSH::coeff(int narg, char **arg)
 
 void PairSH::init_style()
 {
-  avec = (AtomVecShperatom *) atom->style_match("shperatom");
-  if (!avec) error->all(FLERR,"Pair SH requires atom style shperatom");
-
   neighbor->request(this,instance_me);
   cut_respa = NULL;
 }
@@ -247,80 +469,26 @@ void PairSH::init_style()
 /* ----------------------------------------------------------------------
    init for one type pair i,j and corresponding j,i
    JY - Need to set up for different types, although both types must use the
-   spherical harmonic atom style. Both would share the same cut so no mixing
-   would be required here. The only mixing would be in the coefficients used
-   in the contact model, i.e stiffness, but this will need to be explored later
+   spherical harmonic atom style. Maximum radius of type pair is used for cut.
+   The only mixing would be in the coefficients used in the contact model,
+   i.e stiffness, but this will need to be explored later
+   These coefficients wouldn't even be mixed if using F_i = K_i*V*n_i (bad model)
 ------------------------------------------------------------------------- */
 
 double PairSH::init_one(int i, int j)
 {
+  int shi, shj;
+  double *max_rad = avec->get_max_rads();
+
   // No epsilon and no sigma used for the spherical harmonic atom style
   if (setflag[i][j] == 0) {
-    cut[i][j] = cut_global;
+    shi = typetosh[i];
+    shj = typetosh[j];
+    cut[i][j] = MAX(max_rad[shi], max_rad[shj]);
   }
 
-  lj1[i][j] = 48.0 * epsilon[i][j] * pow(sigma[i][j],12.0);
-  lj2[i][j] = 24.0 * epsilon[i][j] * pow(sigma[i][j],6.0);
-  lj3[i][j] = 4.0 * epsilon[i][j] * pow(sigma[i][j],12.0);
-  lj4[i][j] = 4.0 * epsilon[i][j] * pow(sigma[i][j],6.0);
-
- // Offset_flag is true if shift value = yes in the pair_modify command. "The
- // shift keyword determines whether a Lennard-Jones potential is shifted at
- // its cutoff to 0.0". Not applicable for this pairstyle
-//  if (offset_flag && (cut[i][j] > 0.0)) {
-//    double ratio = sigma[i][j] / cut[i][j];
-//    offset[i][j] = 4.0 * epsilon[i][j] * (pow(ratio,12.0) - pow(ratio,6.0));
-//  } else offset[i][j] = 0.0;
-  offset[i][j] = 0.0;
-
-  lj1[j][i] = lj1[i][j];
-  lj2[j][i] = lj2[i][j];
-  lj3[j][i] = lj3[i][j];
-  lj4[j][i] = lj4[i][j];
-  offset[j][i] = offset[i][j];
-
-  // check interior rRESPA cutoff
-
-//  if (cut_respa && cut[i][j] < cut_respa[3])
-//    error->all(FLERR,"Pair cutoff < Respa interior cutoff");
-
-  // compute I,J contribution to long-range tail correction
-  // count total # of atoms of type I and J via Allreduce
-
-//    When the tail keyword is set to yes, certain pair styles will add a long-range
-//    VanderWaals tail “correction” to the energy and pressure. These corrections are
-//    bookkeeping terms which do not affect dynamics, unless a constant-pressure simulation
-//    is being performed. See the doc page for individual styles to see which support this option.
-//    These corrections are included in the calculation and printing of thermodynamic
-//    quantities (see the thermo_style command). Their effect will also be included in
-//    constant NPT or NPH simulations where the pressure influences the simulation box
-//    dimensions (e.g. the fix npt and fix nph commands). The formulas used for the
-//    long-range corrections come from equation 5 of (Sun).
-
-//  if (tail_flag) {
-//    int *type = atom->type;
-//    int nlocal = atom->nlocal;
-//
-//    double count[2],all[2];
-//    count[0] = count[1] = 0.0;
-//    for (int k = 0; k < nlocal; k++) {
-//      if (type[k] == i) count[0] += 1.0;
-//      if (type[k] == j) count[1] += 1.0;
-//    }
-//    MPI_Allreduce(count,all,2,MPI_DOUBLE,MPI_SUM,world);
-//
-//    double sig2 = sigma[i][j]*sigma[i][j];
-//    double sig6 = sig2*sig2*sig2;
-//    double rc3 = cut[i][j]*cut[i][j]*cut[i][j];
-//    double rc6 = rc3*rc3;
-//    double rc9 = rc3*rc6;
-//    etail_ij = 8.0*MY_PI*all[0]*all[1]*epsilon[i][j] *
-//      sig6 * (sig6 - 3.0*rc6) / (9.0*rc9);
-//    ptail_ij = 16.0*MY_PI*all[0]*all[1]*epsilon[i][j] *
-//      sig6 * (2.0*sig6 - 3.0*rc6) / (9.0*rc9);
-//  }
+  // TO FIX - Just use the first coefficient for the pair, no mixing
+  normal_coeffs[i][j][0] = normal_coeffs[j][i][0] = normal_coeffs[i][i][0];
 
   return cut[i][j];
 }
-
-

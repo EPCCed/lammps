@@ -35,7 +35,6 @@ class PairSH : public Pair {
   double init_one(int, int);
 
  protected:
-  double cut_global;
   double **cut;
   double **epsilon,**sigma;
   double **lj1,**lj2,**lj3,**lj4,**offset;
@@ -44,6 +43,15 @@ class PairSH : public Pair {
   class AtomVecShperatom *avec;
 
   virtual void allocate();
+
+ private:
+  // per-type coefficients, set in pair coeff command
+  double ***normal_coeffs;
+  int *typetosh;
+  int matchtypes;
+
+  void matchtype();
+
 };
 
 }

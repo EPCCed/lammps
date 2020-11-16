@@ -1029,7 +1029,10 @@ void Set::set(int keyword)
     else if (keyword == SH_TYPE) {
 
       auto *avec_shperatom = (AtomVecShperatom *) atom->style_match("shperatom");
-      int nshtypes = avec_shperatom->num_sh_types();
+      int nshtypes = atom->nshtypes;
+
+      std::cout << "No SH TYPES = " << nshtypes << std::endl;
+
       if (ivalue <= 0 || ivalue > nshtypes)
         error->one(FLERR,"Invalid value in set command");
       atom->shtype[i] = ivalue-1;
@@ -1320,7 +1323,7 @@ void Set::setrandom(int keyword)
 
   } else if (keyword == SH_TYPE_RANDOM) {
     auto *avec_shperatom = (AtomVecShperatom *) atom->style_match("shperatom");
-    int nshtypes = avec_shperatom->num_sh_types();
+    int nshtypes = atom->nshtypes;
     int nlocal = atom->nlocal;
     srand(seed);
     if (domain->dimension == 3) {
