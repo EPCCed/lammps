@@ -21,11 +21,11 @@
 #include "atom.h"
 #include "atom_vec_ellipsoid.h"
 #include "error.h"
+#include "atom_vec_shperatom.h"
+
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
-
-#define INERTIA 0.2          // moment of inertia prefactor for ellipsoid
 
 /* ---------------------------------------------------------------------- */
 
@@ -63,7 +63,7 @@ void FixNVESh::initial_integrate(int /*vflag*/)
   double omega[3];
 
   double **quat = atom->quat;
-  double **inertia = atom->inertia;
+  double **inertia = avec->get_pinertia_init();
   double **x = atom->x;
   double **v = atom->v;
   double **f = atom->f;
@@ -73,6 +73,8 @@ void FixNVESh::initial_integrate(int /*vflag*/)
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
   if (igroup == atom->firstgroup) nlocal = atom->nfirst;
+  int *shtype = atom->shtype;
+  int ishtype;
 
   // set timestep here since dt may have changed or come via rRESPA
 
@@ -94,12 +96,14 @@ void FixNVESh::initial_integrate(int /*vflag*/)
       angmom[i][1] += dtf * torque[i][1];
       angmom[i][2] += dtf * torque[i][2];
 
+      ishtype = shtype[i];
+
       // compute omega at 1/2 step from angmom at 1/2 step and current q
       // update quaternion a full step via Richardson iteration
       // returns new normalized quaternion
 
-      MathExtra::mq_to_omega(angmom[i],quat[i],inertia[i],omega);
-      MathExtra::richardson(quat[i],angmom[i],omega,inertia[i],dtq);
+      MathExtra::mq_to_omega(angmom[i],quat[i],inertia[ishtype],omega);
+      MathExtra::richardson(quat[i],angmom[i],omega,inertia[ishtype],dtq);
     }
 }
 

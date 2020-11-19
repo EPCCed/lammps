@@ -33,7 +33,6 @@
 #include "error.h"
 #include "utils.h"
 #include "math_extra.h"
-
 #include "atom_vec_shperatom.h"
 
 using namespace LAMMPS_NS;
@@ -56,6 +55,7 @@ PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
   writedata = 0; // Ditto
   respa_enable = 0;
 
+  // Flag indicating if lammps types have been matches with SH type.
   matchtypes = 0;
 }
 
@@ -93,10 +93,10 @@ void PairSH::compute(int eflag, int vflag)
   double **x = atom->x;
   double **f = atom->f;
   int *type = atom->type;
-  double *radius = atom->radius;
   int *shtype = atom->shtype;
   double **quat = atom->quat;
-  double **quatinit = atom->quatinit;
+  int nlocal = atom->nlocal;
+  int newton_pair = force->newton_pair;
 
   double iquat_delta[4];
   double jquat_delta[4];
@@ -105,6 +105,8 @@ void PairSH::compute(int eflag, int vflag)
   int num_quad2;
   double **quad_rads = avec->get_quadrature_rads(num_quad2);
   double **angles = avec->get_quadrature_angs();
+  double **quatinit = avec->get_quat_init();
+  double *max_rad = avec->get_max_rads();
 
   inum = list->inum;
   ilist = list->ilist;
@@ -122,10 +124,10 @@ void PairSH::compute(int eflag, int vflag)
     ishtype = shtype[i];
     jlist = firstneigh[i];
     jnum = numneigh[i];
-    radi = radius[i];
+    radi = max_rad[ishtype];
 
     // Unrolling the initial quat (Unit quaternion - inverse = conjugate)
-    MathExtra::qconjugate(quatinit[i],quat_temp);
+    MathExtra::qconjugate(quatinit[ishtype],quat_temp);
     // Calculating the quat to rotate the particles to new position (q_delta = q_target * q_current^-1)
     MathExtra::quatquat(quat[i],quat_temp,iquat_delta);
     MathExtra::qnormalize(iquat_delta);
@@ -139,84 +141,39 @@ void PairSH::compute(int eflag, int vflag)
       delx = xtmp - x[j][0];
       dely = ytmp - x[j][1];
       delz = ztmp - x[j][2];
-      radj = radius[j];
+      jshtype = shtype[j];
+      radj = max_rad[jshtype];
       radsum = radi + radj;
       rsq = delx*delx + dely*dely + delz*delz;
       r = sqrt(rsq);
       jtype = type[j];
-      jshtype = shtype[j];
 
       if (r < radsum) {
-        std::cout << "ij: " <<i<<j<< " r: "<< r  << "  radsum: " << radsum << std::endl;
-//        std::cout << "xi : " << x[i][0] << " " << x[i][1] << " "<< x[i][2] << std::endl;
-//        std::cout << "xj : " << x[j][0] << " " << x[j][1] << " "<< x[j][2] << std::endl;
-        if (r < MAX(radi, radj)){
-//          std::cout << std::endl;
-//          std::cout << radi << " " << radj << " " << r << std::endl;
-//          std::cout << std::endl;
-          error->all(FLERR,"Error, centre within radius!");
-        }
+        std::cout << "ij: " <<i<<j<< " r: "<< r  << "  radsum: " << radsum << " " << nlocal << std::endl;
+        // TODO require a check here to make sure that the COG of particle is not inside of other particle. Comparing
+        // max radii does not work as not a correct test for asymmetrical particles. Check should also look at minimum
+        // radius. There will then be a zone in which the COG of a particle *could* be inside another, but this can't be
+        // proven until the SH expansion has been tested.
+        //if (r < MAX(radi, radj)){
+        //  error->all(FLERR,"Error, centre within radius!");
+        //}
 
         // Unrolling the initial quat (Unit quaternion - inverse = conjugate)
-        MathExtra::qconjugate(quatinit[j],quat_temp);
+        MathExtra::qconjugate(quatinit[jshtype],quat_temp);
         // Calculating the quat to rotate the particles to new position (q_delta = q_target * q_current^-1)(space frame)
         MathExtra::quatquat(quat[j],quat_temp,jquat_delta);
         MathExtra::qnormalize(jquat_delta);
         // Calculate the rotation matrix for the quaternion for atom j
         MathExtra::quat_to_mat(jquat_delta,jrot);
 
-        // Compare all points of guassian quadrature on atom i against the projected point on atom j
-        for (ll=0; ll<num_quad2; ll++) {
-          // Point of gaussian quadrature in body frame
-          ixquadbf[0] = quad_rads[ishtype][ll] * sin(angles[0][ll]) * cos(angles[1][ll]);
-          ixquadbf[1] = quad_rads[ishtype][ll] * sin(angles[0][ll]) * sin(angles[1][ll]);
-          ixquadbf[2] = quad_rads[ishtype][ll] * cos(angles[0][ll]);
-          // Point of gaussian quadrature in space frame
-          MathExtra::matvec(irot,ixquadbf,ixquadsf);
-          // Translating by current location of particle i's centre
-          ixquadsf[0] += xtmp;
-          ixquadsf[1] += ytmp;
-          ixquadsf[2] += ztmp;
-          // vector distance from gauss point on atom i to COG of atom j (in space frame)
-          MathExtra::sub3(ixquadsf, x[j], xgauss);
-          // scalar distance
-          dtemp = MathExtra::len3(xgauss);
-          // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
-          MathExtra::transpose_matvec(jrot,xgauss,xgaussproj);
-          // Get projected phi and theta angle of gauss point in atom j's body frame
-          phi_proj = std::atan2(xgaussproj[1], xgaussproj[0]);
-          theta_proj = std::acos(xgaussproj[2] / dtemp);
-          // Check for contact
-          if(avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)){
-            // Get the phi and thea angles as project from the gauss point in the space frame for both particle i and j
-            phi = std::atan2(xgauss[1], xgauss[0]);
-            theta = std::acos(xgauss[2] / dtemp);
-            // Get the space frame vector of the radius
-            jxquadsf[0] = finalrad * sin(phi) * cos(theta);
-            jxquadsf[1] = finalrad * sin(phi) * sin(theta);
-            jxquadsf[2] = finalrad * cos(phi);
-            // Translating by current location of particle j's centre
-            jxquadsf[0] += x[j][0];
-            jxquadsf[1] += x[j][1];
-            jxquadsf[2] += x[j][2];
-            // Getting the overlap vector in the space frame, acting towards the COG of particle j
-            MathExtra::sub3(jxquadsf, ixquadsf, overlap);
-            // Using a F=-kx force for testing.
-            fpair = normal_coeffs[itype][jtype][0];
-            f[j][0] += overlap[0]*fpair;
-            f[j][1] += overlap[1]*fpair;
-            f[j][2] += overlap[2]*fpair;
-          }
-        }
-
         // Compare all points of guassian quadrature on atom j against the projected point on atom i
-        for (ll=0; ll<num_quad2; ll++) {
+        for (ll = 0; ll < num_quad2; ll++) {
           // Point of gaussian quadrature in body frame
           jxquadbf[0] = quad_rads[jshtype][ll] * sin(angles[0][ll]) * cos(angles[1][ll]);
           jxquadbf[1] = quad_rads[jshtype][ll] * sin(angles[0][ll]) * sin(angles[1][ll]);
           jxquadbf[2] = quad_rads[jshtype][ll] * cos(angles[0][ll]);
           // Point of gaussian quadrature in space frame
-          MathExtra::matvec(jrot,jxquadbf,jxquadsf);
+          MathExtra::matvec(jrot, jxquadbf, jxquadsf);
           // Translating by current location of particle j's centre
           jxquadsf[0] += x[j][0];
           jxquadsf[1] += x[j][1];
@@ -226,19 +183,19 @@ void PairSH::compute(int eflag, int vflag)
           // scalar distance
           dtemp = MathExtra::len3(xgauss);
           // Rotating the projected point into atom i's body frame (rotation matrix transpose = inverse)
-          MathExtra::transpose_matvec(irot,xgauss,xgaussproj);
+          MathExtra::transpose_matvec(irot, xgauss, xgaussproj);
           // Get projected phi and theta angle of gauss point in atom i's body frame
           phi_proj = std::atan2(xgaussproj[1], xgaussproj[0]);
           theta_proj = std::acos(xgaussproj[2] / dtemp);
           // Check for contact
-          if(avec->check_contact(ishtype, phi_proj, theta_proj, dtemp, finalrad)){
+          if (avec->check_contact(ishtype, phi_proj, theta_proj, dtemp, finalrad)) {
             // Get the phi and thea angles as project from the gauss point in the space frame for both particle i and j
             phi = std::atan2(xgauss[1], xgauss[0]);
             theta = std::acos(xgauss[2] / dtemp);
             // Get the space frame vector of the radius
-            ixquadsf[0] = finalrad * sin(phi) * cos(theta);
-            ixquadsf[1] = finalrad * sin(phi) * sin(theta);
-            ixquadsf[2] = finalrad * cos(phi);
+            ixquadsf[0] = finalrad * sin(theta) * cos(phi);
+            ixquadsf[1] = finalrad * sin(theta) * sin(phi);
+            ixquadsf[2] = finalrad * cos(theta);
             // Translating by current location of particle i's centre
             ixquadsf[0] += xtmp;
             ixquadsf[1] += ytmp;
@@ -247,12 +204,58 @@ void PairSH::compute(int eflag, int vflag)
             MathExtra::sub3(ixquadsf, jxquadsf, overlap);
             // Using a F=-kx force for testing.
             fpair = normal_coeffs[itype][jtype][0];
-            f[i][0] += overlap[0]*fpair;
-            f[i][1] += overlap[1]*fpair;
-            f[i][2] += overlap[2]*fpair;
+            f[i][0] += overlap[0] * fpair;
+            f[i][1] += overlap[1] * fpair;
+            f[i][2] += overlap[2] * fpair;
           }
         }
 
+        if (newton_pair || j < nlocal) {
+          // Compare all points of guassian quadrature on atom i against the projected point on atom j
+          for (ll=0; ll<num_quad2; ll++) {
+            // Point of gaussian quadrature in body frame
+            ixquadbf[0] = quad_rads[ishtype][ll] * sin(angles[0][ll]) * cos(angles[1][ll]);
+            ixquadbf[1] = quad_rads[ishtype][ll] * sin(angles[0][ll]) * sin(angles[1][ll]);
+            ixquadbf[2] = quad_rads[ishtype][ll] * cos(angles[0][ll]);
+            // Point of gaussian quadrature in space frame
+            MathExtra::matvec(irot, ixquadbf, ixquadsf);
+            // Translating by current location of particle i's centre
+            ixquadsf[0] += xtmp;
+            ixquadsf[1] += ytmp;
+            ixquadsf[2] += ztmp;
+            // vector distance from COG of atom j (in space frame) to gauss point on atom i
+            MathExtra::sub3(ixquadsf, x[j], xgauss);
+            // scalar distance
+            dtemp = MathExtra::len3(xgauss);
+            // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
+            MathExtra::transpose_matvec(jrot, xgauss, xgaussproj);
+            // Get projected phi and theta angle of gauss point in atom j's body frame
+            phi_proj = std::atan2(xgaussproj[1], xgaussproj[0]);
+            theta_proj = std::acos(xgaussproj[2] / dtemp);
+
+            // Check for contact
+            if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
+              // Get the phi and thea angles as project from the gauss point in the space frame for both particle i and j
+              phi = std::atan2(xgauss[1], xgauss[0]);
+              theta = std::acos(xgauss[2] / dtemp);
+              // Get the space frame vector of the radius
+              jxquadsf[0] = finalrad * sin(theta) * cos(phi);
+              jxquadsf[1] = finalrad * sin(theta) * sin(phi);
+              jxquadsf[2] = finalrad * cos(theta);
+              // Translating by current location of particle j's centre
+              jxquadsf[0] += x[j][0];
+              jxquadsf[1] += x[j][1];
+              jxquadsf[2] += x[j][2];
+              // Getting the overlap vector in the space frame, acting towards the COG of particle j
+              MathExtra::sub3(jxquadsf, ixquadsf, overlap);
+              // Using a F=-kx force for testing.
+              fpair = normal_coeffs[itype][jtype][0];
+              f[j][0] += overlap[0] * fpair;
+              f[j][1] += overlap[1] * fpair;
+              f[j][2] += overlap[2] * fpair;
+           }
+          }
+        }
       }
     }
   }
@@ -323,7 +326,7 @@ void PairSH::coeff(int narg, char **arg)
     for (int j = MAX(jlo,i); j <= jhi; j++) {
       shi = typetosh[i];
       shj = typetosh[j];
-      cut[i][j] = MAX(max_rad[shi], max_rad[shj]);
+      cut[i][j] = max_rad[shi]+max_rad[shj];
       setflag[i][j] = 1;
       normal_coeffs[i][j][0] = normal_coeffs_one;
       count++;
@@ -361,16 +364,21 @@ void PairSH::matchtype()
       error->all(FLERR,"Types must have same Spherical Harmonic particle type");
     }
   }
+
+  // Possibility that atoms on different processors may have associated different
+  // SH particle types with atom->types. This will not be caught here and the maximum
+  // will be taken.
+  MPI_Allreduce(MPI_IN_PLACE,typetosh,atom->ntypes+1,MPI_INT,MPI_MAX,world);
 }
 
 /* ----------------------------------------------------------------------
    init specific to this pair style
 ------------------------------------------------------------------------- */
 
-void PairSH::init_style()
-{
-  neighbor->request(this,instance_me);
-}
+//void PairSH::init_style()
+//{
+//  neighbor->request(this,instance_me);
+//}
 
 /* ----------------------------------------------------------------------
    init for one type pair i,j and corresponding j,i
@@ -390,7 +398,7 @@ double PairSH::init_one(int i, int j)
   if (setflag[i][j] == 0) {
     shi = typetosh[i];
     shj = typetosh[j];
-    cut[i][j] = MAX(max_rad[shi], max_rad[shj]);
+    cut[i][j] = max_rad[shi]+max_rad[shj];
   }
 
   // TO FIX - Just use the first coefficient for the pair, no mixing

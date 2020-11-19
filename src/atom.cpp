@@ -79,13 +79,7 @@ Atom::Atom(LAMMPS *lmp) : Pointers(lmp)
   // spherical harmonics
 
   shtype = NULL;
-  inertia = NULL;
   quat = NULL;
-  quatinit = NULL;
-  shcoeffs = NULL;
-//  nshtypes = 0;
-//  shcoeff = NULL;
-//  sh_setflag = NULL;
 
   tag = NULL;
   type = mask = NULL;
@@ -312,11 +306,8 @@ Atom::~Atom()
   delete unique_tags;
 
 //  JY ADDED
-//  memory->destroy(shcoeff);
   memory->destroy(shtype);
-  memory->destroy(inertia);
   memory->destroy(quat);
-//  delete [] sh_setflag;
 }
 
 /* ----------------------------------------------------------------------
@@ -360,10 +351,7 @@ void Atom::peratom_create()
   if (sizeof(imageint) == 8) imageintsize = BIGINT;
 
   add_peratom("shtype",&shtype,INT,0);
-  add_peratom("inertia",&inertia,DOUBLE,3);
   add_peratom("quat",&quat,DOUBLE,4);
-  add_peratom("quatinit",&quatinit,DOUBLE,4);
-  add_peratom("shcoeffs",&shcoeffs,DOUBLE,882);
 
   add_peratom("id",&tag,tagintsize,0);
   add_peratom("type",&type,INT,0);
@@ -2400,9 +2388,7 @@ void *Atom::extract(char *name)
   // 4th customization section: customize by adding new variable name
 
   if (strcmp(name,"shtype") == 0) return (void *) shtype;
-  if (strcmp(name,"inertia") == 0) return (void *) inertia;
   if (strcmp(name,"quat") == 0) return (void *) quat;
-  if (strcmp(name,"quatinit") == 0) return (void *) quatinit;
 
   if (strcmp(name,"mass") == 0) return (void *) mass;
 

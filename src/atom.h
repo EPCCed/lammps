@@ -65,12 +65,7 @@ class Atom : protected Pointers {
   // spherical harmonics
 
   int *shtype;             // integer array or spherical harmonic types
-  double **inertia;
   double **quat;
-  double **quatinit;
-  double **shcoeffs;         // per atom
-//  double **shcoeff;        // spherical harmonic coefficients [PER-TYPE ARRAY, NOT PER-ATOM]
-//  int *sh_setflag;         // whether the spherical harmonic coefficients have been set or not
   int nshtypes;              // Number of spherical harmonic particle types
 
   // charged and dipolar particles

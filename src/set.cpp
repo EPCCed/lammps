@@ -23,7 +23,6 @@
 #include "atom_vec_line.h"
 #include "atom_vec_tri.h"
 #include "atom_vec_body.h"
-#include "atom_vec_shperatom.h"
 #include "domain.h"
 #include "region.h"
 #include "group.h"
@@ -53,7 +52,7 @@ enum{TYPE,TYPE_FRACTION,TYPE_RATIO,TYPE_SUBSET,
      DIAMETER,DENSITY,VOLUME,IMAGE,BOND,ANGLE,DIHEDRAL,IMPROPER,
      SPH_E,SPH_CV,SPH_RHO,EDPD_TEMP,EDPD_CV,CC,SMD_MASS_DENSITY,
      SMD_CONTACT_RADIUS,DPDTHETA,INAME,DNAME,VX,VY,VZ,
-     SH_TYPE, SH_TYPE_RANDOM, SH_QUAT, SH_QUAT_RANDOM };
+     SH_TYPE, SH_QUAT, SH_QUAT_RANDOM };
 
 #define BIG INT_MAX
 
@@ -605,16 +604,6 @@ void Set::command(int narg, char **arg)
       set(SH_TYPE);
       iarg += 2;
 
-    } else if (strcmp(arg[iarg],"sh/type/random") == 0) {
-      if (iarg+2 > narg) error->all(FLERR,"Illegal set command");
-      ivalue = force->inumeric(FLERR,arg[iarg+1]);
-      if (!atom->spherharm_flag)
-        error->all(FLERR,"Cannot set this attribute for this atom style");
-      if (ivalue <= 0)
-        error->all(FLERR,"Invalid random number seed in set command");
-      setrandom(SH_TYPE_RANDOM);
-      iarg += 2;
-
     } else if (strcmp(arg[iarg],"sh/quat") == 0) {
       if (iarg + 5 > narg) error->all(FLERR, "Illegal set command");
       if (strstr(arg[iarg + 1], "v_") == arg[iarg + 1]) varparse(arg[iarg + 1], 1);
@@ -1028,15 +1017,10 @@ void Set::set(int keyword)
     // Spherical Harmonics
     else if (keyword == SH_TYPE) {
 
-      auto *avec_shperatom = (AtomVecShperatom *) atom->style_match("shperatom");
       int nshtypes = atom->nshtypes;
-
-      std::cout << "No SH TYPES = " << nshtypes << std::endl;
-
       if (ivalue <= 0 || ivalue > nshtypes)
         error->one(FLERR,"Invalid value in set command");
       atom->shtype[i] = ivalue-1;
-      avec_shperatom->set_properties(i);
     }
 
     else if (keyword == SH_QUAT) {
@@ -1319,24 +1303,6 @@ void Set::setrandom(int keyword)
     }
 
   // Spherical Harmonics
-  // set atom sperical harmonic types to random values
-
-  } else if (keyword == SH_TYPE_RANDOM) {
-    auto *avec_shperatom = (AtomVecShperatom *) atom->style_match("shperatom");
-    int nshtypes = atom->nshtypes;
-    int nlocal = atom->nlocal;
-    srand(seed);
-    if (domain->dimension == 3) {
-      double s,t1,t2,theta1,theta2;
-      for (i = 0; i < nlocal; i++)
-        if (select[i]) {
-          atom->shtype[i] = rand() % nshtypes;
-          avec_shperatom->set_properties(i);
-          count++;
-        }
-
-    } else error->one(FLERR,"Shperatom must be three-dimensional");
-
   // set quaternions to random orientations in 3d
 
   } else if (keyword == SH_QUAT_RANDOM) {
