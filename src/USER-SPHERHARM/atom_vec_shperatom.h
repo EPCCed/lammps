@@ -22,6 +22,7 @@ AtomStyle(shperatom,AtomVecShperatom)
 
 #include "atom_vec.h"
 #include <cmath>
+#include <string>
 
 namespace LAMMPS_NS {
 
@@ -56,7 +57,7 @@ class AtomVecShperatom : public AtomVec {
 
   double *radius,*rmass;
   double **omega;
-  int *shtype;                  // spherical harmonic type used
+  int *shtype;
   double **angmom;
   double **quat;
 
@@ -64,14 +65,6 @@ class AtomVecShperatom : public AtomVec {
   double **pinertia_bytype;
   double **orient_bytype;
   int maxshexpan;
-  int nfile,maxfile;            // current # and max # of open input files
-  int curfile,curentry;         // current # and max # of open input files
-  FILE **infiles;               // list of open input file
-  int maxline,maxcopy;          // max lengths of char strings
-  char *line,*copy,*work;       // input line & copy and work string
-  int lnarg;                    // # of command args
-  char **larg;                  // parsed args for command
-  int maxarg;                   // max # of args in arg
   double **angles;
   double *weights;
   double **quad_rads;
@@ -82,11 +75,9 @@ class AtomVecShperatom : public AtomVec {
   double **expfacts;
   double *maxrad;
 
-
   int radvary;
   double radius_one,rmass_one;
-  int me;                       // proc ID
-
+  int me;
 
   // FOR ELLIPSOID TEST ONLY
   double **ellipsoidshape;
@@ -95,13 +86,7 @@ class AtomVecShperatom : public AtomVec {
   void getI();
   void calcexpansionfactors();
   void calcexpansionfactors_gauss();
-
-  void read_coeffs(char *);// process an input file
-  void read_coeffs();      // process all input
-  void parse();                          // parse an input text line
-  void reallocate(char *&, int &, int);  // reallocate a char string
-  int numtriple(char *);                 // count number of triple quotes
-  char *nextword(char *, char **);       // find next word in string with quotes
+  void read_sh_coeffs(char *, int);
 
 };
 
@@ -109,15 +94,3 @@ class AtomVecShperatom : public AtomVec {
 
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-E: Invalid radius in Atoms section of data file
-
-Radius must be >= 0.0.
-
-E: Invalid density in Atoms section of data file
-
-Density value cannot be <= 0.0.
-
-*/
