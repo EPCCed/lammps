@@ -38,7 +38,7 @@ class AtomVecShperatom : public AtomVec {
   void pack_data_post(int);
 
   ~AtomVecShperatom();     // Destructor
-  void get_expfactors(int, double *);
+
   double** get_quadrature_rads(int &in_num_quad2){
     in_num_quad2 = num_quad2;
     return &quad_rads[0];
@@ -91,28 +91,6 @@ class AtomVecShperatom : public AtomVec {
   // FOR ELLIPSOID TEST ONLY
   double **ellipsoidshape;
 
-  //----- Trying to integrate fastgl -------//
-  // A struct for containing a Node-Weight pair
-  struct QuadPair {
-    double theta, weight;
-
-    // A function for getting the node in x-space
-    double x() {return cos(theta);}
-
-    // A constructor
-    QuadPair(double t, double w) : theta(t), weight(w) {}
-    QuadPair() {}
-  };
-  // Function for getting Gauss-Legendre nodes & weights
-  // Theta values of the zeros are in [0,pi], and monotonically increasing.
-  // The index of the zero k should always be in [1,n].
-  // Compute a node-weight pair:
-  QuadPair GLPair(size_t, size_t);
-
-  double besseljzero(int);
-  double besselj1squared(int);
-  QuadPair GLPairS(size_t, size_t);
-  QuadPair GLPairTabulated(size_t, size_t);
   void get_quadrature_values();
   void getI();
   void calcexpansionfactors();
@@ -124,10 +102,6 @@ class AtomVecShperatom : public AtomVec {
   void reallocate(char *&, int &, int);  // reallocate a char string
   int numtriple(char *);                 // count number of triple quotes
   char *nextword(char *, char **);       // find next word in string with quotes
-  double plegendre(int, int, double);
-  double plegendre_nn(int, double, double);
-  double plegendre_recycle(int, int, double, double, double);
-
 
 };
 
