@@ -199,7 +199,8 @@ values for the 6 wall/particle coefficients than for particle/particle
 interactions.  E.g. if you wish to model the wall as a different
 material.
 
-**Restart, fix_modify, output, run start/stop, minimize info:**
+Restart, fix_modify, output, run start/stop, minimize info
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 Similar to :doc:`fix wall/gran <fix_wall_gran>` command, this fix writes
 the shear friction state of atoms interacting with the wall to :doc:`binary restart files <restart>`, so that a simulation can continue
@@ -245,11 +246,11 @@ the following table:
 +-------+----------------------------------------------------+----------------+
 |     4 | Force :math:`f_z` exerted on the wall              | force units    |
 +-------+----------------------------------------------------+----------------+
-|     5 | :math:`\Delta x` between wall surface and particle | distance units |
+|     5 | :math:`x`-coordinate of contact point on wall      | distance units |
 +-------+----------------------------------------------------+----------------+
-|     6 | :math:`\Delta y` between wall surface and particle | distance units |
+|     6 | :math:`y`-coordinate of contact point on wall      | distance units |
 +-------+----------------------------------------------------+----------------+
-|     7 | :math:`\Delta z` between wall surface and particle | distance units |
+|     7 | :math:`z`-coordinate of contact point on wall      | distance units |
 +-------+----------------------------------------------------+----------------+
 |     8 | Radius :math:`r` of atom                           | distance units |
 +-------+----------------------------------------------------+----------------+
@@ -274,4 +275,7 @@ Related commands
 :doc:`pair_style granular <pair_gran>`,
 :doc:`region <region>`
 
-**Default:** none
+Default
+"""""""
+
+none

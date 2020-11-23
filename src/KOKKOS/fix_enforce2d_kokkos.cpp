@@ -1,6 +1,6 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -49,7 +49,7 @@ void FixEnforce2DKokkos<DeviceType>::setup(int vflag)
 
 
 template <class DeviceType>
-void FixEnforce2DKokkos<DeviceType>::post_force(int vflag)
+void FixEnforce2DKokkos<DeviceType>::post_force(int /*vflag*/)
 {
   atomKK->sync(execution_space,datamask_read);
 
