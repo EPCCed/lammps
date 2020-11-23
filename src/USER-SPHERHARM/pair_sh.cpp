@@ -311,9 +311,9 @@ void PairSH::coeff(int narg, char **arg)
 
   int ilo,ihi,jlo,jhi;
   double normal_coeffs_one;
-  force->bounds(FLERR,arg[0],atom->ntypes,ilo,ihi);
-  force->bounds(FLERR,arg[1],atom->ntypes,jlo,jhi);
-  normal_coeffs_one = force->numeric(FLERR,arg[2]); // kn
+  utils::bounds(FLERR,arg[0],1,atom->ntypes,ilo,ihi,error);
+  utils::bounds(FLERR,arg[1],1,atom->ntypes,jlo,jhi,error);
+  normal_coeffs_one = utils::numeric(FLERR,arg[2],false,lmp);// kn
 
   // Linking the Types to the SH Types, needed for finding the cut per Type
   if (!matchtypes) matchtype();

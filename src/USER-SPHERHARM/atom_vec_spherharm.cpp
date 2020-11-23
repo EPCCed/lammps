@@ -24,6 +24,7 @@
 #include "utils.h"
 #include "math_extra.h"
 #include "fmt/format.h"
+#include "math_eigen.h"
 #include "math_spherharm.h"
 
 using namespace LAMMPS_NS;
@@ -312,7 +313,7 @@ void AtomVecSpherharm::getI() {
     tensor[0][2] = tensor[2][0] = itensor[4];
     tensor[0][1] = tensor[1][0] = itensor[3];
 
-    ierror = MathExtra::jacobi(tensor, inertia, evectors);
+    ierror = MathEigen::jacobi3(tensor,inertia,evectors);
     if (ierror) error->all(FLERR,"Insufficient Jacobi rotations for rigid body");
     ex[0] = evectors[0][0];
     ex[1] = evectors[1][0];

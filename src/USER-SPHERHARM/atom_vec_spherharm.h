@@ -50,8 +50,8 @@ class AtomVecSpherharm : public AtomVec {
     return &quad_rads_byshape[0];
   }
 
-// private:
-  protected:
+//private:
+ protected:
   // per-atom arrays
   double **omega;
   int *shtype;                 // Links atom to the SH shape type that it uses
