@@ -37,7 +37,7 @@ class PairSH : public Pair {
  protected:
   double **cut;
 
-  class AtomVecShperatom *avec;
+  class AtomVecSpherharm *avec;
 
   virtual void allocate();
 

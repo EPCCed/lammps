@@ -21,7 +21,7 @@
 #include "atom.h"
 #include "atom_vec_ellipsoid.h"
 #include "error.h"
-#include "atom_vec_shperatom.h"
+#include "atom_vec_spherharm.h"
 
 
 using namespace LAMMPS_NS;
@@ -36,9 +36,9 @@ FixNVESh::FixNVESh(LAMMPS *lmp, int narg, char **arg) :
 
 void FixNVESh::init()
 {
-  avec = (AtomVecShperatom *) atom->style_match("shperatom");
+  avec = (AtomVecSpherharm *) atom->style_match("spherharm");
   if (!avec)
-    error->all(FLERR,"Fix nve/sh requires atom style shperatom");
+    error->all(FLERR,"Fix nve/sh requires atom style spherharm");
 
   // check that all particles are finite-size ellipsoids
   // no point particles allowed, spherical is OK
@@ -69,12 +69,13 @@ void FixNVESh::initial_integrate(int /*vflag*/)
   double **f = atom->f;
   double **angmom = atom->angmom;
   double **torque = atom->torque;
-  double *rmass = atom->rmass;
+  double *mass = atom->mass;
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
   if (igroup == atom->firstgroup) nlocal = atom->nfirst;
   int *shtype = atom->shtype;
-  int ishtype;
+  int *type = atom->type;
+  int itype, ishtype;
 
   // set timestep here since dt may have changed or come via rRESPA
 
@@ -82,7 +83,8 @@ void FixNVESh::initial_integrate(int /*vflag*/)
 
   for (int i = 0; i < nlocal; i++)
     if (mask[i] & groupbit) {
-      dtfm = dtf / rmass[i];
+      itype = type[i];
+      dtfm = dtf / mass[itype];
       v[i][0] += dtfm * f[i][0];
       v[i][1] += dtfm * f[i][1];
       v[i][2] += dtfm * f[i][2];
@@ -117,14 +119,17 @@ void FixNVESh::final_integrate()
   double **f = atom->f;
   double **angmom = atom->angmom;
   double **torque = atom->torque;
-  double *rmass = atom->rmass;
+  double *mass = atom->mass;
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
   if (igroup == atom->firstgroup) nlocal = atom->nfirst;
+  int *type = atom->type;
+  int itype;
 
   for (int i = 0; i < nlocal; i++)
     if (mask[i] & groupbit) {
-      dtfm = dtf / rmass[i];
+      itype = type[i];
+      dtfm = dtf / mass[itype];
       v[i][0] += dtfm * f[i][0];
       v[i][1] += dtfm * f[i][1];
       v[i][2] += dtfm * f[i][2];

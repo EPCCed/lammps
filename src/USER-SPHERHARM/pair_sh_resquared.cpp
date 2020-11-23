@@ -20,7 +20,7 @@
 #include <cmath>
 #include "math_extra.h"
 #include "atom.h"
-#include "atom_vec_shperatom.h"
+#include "atom_vec_spherharm.h"
 #include "comm.h"
 #include "force.h"
 #include "neighbor.h"
@@ -323,7 +323,7 @@ void PairSHRESquared::init_style()
 //  avec = (AtomVecEllipsoid *) atom->style_match("ellipsoid");
 //  if (!avec) error->all(FLERR,"Pair resquared requires atom style ellipsoid");
 
-  avec = (AtomVecShperatom *) atom->style_match("shperatom");
+  avec = (AtomVecSpherharm *) atom->style_match("shperatom");
   if (!avec) error->all(FLERR,"Pair resquared requires atom style shperatom");
 
   neighbor->request(this,instance_me);
@@ -355,7 +355,7 @@ int PairSHRESquared::shape_consistency(int itype,
 //  double *shape;
   double shape[3] = {0.0, 0.0, 0.0};
 
-  auto avec_sphperatom= (AtomVecShperatom *) atom->style_match("shperatom");
+  auto avec_sphperatom= (AtomVecSpherharm *) atom->style_match("shperatom");
 
   int flag = 0;
   for (int i = 0; i < atom->nlocal; i++) {

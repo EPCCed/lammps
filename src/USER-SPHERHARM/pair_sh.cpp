@@ -33,7 +33,7 @@
 #include "error.h"
 #include "utils.h"
 #include "math_extra.h"
-#include "atom_vec_shperatom.h"
+#include "atom_vec_spherharm.h"
 
 using namespace LAMMPS_NS;
 using namespace MathConst;
@@ -292,7 +292,7 @@ void PairSH::allocate()
 void PairSH::settings(int narg, char **arg) {
   if (narg != 0) error->all(FLERR, "Illegal pair_style command");
 
-  avec = (AtomVecShperatom *) atom->style_match("shperatom");
+  avec = (AtomVecSpherharm *) atom->style_match("spherharm");
   if (!avec) error->all(FLERR,"Pair SH requires atom style shperatom");
 
 }

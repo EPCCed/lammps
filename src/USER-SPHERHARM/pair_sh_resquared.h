@@ -55,7 +55,7 @@ class PairSHRESquared : public Pair {
   double **offset;
   int *setwell;
 //  class AtomVecEllipsoid *avec;
-  class AtomVecShperatom *avec;
+  class AtomVecSpherharm *avec;
 
   // per-particle temporaries for RE-squared calculation
 

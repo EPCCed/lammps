@@ -33,7 +33,7 @@ class FixNVESh : public FixNVE {
 
  private:
   double dtq;
-  class AtomVecShperatom *avec;
+  class AtomVecSpherharm *avec;
 };
 
 }

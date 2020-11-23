@@ -8,9 +8,9 @@ thermo_modify	flush yes
 units 		si  
 
 variable	minrad equal 0.5
-variable	maxrad equal 1.4
+variable	maxrad_byshape equal 1.4
 
-variable 	skin equal 0.3*${maxrad}
+variable 	skin equal 0.3*${maxrad_byshape}
 
 boundary	p p f
 region		reg block 0 20 0 20 0 200 units box
