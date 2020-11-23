@@ -98,6 +98,7 @@ OPT.
    * :doc:`manifoldforce <fix_manifoldforce>`
    * :doc:`meso/move <fix_meso_move>`
    * :doc:`momentum (k) <fix_momentum>`
+   * :doc:`momentum/chunk <fix_momentum>`
    * :doc:`move <fix_move>`
    * :doc:`mscg <fix_mscg>`
    * :doc:`msst <fix_msst>`
@@ -149,6 +150,7 @@ OPT.
    * :doc:`orient/bcc <fix_orient>`
    * :doc:`orient/fcc <fix_orient>`
    * :doc:`orient/eco <fix_orient_eco>`
+   * :doc:`pafi <fix_pafi>`
    * :doc:`phonon <fix_phonon>`
    * :doc:`pimd <fix_pimd>`
    * :doc:`planeforce <fix_planeforce>`
@@ -193,7 +195,7 @@ OPT.
    * :doc:`saed/vtk <fix_saed_vtk>`
    * :doc:`setforce (k) <fix_setforce>`
    * :doc:`setforce/spin <fix_setforce>`
-   * :doc:`shake <fix_shake>`
+   * :doc:`shake (k) <fix_shake>`
    * :doc:`shardlow (k) <fix_shardlow>`
    * :doc:`smd <fix_smd>`
    * :doc:`smd/adjust_dt <fix_smd_adjust_dt>`

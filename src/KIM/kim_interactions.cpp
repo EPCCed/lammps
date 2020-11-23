@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://lammps.sandia.gov/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -57,23 +57,18 @@
 ------------------------------------------------------------------------- */
 
 #include "kim_interactions.h"
-#include <cstring>
-#include <cstdio>
-#include <string>
-#include <sstream>
-#include <vector>
-#include "error.h"
+
 #include "atom.h"
 #include "comm.h"
 #include "domain.h"
+#include "error.h"
+#include "fix_store_kim.h"
+#include "input.h"
 #include "modify.h"
 #include "update.h"
-#include "universe.h"
-#include "input.h"
-#include "variable.h"
-#include "utils.h"
-#include "fix_store_kim.h"
-#include "fmt/format.h"
+
+#include <cstring>
+#include <vector>
 
 extern "C" {
 #include "KIM_SimulatorHeaders.h"
@@ -108,12 +103,12 @@ void KimInteractions::do_setup(int narg, char **arg)
     fixed_types = false;
   }
 
-  char *model_name = NULL;
-  KIM_SimulatorModel *simulatorModel(NULL);
+  char *model_name = nullptr;
+  KIM_SimulatorModel *simulatorModel(nullptr);
 
   // check if we had a kim_init command by finding fix STORE/KIM
   // retrieve model name and pointer to simulator model class instance.
-  // validate model name if not given as NULL.
+  // validate model name if not given as null pointer.
 
   int ifix = modify->find_fix("KIM_MODEL_STORE");
   if (ifix >= 0) {
@@ -190,6 +185,9 @@ void KimInteractions::do_setup(int narg, char **arg)
       KIM_SimulatorModel_GetSimulatorFieldMetadata(
         simulatorModel,i,&sim_lines,&sim_field);
       if (0 == strcmp(sim_field,"model-defn")) {
+	if (domain->periodicity[0]&&domain->periodicity[1]&&domain->periodicity[2]) input->one("variable kim_periodic equal 1");
+	else if (domain->periodicity[0]&&domain->periodicity[1]&&!domain->periodicity[2]) input->one("variable kim_periodic equal 2");
+	else input->one("variable kim_periodic equal 0");
         sim_model_idx = i;
         for (int j=0; j < sim_lines; ++j) {
           KIM_SimulatorModel_GetSimulatorFieldLine(
@@ -256,12 +254,12 @@ void KimInteractions::KIM_SET_TYPE_PARAMETERS(const std::string &input_line) con
   std::string key = words[1];
   std::string filename = words[2];
   std::vector<std::string> species(words.begin()+3,words.end());
-  if (species.size() != atom->ntypes)
+  if ((int)species.size() != atom->ntypes)
     error->one(FLERR,"Incorrect args for KIM_SET_TYPE_PARAMETERS command");
 
   FILE *fp;
   fp = fopen(filename.c_str(),"r");
-  if (fp == NULL) {
+  if (fp == nullptr) {
     error->one(FLERR,"Parameter file not found");
   }
 
@@ -271,7 +269,7 @@ void KimInteractions::KIM_SET_TYPE_PARAMETERS(const std::string &input_line) con
   while (1) {
     if (comm->me == 0) {
       ptr = fgets(line,MAXLINE,fp);
-      if (ptr == NULL) {
+      if (ptr == nullptr) {
         eof = 1;
         fclose(fp);
       } else n = strlen(line) + 1;
@@ -281,7 +279,6 @@ void KimInteractions::KIM_SET_TYPE_PARAMETERS(const std::string &input_line) con
     MPI_Bcast(&n,1,MPI_INT,0,world);
     MPI_Bcast(line,n,MPI_CHAR,0,world);
 
-    ptr = line;
     nocomment = line[0] != '#';
 
     if(nocomment) {
@@ -291,7 +288,7 @@ void KimInteractions::KIM_SET_TYPE_PARAMETERS(const std::string &input_line) con
           for (int ib = ia; ib < atom->ntypes; ++ib)
             if (((species[ia] == words[0]) && (species[ib] == words[1]))
                 || ((species[ib] == words[0]) && (species[ia] == words[1])))
-              input->one(fmt::format("pair_coeff {} {} {}",ia+1,ib+1,words[2]));
+              input->one(fmt::format("pair_coeff {} {} {}",ia+1,ib+1,fmt::join(words.begin()+2,words.end()," ")));
         }
       } else if (key == "charge") {
         for (int ia = 0; ia < atom->ntypes; ++ia)

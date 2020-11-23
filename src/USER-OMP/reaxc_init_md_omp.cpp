@@ -23,11 +23,11 @@
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
   See the GNU General Public License for more details:
-  <http://www.gnu.org/licenses/>.
+  <https://www.gnu.org/licenses/>.
   ----------------------------------------------------------------------*/
 
 #include "reaxc_init_md_omp.h"
-#include <cstdlib>
+
 #include "reaxc_defs.h"
 #include "reaxc_forces.h"
 #include "reaxc_forces_omp.h"
@@ -37,6 +37,8 @@
 #include "reaxc_tool_box.h"
 #include "error.h"
 #include "fmt/format.h"
+
+#include <cstdlib>
 
 // Functions defined in reaxc_init_md.cpp
 extern int Init_MPI_Datatypes(reax_system*, storage*, mpi_datatypes*, MPI_Comm, char*);
