@@ -186,7 +186,9 @@ void PairSH::compute(int eflag, int vflag)
           MathExtra::transpose_matvec(irot, xgauss, xgaussproj);
           // Get projected phi and theta angle of gauss point in atom i's body frame
           phi_proj = std::atan2(xgaussproj[1], xgaussproj[0]);
+          phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
           theta_proj = std::acos(xgaussproj[2] / dtemp);
+
           // Check for contact
           if (avec->check_contact(ishtype, phi_proj, theta_proj, dtemp, finalrad)) {
             // Get the phi and thea angles as project from the gauss point in the space frame for both particle i and j
@@ -231,6 +233,7 @@ void PairSH::compute(int eflag, int vflag)
             MathExtra::transpose_matvec(jrot, xgauss, xgaussproj);
             // Get projected phi and theta angle of gauss point in atom j's body frame
             phi_proj = std::atan2(xgaussproj[1], xgaussproj[0]);
+            phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
             theta_proj = std::acos(xgaussproj[2] / dtemp);
 
             // Check for contact

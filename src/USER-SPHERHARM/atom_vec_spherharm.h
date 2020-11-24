@@ -82,6 +82,9 @@ class AtomVecSpherharm : public AtomVec {
   void getI();                      // Calculate the inertia of each shape
   void calcexpansionfactors();      // Calculate the expansion factors of each shape using a regular grid
   void calcexpansionfactors_gauss();// Calculate the expansion factors of each shape using the quadrature points
+
+
+  void check_rotations(int, int);// Calculate the expansion factors of each shape using the quadrature points
 };
 
 }
