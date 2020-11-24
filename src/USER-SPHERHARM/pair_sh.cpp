@@ -193,6 +193,7 @@ void PairSH::compute(int eflag, int vflag)
           if (avec->check_contact(ishtype, phi_proj, theta_proj, dtemp, finalrad)) {
             // Get the phi and thea angles as project from the gauss point in the space frame for both particle i and j
             phi = std::atan2(xgauss[1], xgauss[0]);
+            phi = phi > 0.0 ? phi : MY_2PI + phi; // move atan2 range from 0 to 2pi
             theta = std::acos(xgauss[2] / dtemp);
             // Get the space frame vector of the radius
             ixquadsf[0] = finalrad * sin(theta) * cos(phi);
@@ -240,6 +241,7 @@ void PairSH::compute(int eflag, int vflag)
             if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
               // Get the phi and thea angles as project from the gauss point in the space frame for both particle i and j
               phi = std::atan2(xgauss[1], xgauss[0]);
+              phi = phi > 0.0 ? phi : MY_2PI + phi; // move atan2 range from 0 to 2pi
               theta = std::acos(xgauss[2] / dtemp);
               // Get the space frame vector of the radius
               jxquadsf[0] = finalrad * sin(theta) * cos(phi);
