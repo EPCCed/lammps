@@ -18,6 +18,10 @@
 
 namespace MathSpherharm {
 
+  // Inline methods
+  inline void quat_to_spherical(double m[4], double &theta, double &phi);
+  inline void spherical_to_quat(double theta, double phi, double q[4]);
+
   // Normalised Legendre polynomials
   double plegendre(const int l, const int m, const double x);
   double plegendre_nn(const int l, const double x, const double Pnm_nn);
@@ -48,4 +52,30 @@ namespace MathSpherharm {
 
 }
 
+/* ----------------------------------------------------------------------
+  Convert quaternion into spherical theta, phi values
+------------------------------------------------------------------------- */
+inline void MathSpherharm::quat_to_spherical(double q[4], double &theta, double &phi)
+{
+  double norm = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+  theta = 2*acos(sqrt((q[0]*q[0] + q[3]*q[3])/norm));
+  phi = atan2(q[3], q[0]) + atan2(-q[1], q[2]);
+}
+
+/* ----------------------------------------------------------------------
+  Convert spherical theta, phi values into a quaternion
+  // https://github.com/moble/quaternion/blob/master/src/quaternion.c
+  // https://quaternion.readthedocs.io/en/latest/Package%20API%3A/quaternion/
+------------------------------------------------------------------------- */
+inline void MathSpherharm::spherical_to_quat(double theta, double phi, double q[4])
+{
+  double ct = cos(theta/2.0);
+  double cp = cos(phi/2.0);
+  double st = sin(theta/2.0);
+  double sp = sin(phi/2.0);
+  q[0] = cp*ct;
+  q[1] = -sp*st;
+  q[2] = st*cp;
+  q[3] = sp*ct;
+}
 #endif

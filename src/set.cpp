@@ -14,7 +14,6 @@
 #include "set.h"
 
 #include "atom.h"
-#include "atom_vec.h"
 #include "atom_vec_body.h"
 #include "atom_vec_ellipsoid.h"
 #include "atom_vec_line.h"
@@ -36,6 +35,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <iostream>
 
 using namespace LAMMPS_NS;
 using namespace MathConst;
@@ -594,7 +594,7 @@ void Set::command(int narg, char **arg)
       set(DNAME);
       iarg += 2;
 
-    } else if (strcmp(arg[iarg],"sh/type") == 0) {
+    } else if (strcmp(arg[iarg],"sh/shape") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal set command");
       if (strstr(arg[iarg+1],"v_") == arg[iarg+1]) varparse(arg[iarg+1],1);
       else ivalue = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
@@ -1321,10 +1321,11 @@ void Set::setrandom(int keyword)
           quat[1] = sin(theta1)*t1;
           quat[2] = cos(theta1)*t1;
           quat[3] = sin(theta2)*t2;
+          std::cout << quat[0] << " "<< quat[1] << " "<< quat[2] << " "<< quat[3] << std::endl;
           count++;
         }
 
-    } else error->one(FLERR,"Shperatom must be three-dimensional");
+    } else error->one(FLERR,"Spherharm must be three-dimensional");
   }
 
   delete ranpark;

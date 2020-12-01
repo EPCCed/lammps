@@ -75,6 +75,10 @@ class Atom : protected Pointers {
   double **quat;
   int nshtypes;              // Number of spherical harmonic particle types
 
+  double **pinertia_byshape;   // Principle inertia for each shape
+  double **quatinit_byshape;   // Initial quaternion for each shape (pricinple axis rotation from global axis)
+  double *maxrad_byshape;      // The maximum radius of each shape at the maximum SH degree (maxshexpan)
+
   // charged and dipolar particles
 
   double *rmass;
@@ -315,9 +319,6 @@ class Atom : protected Pointers {
   void data_bonus(int, char *, AtomVec *, tagint);
   void data_bodies(int, char *, AtomVec *, tagint);
   void data_fix_compute_variable(int, int);
-
-//  JY ADDED
-//  virtual void allocate_type_sh_arrays(int maxshexpan);
 
   virtual void allocate_type_arrays();
   void set_mass(const char *, int, const char *, int);

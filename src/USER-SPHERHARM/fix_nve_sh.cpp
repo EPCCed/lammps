@@ -63,7 +63,8 @@ void FixNVESh::initial_integrate(int /*vflag*/)
   double omega[3];
 
   double **quat = atom->quat;
-  double **inertia = avec->get_pinertia_init();
+//  double **inertia = avec->get_pinertia_init();
+  double **inertia = atom->pinertia_byshape;
   double **x = atom->x;
   double **v = atom->v;
   double **f = atom->f;

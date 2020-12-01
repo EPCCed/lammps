@@ -31,7 +31,7 @@ class PairSH : public Pair {
   virtual void compute(int, int);
   void settings(int, char **);
   void coeff(int, char **);
-//  void init_style();
+  void init_style();
   double init_one(int, int);
 
  protected:
@@ -42,13 +42,25 @@ class PairSH : public Pair {
   virtual void allocate();
 
  private:
+  // Contact methods currently being tested
+  int gauss_quad_method;
+  int patch_method;
+
   // per-type coefficients, set in pair coeff command
   double ***normal_coeffs;
   int *typetosh;
   int matchtypes;
 
-  void matchtype();
+  double **npole_quats; // Quaternions describing the spherical coordinates of points on the top hemisphere of a generic
+                        // atom. These quaternions are accessed by all atoms rather than regenerating them for each one.
+  double spiral_spacing;// Factor used when creating the spiral of points on the pole. Determines the spacing.
 
+  void matchtype();
+  static void get_contact_rotationmat(double (&)[3], double (&)[3][3]);
+  static void get_contact_quat(double (&)[3], double (&)[4]);
+  void gen_pole_points();
+  int pole_to_atom_contact(double in_quat[4], double quat_cont[4], double quat_sf_bf[4], double rot[3][3],
+                                   double x_a[3], double x_b[3], int ashtype, int bshtype, double overlap[3]);
 };
 
 }

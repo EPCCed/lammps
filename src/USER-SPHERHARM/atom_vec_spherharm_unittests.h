@@ -37,6 +37,8 @@ class AtomVecSpherharmUnitTests : public AtomVecSpherharm {
 
  private:
   double **ellipsoidshape;    // FOR ELLIPSOID TEST ONLY
+
+  void check_rotations(int, int);// Calculate the expansion factors of each shape using the quadrature points
 };
 
 }

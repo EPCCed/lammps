@@ -105,6 +105,9 @@ Atom::Atom(LAMMPS *lmp) : Pointers(lmp)
 
   shtype = nullptr;
   quat = nullptr;
+  pinertia_byshape= nullptr;
+  quatinit_byshape= nullptr;
+  maxrad_byshape= nullptr;
 
   tag = nullptr;
   type = mask = nullptr;
@@ -333,6 +336,9 @@ Atom::~Atom()
 //  JY ADDED
   memory->destroy(shtype);
   memory->destroy(quat);
+  memory->destroy(pinertia_byshape);
+  memory->destroy(quatinit_byshape);
+  memory->destroy(maxrad_byshape);
 }
 
 /* ----------------------------------------------------------------------

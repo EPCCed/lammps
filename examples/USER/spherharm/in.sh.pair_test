@@ -28,8 +28,8 @@ mass *      1.0
 set 		atom 1 vx 1.0 vy 1.0 vz 1.0
 set 		atom 2 vx -1.0 vy -1.0 vz -1.0
 #set 		group all mass 1.0
-set		atom 1 sh/type 1
-set		atom 2 sh/type 1
+set		atom 1 sh/shape 1
+set		atom 2 sh/shape 1
 set		group all sh/quat/random 4
 
 fix		time_fix all nve/sh
@@ -42,4 +42,4 @@ pair_coeff 	* * 5.0e-2
 
 timestep	0.005
 
-run		20000
+run		50000

@@ -38,24 +38,23 @@ class AtomVecSpherharm : public AtomVec {
   void pack_data_post(int);
   ~AtomVecSpherharm();
 
-  // Public methods required to access per-shape arrays
+  // Public methods required to access per-shape arrays [TO BE DELETED, CURRENTLY FOR TOY PAIR STYLE]
   double** get_quadrature_angs(){return &angles[0];}
-  double* get_max_rads(){return &maxrad_byshape[0];}
-  double** get_quat_init(){return &quatinit_byshape[0];}
-  double** get_pinertia_init(){return &pinertia_byshape[0];}
-  int check_contact(int, double, double, double, double &);
-  void get_shape(int, double &, double &, double &);            // FOR ELLIPSOID TEST ONLY
   double** get_quadrature_rads(int &num_quad2){
     num_quad2 = num_quadrature*num_quadrature;
     return &quad_rads_byshape[0];
   }
 
-//private:
+  // Public methods used for contact detection. These are called by the pair_style and ensure that shcoeffs_byshape and
+  // expfacts_byshape remain local to the atom style.
+  double get_shape_radius(int sht, double theta, double phi); // Get the shape radius given theta and phi
+  int check_contact(int, double, double, double, double &); // Check for contact given shape, theta, phi, and distance
+
  protected:
   // per-atom arrays
-  double **omega;
+  double **omega;              // Angular velocity
   int *shtype;                 // Links atom to the SH shape type that it uses
-  double **angmom;
+  double **angmom;             // Angular momentum
   double **quat;               // Current quat of the atom
 
   // per-shape arrays
@@ -63,8 +62,8 @@ class AtomVecSpherharm : public AtomVec {
   double **pinertia_byshape;   // Principle inertia for each shape
   double **quatinit_byshape;   // Initial quaternion for each shape (pricinple axis rotation from global axis)
   double **expfacts_byshape;   // The expansion factors for each shape, each SH degree has an expansion factor
-  double **quad_rads_byshape;  // Radii at each point of guassian quadrature, for each shape (index is [shape][point])
   double *maxrad_byshape;      // The maximum radius of each shape at the maximum SH degree (maxshexpan)
+  double **quad_rads_byshape;  // Radii at each point of guassian quadrature, for each shape (index is [shape][point])
 
   // Gaussian quadrature arrays
   int num_quadrature;         // Order of quadrature used (used defined in input file)
@@ -75,16 +74,14 @@ class AtomVecSpherharm : public AtomVec {
   int maxshexpan;             // Maximum degree of the shperical harmonic expansion
   int nshtypes;               // Number of spherical harmonic shapes
 
-  double **ellipsoidshape;    // FOR ELLIPSOID TEST ONLY
+  // Testing properties (not for release)
+  int verbose_out;            // Whether to print all the cout statements used in testing
 
   void read_sh_coeffs(char *, int); // Reads the spherical harmonic coefficients from file
   void get_quadrature_values();     // Get the gaussian quadrature angles and weights
   void getI();                      // Calculate the inertia of each shape
   void calcexpansionfactors();      // Calculate the expansion factors of each shape using a regular grid
   void calcexpansionfactors_gauss();// Calculate the expansion factors of each shape using the quadrature points
-
-
-  void check_rotations(int, int);// Calculate the expansion factors of each shape using the quadrature points
 };
 
 }
