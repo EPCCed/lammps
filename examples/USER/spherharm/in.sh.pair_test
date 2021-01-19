@@ -20,17 +20,43 @@ processors * * 1
 region		boxreg block 0 ${boxx} 0 ${boxy} 0 ${boxz}
 create_box	2 boxreg
 change_box	all boundary f f f
-create_atoms 	1 single 475.0 475.0 475.0
-create_atoms 	2 single 525.0 525.0 525.0
+
+#create_atoms 	1 single 475.0 475.0 475.0
+#create_atoms 	2 single 525.0 525.0 525.0
+
+#create_atoms 	1 single 450.0 450.0 450.0
+#create_atoms 	2 single 550.0 550.0 550.0
+
+#create_atoms 	1 single 450.0 500.0 500.0
+#create_atoms 	2 single 550.0 500.0 500.0
+
+#create_atoms 	1 single 425.0 500.0 500.0
+#create_atoms 	2 single 575.0 500.0 500.0
+
+#create_atoms 	1 single 460.0 500.0 500.0
+#create_atoms 	2 single 540.0 505.0 500.0
+
+#create_atoms 	1 single 450.5 500.0 500.0
+#create_atoms 	2 single 549.5 505.0 505.0
+
+create_atoms 	1 single 460.0 500.0 500.0
+create_atoms 	2 single 540.0 500.0 500.0
 
 mass *      1.0
 
-set 		atom 1 vx 1.0 vy 1.0 vz 1.0
-set 		atom 2 vx -1.0 vy -1.0 vz -1.0
+#set 		atom 1 vx 1.0 vy 1.0 vz 1.0
+#set 		atom 2 vx -1.0 vy -1.0 vz -1.0
+
+set 		atom 1 vx 1.0 vy 0.0 vz 0.0
+set 		atom 2 vx -1.0 vy 0.0 vz 0.0
+
+
 #set 		group all mass 1.0
 set		atom 1 sh/shape 1
 set		atom 2 sh/shape 1
-set		group all sh/quat/random 4
+#set		group all sh/quat/random 4
+#set		group all sh/quat 1.0 0.0 0.0 0.0
+set		group all sh/quat 0.0 1.0 0.0 90.0
 
 fix		time_fix all nve/sh
 
@@ -38,8 +64,8 @@ neigh_modify	delay 0 every 1 check yes
 comm_modify	vel yes
 
 pair_style 	spherharm
-pair_coeff 	* * 5.0e-2
+pair_coeff 	* * 5.0e-1
 
 timestep	0.005
 
-run		50000
+run		100000

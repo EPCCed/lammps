@@ -91,6 +91,16 @@ namespace MathSpherharm {
     return pmn;
   }
 
+  double plgndr(const int l, const int m, const double x)
+  {
+    if (m < 0 || m > l || std::abs(x) > 1.0)
+      return 0;
+    double prod=1.0;
+    for (int j=l-m+1;j<=l+m;j++)
+      prod *= j;
+    return sqrt(4.0*LAMMPS_NS::MathConst::MY_PI*prod/(2*l+1))*plegendre(l,m,x);
+  }
+
 /* ----------------------------------------------------------------------
   Following methods are used for calculating the nodes and weights of
   Gaussian Quadrature
@@ -249,4 +259,15 @@ namespace MathSpherharm {
 
 /* ---------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   factorial n, wrapper for precomputed table
+------------------------------------------------------------------------- */
+
+  double factorial(int n)
+  {
+    if (n < 0 || n > nmaxfactorial)
+      return -1.0;
+
+    return nfac_table[n];
+  }
 }

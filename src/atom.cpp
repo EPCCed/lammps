@@ -108,6 +108,7 @@ Atom::Atom(LAMMPS *lmp) : Pointers(lmp)
   pinertia_byshape= nullptr;
   quatinit_byshape= nullptr;
   maxrad_byshape= nullptr;
+//  extentpoints_byshape = nullptr;
 
   tag = nullptr;
   type = mask = nullptr;
@@ -339,6 +340,7 @@ Atom::~Atom()
   memory->destroy(pinertia_byshape);
   memory->destroy(quatinit_byshape);
   memory->destroy(maxrad_byshape);
+//  memory->destroy(extentpoints_byshape);
 }
 
 /* ----------------------------------------------------------------------

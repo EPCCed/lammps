@@ -78,6 +78,7 @@ class Atom : protected Pointers {
   double **pinertia_byshape;   // Principle inertia for each shape
   double **quatinit_byshape;   // Initial quaternion for each shape (pricinple axis rotation from global axis)
   double *maxrad_byshape;      // The maximum radius of each shape at the maximum SH degree (maxshexpan)
+//  double ***extentpoints_byshape;
 
   // charged and dipolar particles
 

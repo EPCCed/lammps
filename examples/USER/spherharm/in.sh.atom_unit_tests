@@ -1,0 +1,6 @@
+# Test
+
+variable	name string spherical_harmonics_testing
+atom_style	spherharmunittests 120 /home/james/lammps/examples/USER/spherharm/ellipsoid.dat
+units		lj
+newton off

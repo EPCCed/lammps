@@ -1021,7 +1021,7 @@ void Set::set(int keyword)
     }
 
     else if (keyword == SH_QUAT) {
-      double *quat = NULL;
+      double *quat;
       quat = atom -> quat[i];
       if (domain->dimension == 2 && (xvalue != 0.0 || yvalue != 0.0))
         error->one(FLERR,"Cannot set quaternion with xy components "
@@ -1034,6 +1034,7 @@ void Set::set(int keyword)
       quat[2] = yvalue * sintheta2;
       quat[3] = zvalue * sintheta2;
       MathExtra::qnormalize(quat);
+      std::cout << quat[0] << " "<< quat[1] << " "<< quat[2] << " "<< quat[3] << std::endl;
     }
 
     count++;

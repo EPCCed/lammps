@@ -48,6 +48,7 @@ class AtomVecSpherharm : public AtomVec {
   // Public methods used for contact detection. These are called by the pair_style and ensure that shcoeffs_byshape and
   // expfacts_byshape remain local to the atom style.
   double get_shape_radius(int sht, double theta, double phi); // Get the shape radius given theta and phi
+  double get_shape_radius_and_normal(int sht, double theta, double phi, double rnorm[3]); // As above, with unit normal
   int check_contact(int, double, double, double, double &); // Check for contact given shape, theta, phi, and distance
 
  protected:
@@ -82,6 +83,10 @@ class AtomVecSpherharm : public AtomVec {
   void getI();                      // Calculate the inertia of each shape
   void calcexpansionfactors();      // Calculate the expansion factors of each shape using a regular grid
   void calcexpansionfactors_gauss();// Calculate the expansion factors of each shape using the quadrature points
+  void get_normal(double theta, double phi, double r, double rp, double rt, double rnorm[3]);
+
+  double ***extentpoints_byshape;
+  void gen_extent_box_points(int);     // Generate the points used to calculate the extent box for the shape
 };
 
 }

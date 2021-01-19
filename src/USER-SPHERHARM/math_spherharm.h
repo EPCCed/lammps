@@ -23,9 +23,11 @@ namespace MathSpherharm {
   inline void spherical_to_quat(double theta, double phi, double q[4]);
 
   // Normalised Legendre polynomials
-  double plegendre(const int l, const int m, const double x);
-  double plegendre_nn(const int l, const double x, const double Pnm_nn);
-  double plegendre_recycle(const int l, const int m, const double x, const double pnm_m1, const double pnm_m2);
+  double plegendre( int l,  int m,  double x);
+  double plegendre_nn( int l,  double x,  double Pnm_nn);
+  double plegendre_recycle( int l,  int m,  double x,  double pnm_m1,  double pnm_m2);
+  // Not normalised Legendre polynomials
+  double plgndr(int l, int m, double x);
 
   // Gaussian quadrature methods
   // A struct for containing a Node-Weight pair
@@ -49,6 +51,10 @@ namespace MathSpherharm {
   double besselj1squared(int);
   QuadPair GLPairS(size_t, size_t);
   QuadPair GLPairTabulated(size_t, size_t);
+
+
+  // For calculating factorials, borrowed from compute_orientorder_atom.cpp
+  double factorial(int);
 
 }
 
