@@ -70,7 +70,8 @@ PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
   cur_time = 0.0;
   file_count = 0;
 
-  num_pole_quad = 60;
+  num_pole_quad = 30;
+//  num_pole_quad = 60;
 //  num_pole_quad = 240;
 }
 
@@ -164,6 +165,10 @@ void PairSH::compute(int eflag, int vflag)
   double dv_inner, dv_outer;
   double cog_outer[3], cog_inner[3];
 
+  double fcont[6];
+
+  struct Contact contact{};
+
   radius_tol = 1e-6;
   file_count++;
 
@@ -175,9 +180,28 @@ void PairSH::compute(int eflag, int vflag)
     ztmp = x[i][2];
     itype = type[i];
     ishtype = shtype[i];
+
+    contact.shtype[0] = shtype[i];
+
     jlist = firstneigh[i];
     jnum = numneigh[i];
     radi = max_rad[ishtype];
+
+    contact.rad[0] = radi;
+
+    contact.x0[0][0] = x[i][0];
+    contact.x0[0][1] = x[i][1];
+    contact.x0[0][2] = x[i][2];
+    contact.quat[0][0] = quat[ishtype][0];
+    contact.quat[0][1] = quat[ishtype][1];
+    contact.quat[0][2] = quat[ishtype][2];
+    contact.quat[0][3] = quat[ishtype][3];
+    contact.quat_init[0][0] = quatinit[ishtype][0];
+    contact.quat_init[0][1] = quatinit[ishtype][1];
+    contact.quat_init[0][2] = quatinit[ishtype][2];
+    contact.quat_init[0][3] = quatinit[ishtype][3];
+
+    get_frame_quats(contact, 0);
 
     // Unrolling the initial quat (Unit quaternion - inverse = conjugate)
     MathExtra::qconjugate(quatinit[ishtype],quat_temp);
@@ -200,11 +224,28 @@ void PairSH::compute(int eflag, int vflag)
       delvec[1] = -dely;
       delvec[2] = -delz;
       jshtype = shtype[j];
+
+      contact.shtype[1] = shtype[j];
+
       radj = max_rad[jshtype];
       radsum = radi + radj;
       rsq = delx*delx + dely*dely + delz*delz;
       r = sqrt(rsq);
       jtype = type[j];
+
+      contact.rad[1] = radj;
+
+      contact.x0[1][0] = x[j][0];
+      contact.x0[1][1] = x[j][1];
+      contact.x0[1][2] = x[j][2];
+      contact.quat[1][0] = quat[jshtype][0];
+      contact.quat[1][1] = quat[jshtype][1];
+      contact.quat[1][2] = quat[jshtype][2];
+      contact.quat[1][3] = quat[jshtype][3];
+      contact.quat_init[1][0] = quatinit[jshtype][0];
+      contact.quat_init[1][1] = quatinit[jshtype][1];
+      contact.quat_init[1][2] = quatinit[jshtype][2];
+      contact.quat_init[1][3] = quatinit[jshtype][3];
 
 //      if (r < radsum) {
         std::cout << "ij: " <<i<<j<< " r: "<< r  << "  radsum: " << radsum << " " << nlocal << std::endl;
@@ -230,10 +271,15 @@ void PairSH::compute(int eflag, int vflag)
 
         // Get the quaternion from north pole of atom "i" to the vector connecting the centre line of atom "i" and "j".
         get_contact_quat(delvec, iquat_cont);
+        get_contact_quat(delvec, contact.quat_cont[0]);
         MathExtra::negate3(delvec);
         // Get the quaternion from north pole of atom "j" to the vector connecting the centre line of atom "j" and "i".
         get_contact_quat(delvec, jquat_cont);
+        get_contact_quat(delvec, contact.quat_cont[1]);
 
+        contact.angs[0] = iang;
+        contact.angs[1] = jang;
+        get_frame_quats(contact, 1);
         // Unrolling the initial quat (Unit quaternion - inverse = conjugate)
         MathExtra::qconjugate(quatinit[jshtype],quat_temp);
         // Calculating the quat to rotate the particles to new position (q_delta = q_target * q_current^-1)(space frame)
@@ -244,8 +290,9 @@ void PairSH::compute(int eflag, int vflag)
         // Quaternion to get from space frame to body frame for atom "j"
         MathExtra::qconjugate(jquat_bf_sf, jquat_sf_bf);
 
-
-        write_ellipsoid(x[i], x[j], irot, jrot);
+        if (file_count % 200 == 0) {
+          write_ellipsoid(x[i], x[j], irot, jrot);
+        }
         cur_time += (update->dt)/1000;
 
         int trap_L = 2*(num_pole_quad-1);
@@ -725,13 +772,14 @@ void PairSH::compute(int eflag, int vflag)
 
 
 
-          // factor = (0.5 * iang * MY_PI);
-          for (ll = 0; ll < num_pole_quad; ll++) {
-            //theta_pole = 0.5 * iang * (abscissa[ll] + 1.0); // 0 -> iang
-            //st = sin(theta_pole);
 
-            //factor = MY_PI * (1.0 - cos(iang)) / (3.0 * (double(trap_L) + 1.0));
-            //double factor_cog = MY_PI * (1.0 - cos(iang)) / (4.0 * (double(trap_L) + 1.0));
+//          // factor = (0.5 * iang * MY_PI);
+//          for (ll = 0; ll < num_pole_quad; ll++) {
+//            //theta_pole = 0.5 * iang * (abscissa[ll] + 1.0); // 0 -> iang
+//            //st = sin(theta_pole);
+//
+//            //factor = MY_PI * (1.0 - cos(iang)) / (3.0 * (double(trap_L) + 1.0));
+//            //double factor_cog = MY_PI * (1.0 - cos(iang)) / (4.0 * (double(trap_L) + 1.0));
 
 
             double theta_max = -1.0;
@@ -790,11 +838,60 @@ void PairSH::compute(int eflag, int vflag)
                       << (iang * 0.5 * abscissa[kk_count - 1]) + (iang * 0.5) << std::endl;
             if (kk_count == 0) kk_count = 1;
 
+//          std::cout << "Pre Search" << std::endl;
+//          std::cout << contact.quat_bf_sf[0][0] << " " <<  contact.quat_bf_sf[0][1] << " " <<  contact.quat_bf_sf[0][2] << " " <<  contact.quat_bf_sf[0][3] << std::endl;
+//          std::cout << contact.quat_bf_sf[1][0] << " " <<  contact.quat_bf_sf[1][1] << " " <<  contact.quat_bf_sf[1][2] << " " <<  contact.quat_bf_sf[1][3] << std::endl;
+//          std::cout << contact.quat_sf_bf[0][0] << " " <<  contact.quat_sf_bf[0][1] << " " <<  contact.quat_sf_bf[0][2] << " " <<  contact.quat_sf_bf[0][3] << std::endl;
+//          std::cout << contact.quat_sf_bf[1][0] << " " <<  contact.quat_sf_bf[1][1] << " " <<  contact.quat_sf_bf[1][2] << " " <<  contact.quat_sf_bf[1][3] << std::endl;
+//          std::cout << "Pre Search" << std::endl;
+//          std::cout << std::endl;
+
+//          double flag = refine_overlap_angle(contact, 0);
+//          std::cout << "i angle is : " << contact.angs[0] << std::endl;
+//          std::cout << flag << std::endl;
+//          std::cout << "Post Search" << std::endl;
+//          std::cout << contact.shtype[0] << " " << contact.shtype[1] << std::endl;
+//          std::cout << contact.angs[0] << " " << contact.angs[1] << std::endl;
+//          std::cout << contact.rad[0] << " " << contact.rad[1] << std::endl;
+//          std::cout << contact.x0[0][0] << " " <<  contact.x0[0][1] << " " <<  contact.x0[0][2] << std::endl;
+//          std::cout << contact.x0[1][0] << " " <<  contact.x0[1][1] << " " <<  contact.x0[1][2] << std::endl;
+//          std::cout << contact.quat_cont[0][0] << " " <<  contact.quat_cont[0][1] << " " <<  contact.quat_cont[0][2] << " " <<  contact.quat_cont[0][3] << std::endl;
+//          std::cout << contact.quat_cont[1][0] << " " <<  contact.quat_cont[1][1] << " " <<  contact.quat_cont[1][2] << " " <<  contact.quat_cont[1][3] << std::endl;
+//          std::cout << contact.quat[0][0] << " " <<  contact.quat[0][1] << " " <<  contact.quat[0][2] << " " <<  contact.quat[0][3] << std::endl;
+//          std::cout << contact.quat[1][0] << " " <<  contact.quat[1][1] << " " <<  contact.quat[1][2] << " " <<  contact.quat[1][3] << std::endl;
+//          std::cout << contact.quat_init[0][0] << " " <<  contact.quat_init[0][1] << " " <<  contact.quat_init[0][2] << " " <<  contact.quat_init[0][3] << std::endl;
+//          std::cout << contact.quat_init[1][0] << " " <<  contact.quat_init[1][1] << " " <<  contact.quat_init[1][2] << " " <<  contact.quat_init[1][3] << std::endl;
+//          std::cout << contact.quat_bf_sf[0][0] << " " <<  contact.quat_bf_sf[0][1] << " " <<  contact.quat_bf_sf[0][2] << " " <<  contact.quat_bf_sf[0][3] << std::endl;
+//          std::cout << contact.quat_bf_sf[1][0] << " " <<  contact.quat_bf_sf[1][1] << " " <<  contact.quat_bf_sf[1][2] << " " <<  contact.quat_bf_sf[1][3] << std::endl;
+//          std::cout << contact.quat_sf_bf[0][0] << " " <<  contact.quat_sf_bf[0][1] << " " <<  contact.quat_sf_bf[0][2] << " " <<  contact.quat_sf_bf[0][3] << std::endl;
+//          std::cout << contact.quat_sf_bf[1][0] << " " <<  contact.quat_sf_bf[1][1] << " " <<  contact.quat_sf_bf[1][2] << " " <<  contact.quat_sf_bf[1][3] << std::endl;
+//          std::cout << std::endl;
+
+
             if (theta_max >= 0.0) {
+//            if (flag == 1) {
+//
+//              get_volume_and_com(contact, 0, radius_tol, fcont, ii, jj);
+//
+//              f[i][0] += fcont[0];
+//              f[i][1] += fcont[1];
+//              f[i][2] += fcont[2];
+//              f[j][0] += fcont[3];
+//              f[j][1] += fcont[4];
+//              f[j][2] += fcont[5];
+//
+//              std::cout << " Force i  = " << f[i][0] << " " << f[i][1] << " " << f[i][2] << " " << MathExtra::len3(f[i])
+//                        << std::endl;
+//              std::cout << " Force j  = " << f[j][0] << " " << f[j][1] << " " << f[j][2] << " " << MathExtra::len3(f[j])
+//                        << std::endl;
+//              std::cout << " Relative difference  = "
+//                        << 100 * (MathExtra::len3(f[i]) - MathExtra::len3(f[j])) / MathExtra::len3(f[i]) << std::endl;
 
               iang = (iang * 0.5 * abscissa[kk_count - 1]) + (iang * 0.5);
               factor = MY_PI * iang / ((double(trap_L) + 1.0));
               double factor_cog = factor / 4.0;
+              double theta_bf, phi_bf;
+              double rot_temp[3][3];
 
               for (int kk = 0; kk < num_pole_quad; kk++) {
                 theta_pole = (iang * 0.5 * abscissa[kk]) + (iang * 0.5);
@@ -817,6 +914,7 @@ void PairSH::compute(int eflag, int vflag)
 
                   // Rotate to atom's "i"'s body frame to calculate the radius
                   MathExtra::quatquat(iquat_sf_bf, quat_temp, iquat_bf);
+                  MathExtra::quat_to_mat(iquat_cont, rot_temp);
                   // Covert the body frame quaternion into a body frame theta, phi value
                   MathSpherharm::quat_to_spherical(iquat_bf, theta, phi);
                   // TODO MUST FIX RANGE OF PHI AFTER EVERY CALL OF quat_to_spherical
@@ -824,6 +922,8 @@ void PairSH::compute(int eflag, int vflag)
                   // Get the radius at the body frame theta and phi value
 //              rad_body = avec->get_shape_radius(ishtype, theta, phi);
                   rad_body = avec->get_shape_radius_and_normal(ishtype, theta, phi, inorm_bf); // inorm is in body frame
+                  theta_bf = theta;
+                  phi_bf = phi;
 
                   // Covert the space frame quaternion into a space frame theta, phi value
                   MathSpherharm::quat_to_spherical(quat_temp, theta, phi);
@@ -881,37 +981,38 @@ void PairSH::compute(int eflag, int vflag)
                     }
 
                     // Final call to get the normal for the contact point for shape j
-                    rad_body = avec->get_shape_radius_and_normal(jshtype, theta_proj, phi_proj, jnorm_bf);
+//                    rad_body = avec->get_shape_radius_and_normal(jshtype, theta_proj, phi_proj, jnorm_bf);
+                    avec->get_shape_radius_and_normal(jshtype, theta_proj, phi_proj, jnorm_bf);
 
 //                vol_inner += (weights[ll] * weights[kk] * pow(rad_sample, 3) * st / 3.0);
 //                vol_inner += weights[kk] * pow(rad_sample, 3);
-                    dv = weights[kk] * (pow(rad_body, 3) - pow(rad_sample, 3)) * std::sin(theta);
+                    dv = weights[kk] * (pow(rad_body, 3) - pow(rad_sample, 3)) * std::sin(theta_pole);
                     vol_overlap += dv;
 
-                    dcogx = weights[kk] * (pow(rad_body, 4) - pow(rad_sample, 4)) * std::sin(theta) * std::sin(theta) *
-                            std::cos(phi);
-                    dcogy = weights[kk] * (pow(rad_body, 4) - pow(rad_sample, 4)) * std::sin(theta) * std::sin(theta) *
-                            std::sin(phi);
-                    dcogz = weights[kk] * (pow(rad_body, 4) - pow(rad_sample, 4)) * std::sin(theta) * std::cos(theta);
+                    dcogx = weights[kk] * (pow(rad_body, 4) - pow(rad_sample, 4)) * std::sin(theta_pole) * std::sin(theta_pole) *
+                            std::cos(phi_pole);
+                    dcogy = weights[kk] * (pow(rad_body, 4) - pow(rad_sample, 4)) * std::sin(theta_pole) * std::sin(theta_pole) *
+                            std::sin(phi_pole);
+                    dcogz = weights[kk] * (pow(rad_body, 4) - pow(rad_sample, 4)) * std::sin(theta_pole) * std::cos(theta_pole);
                     cog[0] += dcogx;
                     cog[1] += dcogy;
                     cog[2] += dcogz;
 
-                    dcogx = weights[kk] * pow(rad_body, 4) * std::sin(theta) * std::sin(theta) * std::cos(phi);
-                    dcogy = weights[kk] * pow(rad_body, 4) * std::sin(theta) * std::sin(theta) * std::sin(phi);
-                    dcogz = weights[kk] * pow(rad_body, 4) * std::sin(theta) * std::cos(theta);
+                    dcogx = weights[kk] * pow(rad_body, 4) * std::sin(theta_pole) * std::sin(theta_pole) * std::cos(phi_pole);
+                    dcogy = weights[kk] * pow(rad_body, 4) * std::sin(theta_pole) * std::sin(theta_pole) * std::sin(phi_pole);
+                    dcogz = weights[kk] * pow(rad_body, 4) * std::sin(theta_pole) * std::cos(theta_pole);
                     cog_outer[0] += dcogx;
                     cog_outer[1] += dcogy;
                     cog_outer[2] += dcogz;
-                    dcogx = weights[kk] * pow(rad_sample, 4) * std::sin(theta) * std::sin(theta) * std::cos(phi);
-                    dcogy = weights[kk] * pow(rad_sample, 4) * std::sin(theta) * std::sin(theta) * std::sin(phi);
-                    dcogz = weights[kk] * pow(rad_sample, 4) * std::sin(theta) * std::cos(theta);
+                    dcogx = weights[kk] * pow(rad_sample, 4) * std::sin(theta_pole) * std::sin(theta_pole) * std::cos(phi_pole);
+                    dcogy = weights[kk] * pow(rad_sample, 4) * std::sin(theta_pole) * std::sin(theta_pole) * std::sin(phi_pole);
+                    dcogz = weights[kk] * pow(rad_sample, 4) * std::sin(theta_pole) * std::cos(theta_pole);
                     cog_inner[0] += dcogx;
                     cog_inner[1] += dcogy;
                     cog_inner[2] += dcogz;
 
-                    dv_outer = weights[kk] * (pow(rad_body, 3)) * std::sin(theta);;
-                    dv_inner = weights[kk] * (pow(rad_sample, 3)) * std::sin(theta);;
+                    dv_outer = weights[kk] * (pow(rad_body, 3)) * std::sin(theta_pole);
+                    dv_inner = weights[kk] * (pow(rad_sample, 3)) * std::sin(theta_pole);
                     vol_outer += dv_outer;
                     vol_inner += dv_inner;
 
@@ -977,6 +1078,21 @@ void PairSH::compute(int eflag, int vflag)
               cog[0] *= 0.75 / vol_overlap;
               cog[1] *= 0.75 / vol_overlap;
               cog[2] *= 0.75 / vol_overlap;
+
+              double cog_temp[3];
+              cog_temp[0]=cog[0];
+              cog_temp[1]=cog[1];
+              cog_temp[2]=cog[2];
+              MathExtra::matvec(rot_temp, cog_temp, cog);
+              cog_temp[0]=cog_outer[0];
+              cog_temp[1]=cog_outer[1];
+              cog_temp[2]=cog_outer[2];
+              MathExtra::matvec(rot_temp, cog_temp, cog_outer);
+              cog_temp[0]=cog_inner[0];
+              cog_temp[1]=cog_inner[1];
+              cog_temp[2]=cog_inner[2];
+              MathExtra::matvec(rot_temp, cog_temp, cog_inner);
+
               std::cout << cog[0] << " " << cog[1] << " " << cog[2] << std::endl;
               cog[0] = ((cog_outer[0] * vol_outer) - (cog_inner[0] * vol_inner)) / vol_overlap;
               cog[1] = ((cog_outer[1] * vol_outer) - (cog_inner[1] * vol_inner)) / vol_overlap;
@@ -1046,6 +1162,20 @@ void PairSH::compute(int eflag, int vflag)
               f[j][0] += jfx;
               f[j][1] += jfy;
               f[j][2] += jfz;
+
+              delx = cog[0] - x[i][0];
+              dely = cog[1] - x[i][1];
+              delz = cog[2] - x[i][2];
+              torque[i][0] += (dely*ifz - delz*ify);
+              torque[i][1] += (delz*ifx - delx*ifz);
+              torque[i][2] += (delx*ify - dely*ifx);
+
+              delx = cog[0] - x[j][0];
+              dely = cog[1] - x[j][1];
+              delz = cog[2] - x[j][2];
+              torque[j][0] += (dely*jfz - delz*jfy);
+              torque[j][1] += (delz*jfx - delx*jfz);
+              torque[j][2] += (delx*jfy - dely*jfx);
 
 
               // for sphere sphere
@@ -1336,8 +1466,6 @@ void PairSH::compute(int eflag, int vflag)
 //      else std::cout<<"Outside"<<std::endl;
 //    }
   }
-}
-
 
 /* ----------------------------------------------------------------------
    allocate all arrays
@@ -1865,3 +1993,358 @@ int PairSH::write_ellipsoid(double *xi, double *xj, double irotmat[3][3], double
   } else std::cout << "Unable to open file";
   return 0;
 };
+
+void PairSH::get_frame_quats(Contact &contact, int shape) {
+
+  double quat_temp[4];
+
+  // Unrolling the initial quat (Unit quaternion - inverse = conjugate)
+  MathExtra::qconjugate(contact.quat_init[shape], quat_temp);
+  // Calculating the quat to rotate the particles to new position (q_delta = q_target * q_current^-1)
+  MathExtra::quatquat(contact.quat[shape], quat_temp, contact.quat_bf_sf[shape]);
+  MathExtra::qnormalize(contact.quat_bf_sf[shape]);
+  // Quaternion to get from space frame to body frame for atom "i"
+  MathExtra::qconjugate(contact.quat_bf_sf[shape], contact.quat_sf_bf[shape]);
+
+//  std::cout << "Dedicated fn quat, quat_init, bf-sf, sf-bf" << std::endl;
+//  std::cout << contact.quat[shape][0] << " " <<  contact.quat[shape][1] << " " <<  contact.quat[shape][2] << " " <<  contact.quat[shape][3] << std::endl;
+//  std::cout << contact.quat_init[shape][0] << " " <<  contact.quat_init[shape][1] << " " <<  contact.quat_init[shape][2] << " " <<  contact.quat_init[shape][3] << std::endl;
+//  std::cout << contact.quat_bf_sf[shape][0] << " " <<  contact.quat_bf_sf[shape][1] << " " <<  contact.quat_bf_sf[shape][2] << " " <<  contact.quat_bf_sf[shape][3] << std::endl;
+//  std::cout << contact.quat_sf_bf[shape][0] << " " <<  contact.quat_sf_bf[shape][1] << " " <<  contact.quat_sf_bf[shape][2] << " " <<  contact.quat_sf_bf[shape][3] << std::endl;
+//  std::cout << "Dedicated fn iquat_bf_sf" << std::endl;
+//  std::cout << std::endl;
+
+
+}
+
+int PairSH::refine_overlap_angle(Contact &contact, int shape1) {
+
+  int trap_L;
+  int ll, kk, kk_count;
+  int shape2, flag;
+  double theta_pole, phi_pole, theta, phi, theta_proj, phi_proj;
+  double theta_max, rad_body, dtemp, finalrad;
+  double ix_sf[3], x_testpoint[3], x_projtestpoint[3];
+  double rot2[3][3];
+  double quat_temp[4], quat_temp2[4], quat_bf[4];
+
+  flag = 0;
+  trap_L = 2*(num_pole_quad-1);
+  theta_max = -1.0;
+  kk_count = -1;
+  shape2 = abs(shape1-1); // if shape_1=1, shape_2=0, if shape_1=0, shape_2=1;
+
+//  MathExtra::quat_to_mat(jquat_bf_sf, jrot);
+  MathExtra::quat_to_mat(contact.quat_bf_sf[shape2], rot2);
+
+  for (kk = 0; kk < num_pole_quad; kk++) {
+    if (kk_count > -1) break;
+//    theta_pole = (iang * 0.5 * abscissa[kk]) + (iang * 0.5);
+    theta_pole = (contact.angs[shape1] * 0.5 * abscissa[kk]) + (contact.angs[shape1] * 0.5);
+    for (ll = 0; ll <= trap_L; ll++) {
+      phi_pole = MY_2PI * ll / (double(trap_L) + 1.0);
+
+      MathSpherharm::spherical_to_quat(theta_pole, phi_pole, quat_temp2); // polar cord to quat
+      // Rotate the north pole point quaternion to the contact line (space frame)
+//      MathExtra::quatquat(iquat_cont, quat_temp2, quat_temp);
+      MathExtra::quatquat(contact.quat_cont[shape1], quat_temp2, quat_temp);
+
+      // Rotate to atom's "i"'s body frame to calculate the radius
+//      MathExtra::quatquat(iquat_sf_bf, quat_temp, iquat_bf);
+      MathExtra::quatquat(contact.quat_sf_bf[shape1], quat_temp, quat_bf);
+      // Covert the body frame quaternion into a body frame theta, phi value
+//      MathSpherharm::quat_to_spherical(iquat_bf, theta, phi);
+      MathSpherharm::quat_to_spherical(quat_bf, theta, phi);
+      // TODO MUST FIX RANGE OF PHI AFTER EVERY CALL OF quat_to_spherical
+      phi = phi > 0.0 ? phi : MY_2PI + phi; // move atan2 range from 0 to 2pi
+      // Get the radius at the body frame theta and phi value
+//      rad_body = avec->get_shape_radius(ishtype, theta, phi);
+      rad_body = avec->get_shape_radius(contact.shtype[shape1], theta, phi);
+
+      // Covert the space frame quaternion into a space frame theta, phi value
+      MathSpherharm::quat_to_spherical(quat_temp, theta, phi);
+      phi = phi > 0.0 ? phi : MY_2PI + phi; // move atan2 range from 0 to 2pi
+      // Covert the space frame theta, phi value into spherical coordinates and translating by current location of
+      // particle i's centre
+//      ix_sf[0] = (rad_body * sin(theta) * cos(phi)) + x[i][0];
+//      ix_sf[1] = (rad_body * sin(theta) * sin(phi)) + x[i][1];
+//      ix_sf[2] = (rad_body * cos(theta)) + x[i][2];
+      ix_sf[0] = (rad_body * sin(theta) * cos(phi)) + contact.x0[shape1][0];
+      ix_sf[1] = (rad_body * sin(theta) * sin(phi)) + contact.x0[shape1][1];
+      ix_sf[2] = (rad_body * cos(theta)) + contact.x0[shape1][2];
+      // vector distance from COG of atom j (in space frame) to test point on atom i
+//      MathExtra::sub3(ix_sf, x[j], x_testpoint);
+      MathExtra::sub3(ix_sf, contact.x0[shape2], x_testpoint);
+      // scalar distance
+      dtemp = MathExtra::len3(x_testpoint);
+//      if (dtemp > radj) continue;
+      if (dtemp > contact.rad[shape2]) continue;
+      // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
+      MathExtra::transpose_matvec(rot2, x_testpoint, x_projtestpoint);
+      // Get projected phi and theta angle of gauss point in atom i's body frame
+      phi_proj = std::atan2(x_projtestpoint[1], x_projtestpoint[0]);
+      phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
+      theta_proj = std::acos(x_projtestpoint[2] / dtemp);
+
+      // Check for contact
+//      if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
+      if (avec->check_contact(contact.shtype[shape2], phi_proj, theta_proj, dtemp, finalrad)) {
+        flag = 1;
+        theta_max = theta_pole;
+        kk_count = kk;
+        break;
+      }
+    }
+  }
+
+  std::cout << "i angle is : " << contact.angs[shape1] << " Theta max is : " << theta_max << std::endl;
+  std::cout << "kk is : " << kk_count << " Theta max is : "
+            << (contact.angs[shape1] * 0.5 * abscissa[kk_count - 1]) + (contact.angs[shape1] * 0.5) << std::endl;
+
+  if (kk_count == 0) kk_count = 1;
+  contact.angs[shape1] = (contact.angs[shape1] * 0.5 * abscissa[kk_count - 1]) + (contact.angs[shape1] * 0.5);
+
+  return flag;
+}
+
+void PairSH::get_volume_and_com(Contact contact, int shape1, double radius_tol, double fcont[6], int ii, int jj) {
+
+  int trap_L, shape2;
+  double theta_pole, phi_pole, theta, phi, theta_proj, phi_proj;
+  double rad_body, dtemp, finalrad;
+  double factor, upper_bound, lower_bound, rad_sample;
+  double ix_sf[3], jx_sf[3];
+  double x_testpoint[3], x_projtestpoint[3];
+  double rot1[3][3], rot2[3][3];
+  double quat_temp[4], quat_temp2[4], quat_bf[4];
+  double inorm_bf[3], jnorm_bf[3];
+  double inorm_sf[3], jnorm_sf[3];
+  double dv, dv_outer, dv_inner;
+  double vol_overlap, vol_outer, vol_inner;
+  double dcogx,dcogy,dcogz;
+  double cog[3],cog_outer[3],cog_inner[3];
+  double inorm[3],jnorm[3];
+  double fpair;
+  bool first_call;
+
+  trap_L = 2*(num_pole_quad-1);
+  shape2 = abs(shape1-1); // if shape_1=1 then shape_2=0, if shape_1=0 then shape_2=1;
+
+  MathExtra::quat_to_mat(contact.quat_bf_sf[shape1], rot1);
+  MathExtra::quat_to_mat(contact.quat_bf_sf[shape2], rot2);
+
+  factor = MY_PI * contact.angs[shape1] / ((double(trap_L) + 1.0));
+
+  first_call = true;
+  vol_outer = vol_inner = vol_overlap = 0.0;
+  inorm[0] = inorm[1] = inorm[2] = 0.0;
+  jnorm[0] = jnorm[1] = jnorm[2] = 0.0;
+  cog[0] = 0.0;
+  cog[1] = 0.0;
+  cog[2] = 0.0;
+  cog_outer[0] = 0.0;
+  cog_outer[1] = 0.0;
+  cog_outer[2] = 0.0;
+  cog_inner[0] = 0.0;
+  cog_inner[1] = 0.0;
+  cog_inner[2] = 0.0;
+
+
+  for (int kk = 0; kk < num_pole_quad; kk++) {
+    theta_pole = (contact.angs[shape1] * 0.5 * abscissa[kk]) + (contact.angs[shape1] * 0.5);
+    for (int ll = 0; ll <= trap_L; ll++) {
+      phi_pole = MY_2PI * ll / (double(trap_L) + 1.0);
+
+      MathSpherharm::spherical_to_quat(theta_pole, phi_pole, quat_temp2); // polar cord to quat
+      // Rotate the north pole point quaternion to the contact line (space frame)
+//      MathExtra::quatquat(iquat_cont, quat_temp2, quat_temp);
+      MathExtra::quatquat(contact.quat_cont[shape1], quat_temp2, quat_temp);
+
+      // Rotate to atom's "i"'s body frame to calculate the radius
+//      MathExtra::quatquat(iquat_sf_bf, quat_temp, iquat_bf);
+      MathExtra::quatquat(contact.quat_sf_bf[shape1], quat_temp, quat_bf);
+      // Covert the body frame quaternion into a body frame theta, phi value
+//      MathSpherharm::quat_to_spherical(iquat_bf, theta, phi);
+      MathSpherharm::quat_to_spherical(quat_bf, theta, phi);
+      // TODO MUST FIX RANGE OF PHI AFTER EVERY CALL OF quat_to_spherical
+      phi = phi > 0.0 ? phi : MY_2PI + phi; // move atan2 range from 0 to 2pi
+      // Get the radius at the body frame theta and phi value
+//      rad_body = avec->get_shape_radius_and_normal(ishtype, theta, phi, inorm_bf); // inorm is in body frame
+      rad_body = avec->get_shape_radius_and_normal(contact.shtype[shape1], theta, phi, inorm_bf); // inorm is in body frame
+
+      // Covert the space frame quaternion into a space frame theta, phi value
+      MathSpherharm::quat_to_spherical(quat_temp, theta, phi);
+      phi = phi > 0.0 ? phi : MY_2PI + phi; // move atan2 range from 0 to 2pi
+      // Covert the space frame theta, phi value into spherical coordinates and translating by current location of
+      // particle i's centre
+//      ix_sf[0] = (rad_body * sin(theta) * cos(phi)) + x[i][0];
+//      ix_sf[1] = (rad_body * sin(theta) * sin(phi)) + x[i][1];
+//      ix_sf[2] = (rad_body * cos(theta)) + x[i][2];
+      ix_sf[0] = (rad_body * sin(theta) * cos(phi)) + contact.x0[shape1][0];
+      ix_sf[1] = (rad_body * sin(theta) * sin(phi)) + contact.x0[shape1][1];
+      ix_sf[2] = (rad_body * cos(theta)) + contact.x0[shape1][2];
+      // vector distance from COG of atom j (in space frame) to test point on atom i
+//      MathExtra::sub3(ix_sf, x[j], x_testpoint);
+      MathExtra::sub3(ix_sf, contact.x0[shape2], x_testpoint);
+      // scalar distance
+      dtemp = MathExtra::len3(x_testpoint);
+//      if (dtemp > radj) continue;
+      if (dtemp > contact.rad[shape2]) continue;
+      // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
+//      MathExtra::transpose_matvec(jrot, x_testpoint, x_projtestpoint);
+      MathExtra::transpose_matvec(rot2, x_testpoint, x_projtestpoint);
+      // Get projected phi and theta angle of gauss point in atom i's body frame
+      phi_proj = std::atan2(x_projtestpoint[1], x_projtestpoint[0]);
+      phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
+      theta_proj = std::acos(x_projtestpoint[2] / dtemp);
+
+      // Check for contact
+//      if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
+      if (avec->check_contact(contact.shtype[shape2], phi_proj, theta_proj, dtemp, finalrad)) {
+        upper_bound = rad_body;
+        lower_bound = 0.0;
+        rad_sample = (upper_bound + lower_bound) / 2.0;
+        while (upper_bound - lower_bound > radius_tol) {
+          // Covert the space frame theta, phi value into spherical coordinates and translating by current location of
+          // particle i's centre
+//          jx_sf[0] = (rad_sample * sin(theta) * cos(phi)) + x[i][0];
+//          jx_sf[1] = (rad_sample * sin(theta) * sin(phi)) + x[i][1];
+//          jx_sf[2] = (rad_sample * cos(theta)) + x[i][2];
+          jx_sf[0] = (rad_body * sin(theta) * cos(phi)) + contact.x0[shape1][0];
+          jx_sf[1] = (rad_body * sin(theta) * sin(phi)) + contact.x0[shape1][1];
+          jx_sf[2] = (rad_body * cos(theta)) + contact.x0[shape1][2];
+          // vector distance from COG of atom j (in space frame) to test point on atom i
+//          MathExtra::sub3(jx_sf, x[j], x_testpoint);
+          MathExtra::sub3(jx_sf, contact.x0[shape2], x_testpoint);
+          // scalar distance
+          dtemp = MathExtra::len3(x_testpoint);
+//          if (dtemp > radj) {
+          if (dtemp > contact.rad[shape2]){
+            lower_bound = rad_sample;  // sampled radius outside of particle j, increase the lower bound
+          } else {
+            // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
+//            MathExtra::transpose_matvec(jrot, x_testpoint, x_projtestpoint);
+            MathExtra::transpose_matvec(rot2, x_testpoint, x_projtestpoint);
+            // Get projected phi and theta angle of gauss point in atom i's body frame
+            phi_proj = std::atan2(x_projtestpoint[1], x_projtestpoint[0]);
+            phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
+            theta_proj = std::acos(x_projtestpoint[2] / dtemp);
+//            if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
+            if (avec->check_contact(contact.shtype[shape2], phi_proj, theta_proj, dtemp, finalrad)) {
+              upper_bound = rad_sample; // sampled radius inside of particle j, decrease the upper bound
+            } else {
+              lower_bound = rad_sample;  // sampled radius outside of particle j, increase the lower bound
+            }
+          }
+          rad_sample = (upper_bound + lower_bound) / 2.0;
+        }
+
+        // Final call to get the normal for the contact point for shape j
+//        rad_body = avec->get_shape_radius_and_normal(jshtype, theta_proj, phi_proj, jnorm_bf);
+        rad_body = avec->get_shape_radius_and_normal(contact.shtype[shape2], theta_proj, phi_proj, jnorm_bf);
+
+        dv = weights[kk] * (pow(rad_body, 3) - pow(rad_sample, 3)) * std::sin(theta);
+        vol_overlap += dv;
+
+        dcogx = weights[kk] * (pow(rad_body, 4) - pow(rad_sample, 4)) * std::sin(theta) * std::sin(theta) *
+                std::cos(phi);
+        dcogy = weights[kk] * (pow(rad_body, 4) - pow(rad_sample, 4)) * std::sin(theta) * std::sin(theta) *
+                std::sin(phi);
+        dcogz = weights[kk] * (pow(rad_body, 4) - pow(rad_sample, 4)) * std::sin(theta) * std::cos(theta);
+        cog[0] += dcogx;
+        cog[1] += dcogy;
+        cog[2] += dcogz;
+
+        dcogx = weights[kk] * pow(rad_body, 4) * std::sin(theta) * std::sin(theta) * std::cos(phi);
+        dcogy = weights[kk] * pow(rad_body, 4) * std::sin(theta) * std::sin(theta) * std::sin(phi);
+        dcogz = weights[kk] * pow(rad_body, 4) * std::sin(theta) * std::cos(theta);
+        cog_outer[0] += dcogx;
+        cog_outer[1] += dcogy;
+        cog_outer[2] += dcogz;
+        dcogx = weights[kk] * pow(rad_sample, 4) * std::sin(theta) * std::sin(theta) * std::cos(phi);
+        dcogy = weights[kk] * pow(rad_sample, 4) * std::sin(theta) * std::sin(theta) * std::sin(phi);
+        dcogz = weights[kk] * pow(rad_sample, 4) * std::sin(theta) * std::cos(theta);
+        cog_inner[0] += dcogx;
+        cog_inner[1] += dcogy;
+        cog_inner[2] += dcogz;
+
+        dv_outer = weights[kk] * (pow(rad_body, 3)) * std::sin(theta);;
+        dv_inner = weights[kk] * (pow(rad_sample, 3)) * std::sin(theta);;
+        vol_outer += dv_outer;
+        vol_inner += dv_inner;
+
+        inorm[0] += inorm_bf[0] * dv;
+        inorm[1] += inorm_bf[1] * dv;
+        inorm[2] += inorm_bf[2] * dv;
+
+        jnorm[0] += jnorm_bf[0] * dv;
+        jnorm[1] += jnorm_bf[1] * dv;
+        jnorm[2] += jnorm_bf[2] * dv;
+
+        if (file_count % 1 == 0) {
+          if (first_call & ii == 0 & jj == 0) {
+            first_call = false;
+            write_surfpoints_to_file(ix_sf, false, 1);
+            write_surfpoints_to_file(jx_sf, true, 0);
+          } else if (ii == 0 & jj == 0) {
+            write_surfpoints_to_file(ix_sf, true, 1);
+            write_surfpoints_to_file(jx_sf, true, 0);
+          }
+        }
+
+      }
+    }
+  }
+
+  cog_outer[0] *= 0.75 / vol_outer;
+  cog_outer[1] *= 0.75 / vol_outer;
+  cog_outer[2] *= 0.75 / vol_outer;
+  cog_inner[0] *= 0.75 / vol_inner;
+  cog_inner[1] *= 0.75 / vol_inner;
+  cog_inner[2] *= 0.75 / vol_inner;
+
+  cog[0] *= 0.75 / vol_overlap;
+  cog[1] *= 0.75 / vol_overlap;
+  cog[2] *= 0.75 / vol_overlap;
+  std::cout << cog[0] << " " << cog[1] << " " << cog[2] << std::endl;
+  cog[0] = ((cog_outer[0] * vol_outer) - (cog_inner[0] * vol_inner)) / vol_overlap;
+  cog[1] = ((cog_outer[1] * vol_outer) - (cog_inner[1] * vol_inner)) / vol_overlap;
+  cog[2] = ((cog_outer[2] * vol_outer) - (cog_inner[2] * vol_inner)) / vol_overlap;
+  std::cout << cog[0] << " " << cog[1] << " " << cog[2] << std::endl;
+  std::cout << cog_outer[0] << " " << cog_outer[1] << " " << cog_outer[2] << std::endl;
+  std::cout << cog_inner[0] << " " << cog_inner[1] << " " << cog_inner[2] << std::endl;
+
+
+  cog[0] += contact.x0[shape1][0];
+  cog[1] += contact.x0[shape1][1];
+  cog[2] += contact.x0[shape1][2];
+  std::cout << cog[0] << " " << cog[1] << " " << cog[2] << std::endl;
+
+  vol_overlap *= factor / 3.0;
+  vol_inner *= factor / 3.0;
+  vol_outer *= factor / 3.0;
+
+  MathExtra::matvec(rot1, inorm, inorm_sf);
+  MathExtra::norm3(inorm_sf);
+  MathExtra::matvec(rot2, jnorm, jnorm_sf);
+  MathExtra::norm3(jnorm_sf);
+
+  if (file_count % 1 == 0) {
+    write_spherecentre_to_file(cog, false, contact.rad[shape1]);
+  }
+
+  fpair = normal_coeffs[contact.shtype[shape1]][contact.shtype[shape2]][0];
+
+  fcont[0] = -inorm_sf[0] * fpair * vol_overlap;
+  fcont[1] = -inorm_sf[1] * fpair * vol_overlap;
+  fcont[2] = -inorm_sf[2] * fpair * vol_overlap;
+  fcont[3] = -jnorm_sf[0] * fpair * vol_overlap;
+  fcont[4] = -jnorm_sf[1] * fpair * vol_overlap;
+  fcont[5] = -jnorm_sf[2] * fpair * vol_overlap;
+
+  std::cout << fcont[0] << " " << fcont[1] << " "<< fcont[2] << " "<< fcont[3] << " "<< fcont[4] << " "<< fcont[5] << " "<<std::endl;
+
+  std::cout << "Outer Volume = " << vol_outer << " Inner Volume = " << vol_inner << " Overlap Volume = "
+            << vol_outer - vol_inner << " Overlap Volume (real) = " << vol_overlap << std::endl;
+
+}

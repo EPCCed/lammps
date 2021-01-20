@@ -71,15 +71,20 @@ class PairSH : public Pair {
   int write_volumecomp(double vol_sh, double vol_val, double c, double a, double gridsp);
   int write_ellipsoid(double *xi, double *xj, double irotmat[3][3], double jrotmat[3][3]);
 
-  struct Contact {
+    struct Contact {
     int shtype[2];
     double angs[2];
     double rad[2];
     double x0[2][3];
+    double quat[2][4];
+    double quat_init[2][4];
     double quat_bf_sf[2][4];
     double quat_sf_bf[2][4];
     double quat_cont[2][4];
   };
+  static void get_frame_quats(Contact &contact, int shape);
+  int refine_overlap_angle(Contact &contact, int shape);
+  void get_volume_and_com(Contact contact, int shape1, double radius_tol, double fcont[6], int ii, int jj);
 
   // Gaussian quadrature arrays
   double *abscissa;          // Abscissa of gaussian quadrature (same for all shapes)
