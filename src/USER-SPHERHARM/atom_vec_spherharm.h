@@ -38,13 +38,6 @@ class AtomVecSpherharm : public AtomVec {
   void pack_data_post(int);
   ~AtomVecSpherharm();
 
-  // Public methods required to access per-shape arrays [TO BE DELETED, CURRENTLY FOR TOY PAIR STYLE]
-  double** get_quadrature_angs(){return &angles[0];}
-  double** get_quadrature_rads(int &num_quad2){
-    num_quad2 = num_quadrature*num_quadrature;
-    return &quad_rads_byshape[0];
-  }
-
   // Public methods used for contact detection. These are called by the pair_style and ensure that shcoeffs_byshape and
   // expfacts_byshape remain local to the atom style.
   double get_shape_radius(int sht, double theta, double phi); // Get the shape radius given theta and phi

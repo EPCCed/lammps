@@ -4,7 +4,7 @@ variable	name string spherical_harmonics_testing
 atom_style	spherharm 120 /home/james/lammps/examples/USER/spherharm/ellipsoid.dat
 units		lj
 newton off
-
+# newton on
 
 ###############################################
 # Geometry-related parameters
@@ -36,11 +36,14 @@ change_box	all boundary f f f
 #create_atoms 	1 single 460.0 500.0 500.0
 #create_atoms 	2 single 540.0 505.0 500.0
 
-create_atoms 	1 single 450.5 500.0 500.0
-create_atoms 	2 single 549.5 505.0 505.0
+#create_atoms 	1 single 450.5 500.0 500.0
+#create_atoms 	2 single 549.5 505.0 505.0
 
 #create_atoms 	1 single 460.0 500.0 500.0
 #create_atoms 	2 single 540.0 500.0 500.0
+
+create_atoms 	1 single 445.0 500.0 500.0
+create_atoms 	2 single 555.0 505.0 505.0
 
 mass *      1.0
 
@@ -68,4 +71,4 @@ pair_coeff 	* * 5.0e-1
 
 timestep	0.005
 
-run		100000
+run		50000

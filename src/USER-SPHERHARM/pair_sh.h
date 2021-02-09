@@ -35,64 +35,34 @@ class PairSH : public Pair {
   double init_one(int, int);
 
  protected:
-  double **cut;
+  double **cut{};
 
-  class AtomVecSpherharm *avec;
+  class AtomVecSpherharm *avec{};
 
   virtual void allocate();
 
  private:
-  // Contact methods currently being tested
-  int gauss_quad_method;
-  int patch_method;
-  int gauss_vol_method;
 
   // per-type coefficients, set in pair coeff command
-  double ***normal_coeffs;
-  int *typetosh;
+  double ***normal_coeffs{};
+  int *typetosh{};
   int matchtypes;
 
-  double **npole_quats; // Quaternions describing the spherical coordinates of points on the top hemisphere of a generic
-                        // atom. These quaternions are accessed by all atoms rather than regenerating them for each one.
-  double spiral_spacing;// Factor used when creating the spiral of points on the pole. Determines the spacing.
-
   void matchtype();
-  static void get_contact_rotationmat(double (&)[3], double (&)[3][3]);
   static void get_contact_quat(double (&)[3], double (&)[4]);
-  void gen_pole_points_spiral();
-  int pole_to_atom_contact(double in_quat[4], double quat_cont[4], double quat_sf_bf[4], double rot[3][3],
-                                   double x_a[3], double x_b[3], int ashtype, int bshtype, double overlap[3]);
 
   double cur_time;
   int file_count;
-  int write_surfpoints_to_file(double *x, bool append_file, int cont);
-  int write_spherecentre_to_file(double *x, bool append_file, double rad);
-  int write_gridpoint_tofile(double *x, bool append_file);
-  int write_volumecomp(double vol_sh, double vol_val, double c, double a, double gridsp);
-  int write_ellipsoid(double *xi, double *xj, double irotmat[3][3], double jrotmat[3][3]);
-
-    struct Contact {
-    int shtype[2];
-    double angs[2];
-    double rad[2];
-    double x0[2][3];
-    double quat[2][4];
-    double quat_init[2][4];
-    double quat_bf_sf[2][4];
-    double quat_sf_bf[2][4];
-    double quat_cont[2][4];
-  };
-  static void get_frame_quats(Contact &contact, int shape);
-  int refine_overlap_angle(Contact &contact, int shape);
-  void get_volume_and_com(Contact contact, int shape1, double radius_tol, double fcont[6], int ii, int jj);
+  int write_surfpoints_to_file(double *x, bool append_file, int cont) const;
+  int write_spherecentre_to_file(double *x, bool append_file, double rad) const;
+  int write_ellipsoid(double *xi, double *xj, double irotmat[3][3], double jrotmat[3][3]) const;
 
   // Gaussian quadrature arrays
-  double *abscissa;          // Abscissa of gaussian quadrature (same for all shapes)
-  double *weights;            // Weights of gaussian quadrature (same for all shapes)
+  double *abscissa{};          // Abscissa of gaussian quadrature (same for all shapes)
+  double *weights{};            // Weights of gaussian quadrature (same for all shapes)
   int num_pole_quad;
 
   void get_quadrature_values(int num_quadrature);
-  double get_ellipsoid_overlap_volume(double ix[3], double jx[3], double dist, double a, double c, double spacing, bool first_call);
 
 };
 

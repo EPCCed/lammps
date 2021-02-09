@@ -9,34 +9,59 @@ units		lj
 # Geometry-related parameters
 ###############################################
 
-variable	boxx equal 10
-variable	boxy equal 10
-variable	boxz equal 10
+variable	boxx equal 1000
+variable	boxy equal 1000
+variable	boxz equal 1000
 
 
 #############
 processors * * 1
 region		boxreg block 0 ${boxx} 0 ${boxy} 0 ${boxz}
-create_box	1 boxreg
+create_box	2 boxreg
 change_box	all boundary f f f
-create_atoms 	1 single 1.0 1.0 1.0
-create_atoms 	1 single 9.0 9.0 9.0
+#create_atoms 	1 single 1.0 1.0 1.0
+#create_atoms 	1 single 9.0 9.0 9.0
+create_atoms 	1 single 445.0 500.0 500.0
+create_atoms 	2 single 555.0 505.0 505.0
 
-set 		atom 1 vx 1.0 vy 1.0 vz 1.0
-set 		atom 2 vx -1.0 vy -1.0 vz -1.0
+#set 		atom 1 vx 1.0 vy 1.0 vz 1.0
+#set 		atom 2 vx -1.0 vy -1.0 vz -1.0
+set 		atom 1 vx 1.0 vy 0.0 vz 0.0
+set 		atom 2 vx -1.0 vy 0.0 vz 0.0
+
 set 		group all mass 1.0
-set 		group all shape 1 1 5
-set		group all quat/random 4
+set 		group all shape 21 21 105
+#set		group all quat/random 4
+set		    group all quat 0.0 1.0 0.0 90.0
 
 fix		1 all nve/asphere
 
 neigh_modify	delay 0 every 1 check yes
 comm_modify	vel yes
 
-pair_style 	resquared 10.0
+pair_style 	resquared 210.0
 pair_coeff 	* * 1.0 1.0 1.7 3.4 3.4 1.0 1.0 1.0
 
+compute shapex all property/atom shapex
+compute shapey all property/atom shapey
+compute shapez all property/atom shapez
+compute quatw all property/atom quatw
+compute quati all property/atom quati
+compute quatj all property/atom quatj
+compute quatk all property/atom quatk
+dump dmpvtk all vtk 100 vtk_test/dump*.myforce.vtk id type c_shapex c_shapey c_shapez c_quatw c_quati c_quatj c_quatk
+
+
+variable	myN equal 10
+variable fac python factorial
+python factorial input 1 v_myN return v_fac format ii here """
+def factorial(n):
+  if n == 1: return n
+  return n * factorial(n-1)
+ """
+
+print ${fac}
 
 timestep	0.005
 
-run		1000
+run		50000

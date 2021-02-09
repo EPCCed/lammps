@@ -106,6 +106,7 @@ page gives those details.
    * :ref:`USER-UEF <PKG-USER-UEF>`
    * :ref:`USER-VTK <PKG-USER-VTK>`
    * :ref:`USER-YAFF <PKG-USER-YAFF>`
+   * :ref:`USER-SPHERHARM <PKG-USER-SPHERHARM>`
 
 ----------
 
@@ -2415,6 +2416,42 @@ This package has :ref:`specific installation instructions <user-vtk>` on the :do
 .. _PKG-USER-YAFF:
 
 USER-YAFF package
+-----------------
+
+**Contents:**
+
+Some potentials that are also implemented in the Yet Another Force Field (`YAFF <yaff_>`_) code.
+The expressions and their use are discussed in the following papers
+
+* Vanduyfhuys et al., J. Comput. Chem., 36 (13), 1015-1027 (2015) `link <vanduyfhuys2015_>`_
+* Vanduyfhuys et al., J. Comput. Chem., 39 (16), 999-1011 (2018) `link <vanduyfhuys2018_>`_
+
+which discuss the `QuickFF <quickff_>`_ methodology.
+
+.. _vanduyfhuys2015: https://doi.org/10.1002/jcc.23877
+.. _vanduyfhuys2018: https://doi.org/10.1002/jcc.25173
+.. _quickff: http://molmod.github.io/QuickFF
+.. _yaff: https://github.com/molmod/yaff
+
+**Author:** Steven Vandenbrande.
+
+**Supporting info:**
+
+* src/USER-YAFF/README
+* :doc:`angle_style cross <angle_cross>`
+* :doc:`angle_style mm3 <angle_mm3>`
+* :doc:`bond_style mm3 <bond_mm3>`
+* :doc:`improper_style distharm <improper_distharm>`
+* :doc:`improper_style sqdistharm <improper_sqdistharm>`
+* :doc:`pair_style mm3/switch3/coulgauss/long <pair_mm3_switch3_coulgauss_long>`
+* :doc:`pair_style lj/switch3/coulgauss/long <pair_lj_switch3_coulgauss_long>`
+* examples/USER/yaff
+
+----------
+
+.. _PKG-USER-SPHERHARM:
+
+USER-SPHERHARM package
 -----------------
 
 **Contents:**
