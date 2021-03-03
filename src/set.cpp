@@ -1021,20 +1021,28 @@ void Set::set(int keyword)
     }
 
     else if (keyword == SH_QUAT) {
-      double *quat;
+      double **quatinit, *quat;
+      int ishtype, *shtype;
+      double quat_foo[4], quat_bar[4];
       quat = atom -> quat[i];
+      quatinit = atom->quatinit_byshape;
+      shtype = atom->shtype;
       if (domain->dimension == 2 && (xvalue != 0.0 || yvalue != 0.0))
         error->one(FLERR,"Cannot set quaternion with xy components "
                          "for 2d system");
 
       double theta2 = MY_PI2 * wvalue/180.0;
       double sintheta2 = sin(theta2);
-      quat[0] = cos(theta2);
-      quat[1] = xvalue * sintheta2;
-      quat[2] = yvalue * sintheta2;
-      quat[3] = zvalue * sintheta2;
+      quat_foo[0] = cos(theta2);
+      quat_foo[1] = xvalue * sintheta2;
+      quat_foo[2] = yvalue * sintheta2;
+      quat_foo[3] = zvalue * sintheta2;
+      MathExtra::qnormalize(quat_foo);
+      std::cout << quat_foo[0] << " "<< quat_foo[1] << " "<< quat_foo[2] << " "<< quat_foo[3] << std::endl;
+      ishtype = shtype[i];
+      MathExtra::qconjugate(quatinit[ishtype],quat_bar);
+      MathExtra::quatquat(quat_foo, quat_bar, quat);
       MathExtra::qnormalize(quat);
-      std::cout << quat[0] << " "<< quat[1] << " "<< quat[2] << " "<< quat[3] << std::endl;
     }
 
     count++;
@@ -1305,24 +1313,32 @@ void Set::setrandom(int keyword)
 
   } else if (keyword == SH_QUAT_RANDOM) {
     int nlocal = atom->nlocal;
-    double *quat;
+    double **quatinit, *quat;
+    int ishtype, *shtype;
+    double quat_foo[4], quat_bar[4];
 
     if (domain->dimension == 3) {
       double s,t1,t2,theta1,theta2;
       for (i = 0; i < nlocal; i++)
         if (select[i]) {
           quat = atom -> quat[i];
+          quatinit = atom->quatinit_byshape;
+          shtype = atom->shtype;
           ranpark->reset(seed,x[i]);
           s = ranpark->uniform();
           t1 = sqrt(1.0-s);
           t2 = sqrt(s);
           theta1 = 2.0*MY_PI*ranpark->uniform();
           theta2 = 2.0*MY_PI*ranpark->uniform();
-          quat[0] = cos(theta2)*t2;
-          quat[1] = sin(theta1)*t1;
-          quat[2] = cos(theta1)*t1;
-          quat[3] = sin(theta2)*t2;
-          std::cout << quat[0] << " "<< quat[1] << " "<< quat[2] << " "<< quat[3] << std::endl;
+          quat_foo[0] = cos(theta2)*t2;
+          quat_foo[1] = sin(theta1)*t1;
+          quat_foo[2] = cos(theta1)*t1;
+          quat_foo[3] = sin(theta2)*t2;
+          std::cout << quat_foo[0] << " "<< quat_foo[1] << " "<< quat_foo[2] << " "<< quat_foo[3] << std::endl;
+          ishtype = shtype[i];
+          MathExtra::qconjugate(quatinit[ishtype],quat_bar);
+          MathExtra::quatquat(quat_foo, quat_bar, quat);
+          MathExtra::qnormalize(quat);
           count++;
         }
 

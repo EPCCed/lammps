@@ -42,6 +42,9 @@ class AtomVecSpherharmUnitTests : public AtomVecSpherharm {
   void check_sphere_normals();
   void check_ellipsoid_normals();
   void get_cog();
+  void dump_ply();
+  void dump_shapenormals();
+  void compare_areas();
 };
 
 }

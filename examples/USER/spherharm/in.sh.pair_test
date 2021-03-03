@@ -2,7 +2,7 @@
 
 variable	name string spherical_harmonics_testing
 atom_style	spherharm 120 /home/james/lammps/examples/USER/spherharm/ellipsoid.dat
-units		lj
+units		si
 newton off
 # newton on
 
@@ -30,11 +30,11 @@ change_box	all boundary f f f
 #create_atoms 	1 single 450.0 500.0 500.0
 #create_atoms 	2 single 550.0 500.0 500.0
 
-#create_atoms 	1 single 425.0 500.0 500.0
-#create_atoms 	2 single 575.0 500.0 500.0
+##create_atoms 	1 single 425.0 500.0 500.0
+##create_atoms 	2 single 575.0 500.0 500.0
 
-#create_atoms 	1 single 460.0 500.0 500.0
-#create_atoms 	2 single 540.0 505.0 500.0
+##create_atoms 	1 single 425.0 500.0 500.0
+##create_atoms 	2 single 575.0 505.0 500.0
 
 #create_atoms 	1 single 450.5 500.0 500.0
 #create_atoms 	2 single 549.5 505.0 505.0
@@ -66,9 +66,21 @@ fix		time_fix all nve/sh
 neigh_modify	delay 0 every 1 check yes
 comm_modify	vel yes
 
-pair_style 	spherharm
-pair_coeff 	* * 5.0e-1
+thermo 1
 
-timestep	0.005
+#compute RotKE all erotate/spherharm
+#variable ETotal equal "pe + ke + c_RotKE"
+#thermo_style custom step pe ke c_RotKE v_ETotal
+
+compute TransKE all ke
+compute RotKE all erotate/spherharm
+compute PEcalc all efunction/spherharm
+variable ETotal equal "c_PEcalc + c_TransKE + c_RotKE"
+thermo_style custom step c_PEcalc c_TransKE c_RotKE v_ETotal
+
+pair_style 	spherharm
+pair_coeff 	* * 5.0e-3 2.0
+
+timestep	0.005e0
 
 run		50000

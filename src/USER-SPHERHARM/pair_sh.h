@@ -47,13 +47,14 @@ class PairSH : public Pair {
   double ***normal_coeffs{};
   int *typetosh{};
   int matchtypes;
+  double exponent;
 
   void matchtype();
   static void get_contact_quat(double (&)[3], double (&)[4]);
 
   double cur_time;
   int file_count;
-  int write_surfpoints_to_file(double *x, bool append_file, int cont) const;
+  int write_surfpoints_to_file(double *x, bool append_file, int cont, int ifnorm, double *norm) const;
   int write_spherecentre_to_file(double *x, bool append_file, double rad) const;
   int write_ellipsoid(double *xi, double *xj, double irotmat[3][3], double jrotmat[3][3]) const;
 

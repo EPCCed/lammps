@@ -42,9 +42,12 @@ class AtomVecSpherharm : public AtomVec {
   // expfacts_byshape remain local to the atom style.
   double get_shape_radius(int sht, double theta, double phi); // Get the shape radius given theta and phi
   double get_shape_radius_and_normal(int sht, double theta, double phi, double rnorm[3]); // As above, with unit normal
+  double get_shape_radius_and_gradients(int sht, double theta, double phi, double &rad_dphi, double &rad_dtheta); // As above, with unit normal
   int check_contact(int, double, double, double, double &); // Check for contact given shape, theta, phi, and distance
 
- protected:
+  void dump_ply(int i, int shape, int plycount, double irot[3][3], double offset[3]);
+
+protected:
   // per-atom arrays
   double **omega;              // Angular velocity
   int *shtype;                 // Links atom to the SH shape type that it uses

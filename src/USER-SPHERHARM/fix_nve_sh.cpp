@@ -60,8 +60,8 @@ void FixNVESh::init()
 void FixNVESh::initial_integrate(int /*vflag*/)
 {
   double dtfm;
-  double omega[3];
 
+  double **omega = atom->omega;
   double **quat = atom->quat;
 //  double **inertia = avec->get_pinertia_init();
   double **inertia = atom->pinertia_byshape;
@@ -105,8 +105,8 @@ void FixNVESh::initial_integrate(int /*vflag*/)
       // update quaternion a full step via Richardson iteration
       // returns new normalized quaternion
 
-      MathExtra::mq_to_omega(angmom[i],quat[i],inertia[ishtype],omega);
-      MathExtra::richardson(quat[i],angmom[i],omega,inertia[ishtype],dtq);
+      MathExtra::mq_to_omega(angmom[i],quat[i],inertia[ishtype],omega[i]);
+      MathExtra::richardson(quat[i],angmom[i],omega[i],inertia[ishtype],dtq);
     }
 }
 

@@ -15,6 +15,7 @@
 #include <math_extra.h>
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 #include "atom_vec_spherharm_unittests.h"
 #include "atom.h"
 #include "modify.h"
@@ -60,7 +61,10 @@ void AtomVecSpherharmUnitTests::process_args(int narg, char **arg) {
 
 //  check_sphere_normals();
 //  check_ellipsoid_normals();
-  get_cog();
+//  get_cog();
+//  dump_ply();
+//  dump_shapenormals();
+  compare_areas();
 
 }
 
@@ -315,4 +319,122 @@ void AtomVecSpherharmUnitTests::get_cog() {
   std::cout << cog[0] << " " << cog[1] << " " << cog[2] << std::endl;
   std::cout << std::endl;
 
+}
+
+void AtomVecSpherharmUnitTests::dump_ply() {
+
+  double theta, phi, rad_body;
+  double ix_sf[3];
+  int count, sht;
+
+  count = 0;
+  sht = 0;
+
+  std::ofstream outfile;
+  outfile.open("test_ply/test.ply");
+  if (outfile.is_open()) {
+    outfile << "ply" << "\n";
+    outfile << "format ascii 1.0" << "\n" << "element vertex " <<
+      std::to_string(num_quadrature*num_quadrature) <<
+      "\n" << "property float64 x" << "\n" << "property float64 y" <<
+      "\n" << "property float64 z" << "\n" << "end_header" << "\n";
+  } else std::cout << "Unable to open file";
+  for (int i = 0; i < num_quadrature; i++) {
+    for (int j = 0; j < num_quadrature; j++) {
+      theta = angles[0][count];
+      phi = angles[1][count];
+      rad_body = quad_rads_byshape[sht][count];
+      ix_sf[0] = (rad_body * sin(theta) * cos(phi));
+      ix_sf[1] = (rad_body * sin(theta) * sin(phi));
+      ix_sf[2] = (rad_body * cos(theta));
+      outfile << ix_sf[0] << " " << ix_sf[1] << " " << ix_sf[2] << "\n";
+      count++;
+    }
+  }
+  outfile.close();
+}
+
+void AtomVecSpherharmUnitTests::dump_shapenormals() {
+
+  std::cout<<"DUMPING NORMALS"<<std::endl;
+
+  double theta, phi, rad_body;
+  double ix_sf[3], norm[3];
+  int count, sht;
+
+  count = 0;
+  sht = 0;
+
+  std::ofstream outfile;
+  outfile.open("test_dump/normalcheck.csv");
+  if (outfile.is_open()) {
+    outfile << "x,y,z,nx,ny,nz" << "\n";
+    for (int i = 0; i < num_quadrature; i++) {
+      for (int j = 0; j < num_quadrature; j++) {
+        theta = angles[0][count];
+        phi = angles[1][count];
+        rad_body = get_shape_radius_and_normal(sht, theta, phi, norm);
+        rad_body = quad_rads_byshape[sht][count];
+        ix_sf[0] = (rad_body * sin(theta) * cos(phi));
+        ix_sf[1] = (rad_body * sin(theta) * sin(phi));
+        ix_sf[2] = (rad_body * cos(theta));
+        outfile << std::setprecision(16) << ix_sf[0] << "," << ix_sf[1] << "," << ix_sf[2] <<
+                "," << norm[0] << "," << norm[1] << "," << norm[2] << "\n";
+        count++;
+      }
+    }
+    outfile.close();
+  } else std::cout << "Unable to open file";
+
+}
+
+
+void AtomVecSpherharmUnitTests::compare_areas() {
+
+  std::cout<<"Comparing Areas"<<std::endl;
+
+  double theta, phi, rad, rp, rt, st, Q;
+  double normQ[3], vec_sa[3];
+  double surf_area, iang, factor, test_sa, surf_area2;
+  double abscissa[num_quadrature];
+  int sht, trap_L;
+
+  sht = 0;
+  iang = 4.0*MY_PI/5.0;
+  trap_L = 2*(num_quadrature-1);
+  factor = (MY_PI*iang/((double(trap_L)+1.0)));
+
+  surf_area = 0.0;
+  surf_area2 = 0.0;
+  MathExtra::zero3(vec_sa);
+
+  QuadPair p;
+  // Get the quadrature weights, and abscissa. Convert abscissa to theta angles
+  for (int i = 0; i < num_quadrature; i++) {
+    p = GLPair(num_quadrature, i + 1);
+    abscissa[i] = p.x();
+  }
+
+  for (int ll = 0; ll <= trap_L; ll++) {
+    phi = MY_2PI * ll / (double(trap_L) + 1.0);
+    for (int kk = 0; kk < num_quadrature; kk++) {
+      theta = (iang * 0.5 * abscissa[kk]) + (iang * 0.5);
+      st = std::sin(theta);
+      rad = get_shape_radius_and_gradients(sht, theta, phi, rp, rt);
+      get_normal(theta, phi, rad, rp, rt, normQ);
+      Q = rad*std::sqrt((rp*rp)+(rt*rt*st*st)+(rad*rad*st*st));
+      surf_area += weights[kk] * Q;
+      MathExtra::scale3(weights[kk], normQ);
+      MathExtra::add3(vec_sa, normQ, vec_sa);
+      surf_area2 += MathExtra::len3(normQ);
+    }
+  }
+  surf_area *= factor;
+  surf_area2 *= factor;
+  MathExtra::scale3(factor, vec_sa);
+  test_sa = MathExtra::len3(vec_sa);
+
+  std::cout <<"Surface area, direct calculation -> " << surf_area << std::endl;
+  std::cout <<"Surface area, from vector area   -> " << surf_area2 << std::endl;
+  std::cout <<"Projected surface area, from vector area   -> " << test_sa << std::endl;
 }
