@@ -51,6 +51,14 @@ class PairSH : public Pair {
 
   void matchtype();
   static void get_contact_quat(double (&)[3], double (&)[4]);
+  int refine_cap_angle(int &kk_count, int ishtype, int jshtype, double iang,  double radj,
+                       double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
+                       const double xj[3], double (&jrot)[3][3]);
+  void calc_force_torque(int kk_count, int ishtype, int jshtype, double iang,  double radj,
+                         double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
+                         const double xj[3], double (&irot)[3][3],  double (&jrot)[3][3],
+                         double &vol_overlap, double (&iforce)[3], double (&torsum)[3],
+                         double &factor, bool &first_call, int ii, int jj);
 
   double cur_time;
   int file_count;
@@ -62,6 +70,7 @@ class PairSH : public Pair {
   double *abscissa{};          // Abscissa of gaussian quadrature (same for all shapes)
   double *weights{};            // Weights of gaussian quadrature (same for all shapes)
   int num_pole_quad;
+  double radius_tol;
 
   void get_quadrature_values(int num_quadrature);
 
