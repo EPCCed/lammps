@@ -64,7 +64,8 @@ void AtomVecSpherharmUnitTests::process_args(int narg, char **arg) {
 //  get_cog();
 //  dump_ply();
 //  dump_shapenormals();
-  compare_areas();
+//  compare_areas();
+  validate_rotation();
 
 }
 
@@ -437,4 +438,290 @@ void AtomVecSpherharmUnitTests::compare_areas() {
   std::cout <<"Surface area, direct calculation -> " << surf_area << std::endl;
   std::cout <<"Surface area, from vector area   -> " << surf_area2 << std::endl;
   std::cout <<"Projected surface area, from vector area   -> " << test_sa << std::endl;
+}
+
+void AtomVecSpherharmUnitTests::validate_rotation() {
+
+  double *rotcoeffs;
+  double quat[4];
+  double rot[3][3], zxzmat[3][3];
+  double alpha,beta,gamma;
+  double theta, phi, num_quad2;
+  double ix_bf[3], ix_sf[3], ix_sf_rot[3];
+  double rad_val;
+  int n, nloc, loc;
+  double P_n_m, x_val, mphi, Pnm_nn;
+  std::vector<double> Pnm_m2, Pnm_m1;
+
+  memory->create(rotcoeffs, (maxshexpan+1)*(maxshexpan+2), "validate_rotation:rotcoeffs");
+
+  quat[0]= -0.2;
+  quat[1]= -0.3;
+  quat[2]= -0.5;
+  quat[3]= 0.1;
+
+  std::string seq="ZYZ";
+  MathExtra::qnormalize(quat);
+  std::cout<<quat[0]<<" "<<quat[1]<<" "<<quat[2]<<" "<<quat[3]<<std::endl;
+  MathExtra::quat_to_mat(quat, rot);
+
+//  if (!MathSpherharm::quat_to_euler(quat, alpha, beta, gamma, seq)) error->all(FLERR, "Sequence missing");
+//  std::cout<<"alpha, beta, gamma"<<std::endl;
+//  std::cout<<alpha<<" "<<beta<<" "<<gamma<<std::endl;
+  if (!MathSpherharm::quat_to_euler_test(quat, alpha, beta, gamma, seq)) error->all(FLERR, "Sequence missing");
+  std::cout<<"alpha, beta, gamma"<<std::endl;
+  std::cout<<alpha<<" "<<beta<<" "<<gamma<<std::endl;
+
+  double c1,c2,c3,s1,s2,s3;
+  c1 = std::cos(alpha);
+  s1 = std::sin(alpha);
+  c2 = std::cos(beta);
+  s2 = std::sin(beta);
+  c3 = std::cos(gamma);
+  s3 = std::sin(gamma);
+
+  std::cout << std::endl;
+  std::cout << "Rot mat from quat" << std::endl;
+  std::cout << rot[0][0] << " " << rot[0][1] << " " << rot[0][2] << std::endl;
+  std::cout << rot[1][0] << " " << rot[1][1] << " " << rot[1][2] << std::endl;
+  std::cout << rot[2][0] << " " << rot[2][1] << " " << rot[2][2] << std::endl;
+  std::cout << std::endl;
+
+  std::cout << "ZXZ rot mat" << std::endl;
+  std::cout <<  c1*c3-c2*s1*s3 << " " << -c1*s3 - c2*c3*s1  << " " << s1*s2 << std::endl;
+  std::cout <<  c3*s1+c1*c2*s3 << " " << c1*c2*c3 - s1*s3  << " " << -c1*s2 << std::endl;
+  std::cout << s2*s3 << " " << c3*s2 << " " << c2 << std::endl;
+  std::cout << std::endl;
+
+  zxzmat[0][0]=c1*c3-c2*s1*s3;
+  zxzmat[0][1]=-c1*s3 - c2*c3*s1;
+  zxzmat[0][2]=s1*s2;
+  zxzmat[1][0]=c3*s1+c1*c2*s3;
+  zxzmat[1][1]=c1*c2*c3 - s1*s3;
+  zxzmat[1][2]=-c1*s2;
+  zxzmat[2][0]=s2*s3;
+  zxzmat[2][1]=c3*s2;
+  zxzmat[2][2]=c2;
+
+  std::cout << "ZYZ rot mat" << std::endl;
+  std::cout << c1*c2*c3-s1*s3 << " " << -c3*s1-c1*c2*s3 << " " << c1*s2 << std::endl;
+  std::cout << c1*s3 + c2*c3*s1 << " " << c1*c3-c2*s1*s3 << " " << s1*s2 << std::endl;
+  std::cout << -c3*s2 << " " << s2*s3 << " " << c2 << std::endl;
+  std::cout << std::endl;
+
+  get_coefficients(0, rotcoeffs);
+//  doRotate(0, rotcoeffs, rotcoeffs, alpha, -beta, gamma);
+  doRotate(0, rotcoeffs, rotcoeffs, alpha, beta, 0);
+  doRotate(0, rotcoeffs, rotcoeffs, 0, 0, gamma);
+  num_quad2 = num_quadrature*num_quadrature;
+
+  std::ofstream outfile;
+  outfile.open("plys/rottest.ply");
+  if (outfile.is_open()) {
+    outfile << "ply" << "\n";
+    outfile << "format ascii 1.0" << "\n" << "element vertex " <<
+            std::to_string(num_quadrature*num_quadrature) <<
+            "\n" << "property double x" << "\n" << "property double y" <<
+            "\n" << "property double z" << "\n" << "end_header" << "\n";
+  } else std::cout << "Unable to open file";
+  for (int k = 0; k < num_quad2; k++) {
+    theta = angles[0][k];
+    phi = angles[1][k];
+    rad_val = rotcoeffs[0] * std::sqrt(1.0 / (4.0 * MY_PI));
+    Pnm_m2.resize(maxshexpan+1, 0.0);
+    Pnm_m1.resize(maxshexpan+1, 0.0);
+    x_val = std::cos(theta);
+    for (n=1; n<=maxshexpan; n++){
+      nloc = n * (n + 1);
+      if (n == 1) {
+        P_n_m = plegendre(1, 0, x_val);
+        Pnm_m2[0] = P_n_m;
+        rad_val += rotcoeffs[4] * P_n_m;
+        P_n_m = plegendre(1, 1, x_val);
+        Pnm_m2[1] = P_n_m;
+        mphi = 1.0 * phi;
+        rad_val += (rotcoeffs[2] * cos(mphi) - rotcoeffs[3] * sin(mphi)) * 2.0 * P_n_m;
+      } else if (n == 2) {
+        P_n_m = plegendre(2, 0, x_val);
+        Pnm_m1[0] = P_n_m;
+        rad_val += rotcoeffs[10] * P_n_m;
+        for (int m = 2; m >= 1; m--) {
+          P_n_m = plegendre(2, m, x_val);
+          Pnm_m1[m] = P_n_m;
+          mphi = (double) m * phi;
+          rad_val += (rotcoeffs[nloc] * cos(mphi) - rotcoeffs[nloc + 1] * sin(mphi)) * 2.0 * P_n_m;
+          nloc += 2;
+        }
+        Pnm_nn = Pnm_m1[2];
+      } else {
+        P_n_m = plegendre_recycle(n, 0, x_val, Pnm_m1[0], Pnm_m2[0]);
+        Pnm_m2[0] = Pnm_m1[0];
+        Pnm_m1[0] = P_n_m;
+        loc = (n + 1) * (n + 2) - 2;
+        rad_val += rotcoeffs[loc] * P_n_m;
+        loc -= 2;
+        for (int m = 1; m < n - 1; m++) {
+          P_n_m = plegendre_recycle(n, m, x_val, Pnm_m1[m], Pnm_m2[m]);
+          Pnm_m2[m] = Pnm_m1[m];
+          Pnm_m1[m] = P_n_m;
+          mphi = (double) m * phi;
+          rad_val += (rotcoeffs[loc] * cos(mphi) - rotcoeffs[loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+          loc -= 2;
+        }
+
+        P_n_m = x_val * std::sqrt((2.0 * ((double) n - 1.0)) + 3.0) * Pnm_nn;
+        Pnm_m2[n - 1] = Pnm_m1[n - 1];
+        Pnm_m1[n - 1] = P_n_m;
+        mphi = (double) (n - 1) * phi;
+        rad_val += (rotcoeffs[loc] * cos(mphi) - rotcoeffs[loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+        loc -= 2;
+
+        P_n_m = plegendre_nn(n, x_val, Pnm_nn);
+        Pnm_nn = P_n_m;
+        Pnm_m1[n] = P_n_m;
+        mphi = (double) n * phi;
+        rad_val += (rotcoeffs[loc] * cos(mphi) - rotcoeffs[loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+      }
+    }
+    ix_sf_rot[0] = (rad_val * sin(theta) * cos(phi));
+    ix_sf_rot[1] = (rad_val * sin(theta) * sin(phi));
+    ix_sf_rot[2] = (rad_val * cos(theta));
+
+    outfile << std::setprecision(16) << ix_sf_rot[0] << " " << ix_sf_rot[1] << " " << ix_sf_rot[2] << "\n";
+
+  }
+  outfile.close();
+
+
+  outfile.open("plys/rottest_orig.ply");
+  if (outfile.is_open()) {
+    outfile << "ply" << "\n";
+    outfile << "format ascii 1.0" << "\n" << "element vertex " <<
+            std::to_string(num_quadrature*num_quadrature) <<
+            "\n" << "property double x" << "\n" << "property double y" <<
+            "\n" << "property double z" << "\n" << "end_header" << "\n";
+  } else std::cout << "Unable to open file";
+  for (int k = 0; k < num_quad2; k++) {
+    theta = angles[0][k];
+    phi = angles[1][k];
+    rad_val = quad_rads_byshape[0][k];
+    ix_bf[0] = (rad_val * sin(theta) * cos(phi));
+    ix_bf[1] = (rad_val * sin(theta) * sin(phi));
+    ix_bf[2] = (rad_val * cos(theta));
+//    outfile << std::setprecision(16) << ix_bf[0] << " " << ix_bf[1] << " " << ix_bf[2] << "\n";
+//    MathExtra::matvec(zxzmat, ix_bf, ix_sf);
+    MathExtra::transpose_matvec(rot, ix_bf, ix_sf);
+    outfile << std::setprecision(16) << ix_bf[0] << " " << ix_bf[1] << " " << ix_bf[2] << "\n";
+
+
+//    std::cout << rad_val << " ";
+//    double quat_foo[4], quat_bar[4];
+//    MathSpherharm::spherical_to_quat(theta, phi, quat_foo);
+//    MathExtra::qconjugate(quat, quat_bar);
+//    MathExtra::quatquat(quat_bar, quat_foo, quat);
+//    MathSpherharm::quat_to_spherical(quat, theta, phi);
+
+
+    rad_val = rotcoeffs[0] * std::sqrt(1.0 / (4.0 * MY_PI));
+    Pnm_m2.resize(maxshexpan+1, 0.0);
+    Pnm_m1.resize(maxshexpan+1, 0.0);
+    x_val = std::cos(theta);
+    for (n=1; n<=maxshexpan; n++){
+      nloc = n * (n + 1);
+      if (n == 1) {
+        P_n_m = plegendre(1, 0, x_val);
+        Pnm_m2[0] = P_n_m;
+        rad_val += rotcoeffs[4] * P_n_m;
+        P_n_m = plegendre(1, 1, x_val);
+        Pnm_m2[1] = P_n_m;
+        mphi = 1.0 * phi;
+        rad_val += (rotcoeffs[2] * cos(mphi) - rotcoeffs[3] * sin(mphi)) * 2.0 * P_n_m;
+      } else if (n == 2) {
+        P_n_m = plegendre(2, 0, x_val);
+        Pnm_m1[0] = P_n_m;
+        rad_val += rotcoeffs[10] * P_n_m;
+        for (int m = 2; m >= 1; m--) {
+          P_n_m = plegendre(2, m, x_val);
+          Pnm_m1[m] = P_n_m;
+          mphi = (double) m * phi;
+          rad_val += (rotcoeffs[nloc] * cos(mphi) - rotcoeffs[nloc + 1] * sin(mphi)) * 2.0 * P_n_m;
+          nloc += 2;
+        }
+        Pnm_nn = Pnm_m1[2];
+      } else {
+        P_n_m = plegendre_recycle(n, 0, x_val, Pnm_m1[0], Pnm_m2[0]);
+        Pnm_m2[0] = Pnm_m1[0];
+        Pnm_m1[0] = P_n_m;
+        loc = (n + 1) * (n + 2) - 2;
+        rad_val += rotcoeffs[loc] * P_n_m;
+        loc -= 2;
+        for (int m = 1; m < n - 1; m++) {
+          P_n_m = plegendre_recycle(n, m, x_val, Pnm_m1[m], Pnm_m2[m]);
+          Pnm_m2[m] = Pnm_m1[m];
+          Pnm_m1[m] = P_n_m;
+          mphi = (double) m * phi;
+          rad_val += (rotcoeffs[loc] * cos(mphi) - rotcoeffs[loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+          loc -= 2;
+        }
+
+        P_n_m = x_val * std::sqrt((2.0 * ((double) n - 1.0)) + 3.0) * Pnm_nn;
+        Pnm_m2[n - 1] = Pnm_m1[n - 1];
+        Pnm_m1[n - 1] = P_n_m;
+        mphi = (double) (n - 1) * phi;
+        rad_val += (rotcoeffs[loc] * cos(mphi) - rotcoeffs[loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+        loc -= 2;
+
+        P_n_m = plegendre_nn(n, x_val, Pnm_nn);
+        Pnm_nn = P_n_m;
+        Pnm_m1[n] = P_n_m;
+        mphi = (double) n * phi;
+        rad_val += (rotcoeffs[loc] * cos(mphi) - rotcoeffs[loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+      }
+    }
+
+  }
+  outfile.close();
+
+
+  double inorm[3],inormtemp[3];
+  double quat_foo[4], quat_bar[4], quat_temp[4];
+  for (int k = 0; k < num_quad2; k++) {
+    theta = angles[0][k];
+    phi = angles[1][k];
+
+    ///// contact to init
+//    rad_val = get_shape_radius_and_normal(theta, phi, inorm, rotcoeffs);
+//    std::cout << rad_val << " ";
+//
+//    MathExtra::copy3(inorm, inormtemp);
+//    MathExtra::matvec(rot, inormtemp, inorm);
+//    std::cout << inorm[0] << " " << inorm[1] << " " << inorm[2] << " " << std::endl;
+//
+//    MathSpherharm::spherical_to_quat(theta, phi, quat_foo);
+//    MathExtra::quatquat(quat, quat_foo, quat_bar);
+//    MathSpherharm::quat_to_spherical(quat_bar, theta, phi);
+//    rad_val = get_shape_radius_and_normal(theta, phi, inorm, shcoeffs_byshape[0]);
+//    std::cout << rad_val << " ";
+//    std::cout << inorm[0] << " " << inorm[1] << " " << inorm[2] << " " << std::endl;
+
+    ///// init to contact
+    rad_val = get_shape_radius_and_normal(theta, phi, inorm, shcoeffs_byshape[0]);
+    std::cout << rad_val << " ";
+
+    MathExtra::copy3(inorm, inormtemp);
+    MathExtra::transpose_matvec(rot, inormtemp, inorm);
+    std::cout << inorm[0] << " " << inorm[1] << " " << inorm[2] << " " << std::endl;
+
+    MathSpherharm::spherical_to_quat(theta, phi, quat_bar);
+    MathExtra::qconjugate(quat, quat_foo);
+    MathExtra::quatquat(quat_foo, quat_bar, quat_temp);
+    MathSpherharm::quat_to_spherical(quat_temp, theta, phi);
+    rad_val = get_shape_radius_and_normal(theta, phi, inorm, rotcoeffs);
+    std::cout << rad_val << " ";
+    std::cout << inorm[0] << " " << inorm[1] << " " << inorm[2] << " " << std::endl;
+  }
+
+
+  memory->sfree(rotcoeffs);
+
 }

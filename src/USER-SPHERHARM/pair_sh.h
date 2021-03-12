@@ -60,6 +60,12 @@ class PairSH : public Pair {
                          double &vol_overlap, double (&iforce)[3], double (&torsum)[3],
                          double &factor, bool &first_call, int ii, int jj);
 
+  void rotatedvolume(int kk_count, int ishtype, int jshtype, double iang,  double radj,
+                             double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
+                             const double xj[3], double (&irot)[3][3],  double (&jrot)[3][3],
+                             double &vol_overlap, double (&iforce)[3], double (&torsum)[3],
+                             double &factor, bool &first_call, int ii, int jj);
+
   double cur_time;
   int file_count;
   int write_surfpoints_to_file(double *x, bool append_file, int cont, int ifnorm, double *norm) const;

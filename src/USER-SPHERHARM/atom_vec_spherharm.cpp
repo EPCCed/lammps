@@ -16,6 +16,7 @@
 #include <potential_file_reader.h>
 #include <fstream>
 #include <iomanip>
+#include <complex>
 #include "atom.h"
 #include "modify.h"
 #include "fix.h"
@@ -951,6 +952,125 @@ double AtomVecSpherharm::get_shape_radius_and_normal(int sht, double theta, doub
 
   return rad_val;
 }
+
+double AtomVecSpherharm::get_shape_radius_and_normal(double theta, double phi, double rnorm[3], const double *coeffs) {
+
+  int n, nloc, loc;
+  double P_n_m, x_val, mphi, Pnm_nn, fnm, st;
+  std::vector<double> Pnm_m2, Pnm_m1;
+
+  fnm = std::sqrt(1.0 / MY_4PI);
+  double rad_val = coeffs[0] * fnm;
+  double rad_dphi, rad_dtheta;
+  rad_dphi = rad_dtheta = 0.0;
+
+  Pnm_m2.resize(maxshexpan+1, 0.0);
+  Pnm_m1.resize(maxshexpan+1, 0.0);
+
+  if (sin(theta) == 0.0) theta += 1.0e-5; // otherwise dividing by sin(theta) for gradients will not work
+  if (sin(phi) == 0.0) phi += 1.0e-5; // To be consistent...
+  x_val = std::cos(theta);
+  st = std::sin(theta);
+
+  for (n=1; n<=maxshexpan; n++){
+    nloc = n * (n + 1);
+
+    // n=1
+    if (n == 1) {
+      // n=1, m=0
+      P_n_m = plegendre(1, 0, x_val);
+      Pnm_m2[0] = P_n_m;
+      rad_val += coeffs[4] * P_n_m;
+      fnm = std::sqrt(3.0 / MY_4PI);
+      rad_dtheta -= (coeffs[4]*fnm/st)*((2.0*x_val*plgndr(1,0,x_val))-(2.0*plgndr(2, 0, x_val)));
+      // n=1, m=1
+      P_n_m = plegendre(1, 1, x_val);
+      Pnm_m2[1] = P_n_m;
+      mphi = 1.0 * phi;
+      rad_val += (coeffs[2] * cos(mphi) - coeffs[3] * sin(mphi)) * 2.0 * P_n_m;
+      rad_dphi -= (coeffs[2] * sin(mphi) + coeffs[3] * cos(mphi)) * 2.0 * P_n_m;
+      fnm = std::sqrt(3.0 / (2.0 * MY_4PI));
+      rad_dtheta += 2.0*(fnm/st)*((2.0*x_val*plgndr(1,1,x_val))-(plgndr(2, 1, x_val)))*
+                    ((coeffs[3]*sin(mphi))-(coeffs[2] * cos(mphi))) ;
+      // n = 2
+    } else if (n == 2) {
+      // n=2, m=0
+      P_n_m = plegendre(2, 0, x_val);
+      Pnm_m1[0] = P_n_m;
+      rad_val += coeffs[10] * P_n_m;
+      fnm = std::sqrt(5.0 / MY_4PI);
+      rad_dtheta -= (coeffs[10]*fnm / st)*((3.0*x_val*plgndr(2,0,x_val))-(3.0*plgndr(3, 0, x_val)));
+      // n=2 2>=m>0
+      for (int m = 2; m >= 1; m--) {
+        P_n_m = plegendre(2, m, x_val);
+        Pnm_m1[m] = P_n_m;
+        mphi = (double) m * phi;
+        rad_val += (coeffs[nloc] * cos(mphi) - coeffs[nloc + 1] * sin(mphi)) * 2.0 * P_n_m;
+        rad_dphi -= (coeffs[nloc] * sin(mphi) + coeffs[nloc + 1] * cos(mphi)) * 2.0 * P_n_m * (double) m;
+        fnm = std::sqrt((2.0*double(n)+1.0)*factorial(n-m)/(MY_4PI*factorial(n+m)));
+        rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,m,x_val))-(double(n-m+1)*plgndr(n+1, m, x_val)))*
+                      ((coeffs[nloc+1]*sin(mphi))-(coeffs[nloc] * cos(mphi)));
+        nloc += 2;
+      }
+      Pnm_nn = Pnm_m1[2];
+
+      // 2 < n > n-1
+    } else {
+      P_n_m = plegendre_recycle(n, 0, x_val, Pnm_m1[0], Pnm_m2[0]);
+      Pnm_m2[0] = Pnm_m1[0];
+      Pnm_m1[0] = P_n_m;
+      loc = (n + 1) * (n + 2) - 2;
+      rad_val += coeffs[loc] * P_n_m;
+      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI));
+      rad_dtheta -= (coeffs[loc]*fnm / st)*
+                    ((double(n+1)*x_val*plgndr(n,0,x_val))-(double(n+1)*plgndr(n+1, 0, x_val)));
+
+      loc -= 2;
+      for (int m = 1; m < n - 1; m++) {
+        P_n_m = plegendre_recycle(n, m, x_val, Pnm_m1[m], Pnm_m2[m]);
+        Pnm_m2[m] = Pnm_m1[m];
+        Pnm_m1[m] = P_n_m;
+        mphi = (double) m * phi;
+        rad_val += (coeffs[loc] * cos(mphi) - coeffs[loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+        rad_dphi -= (coeffs[loc] * sin(mphi) + coeffs[loc + 1] * cos(mphi)) * 2.0 * P_n_m * (double) m;
+        fnm = std::sqrt((2.0*double(n)+1.0)*factorial(n-m)/(MY_4PI*factorial(n+m)));
+        rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,m,x_val))-(double(n-m+1)*plgndr(n+1, m, x_val)))*
+                      ((coeffs[loc+1]*sin(mphi))-(coeffs[loc] * cos(mphi)));
+        loc -= 2;
+      }
+
+      // m = n-1
+      P_n_m = x_val * std::sqrt((2.0 * ((double) n - 1.0)) + 3.0) * Pnm_nn;
+      Pnm_m2[n - 1] = Pnm_m1[n - 1];
+      Pnm_m1[n - 1] = P_n_m;
+      mphi = (double) (n - 1) * phi;
+      rad_val += (coeffs[loc] * cos(mphi) - coeffs[loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+      rad_dphi -= (coeffs[loc] * sin(mphi) + coeffs[loc + 1] * cos(mphi)) * 2.0 * P_n_m * (double) (n-1);
+      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI*factorial(2*n-1)));
+      rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,n-1,x_val))-(2.0*plgndr(n+1, n-1, x_val)))*
+                    ((coeffs[loc+1]*sin(mphi))-(coeffs[loc] * cos(mphi)));
+      loc -= 2;
+
+      // m = n
+      P_n_m = plegendre_nn(n, x_val, Pnm_nn);
+      Pnm_nn = P_n_m;
+      Pnm_m1[n] = P_n_m;
+      mphi = (double) n * phi;
+      rad_val += (coeffs[loc] * cos(mphi) - coeffs[loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+      rad_dphi -= (coeffs[loc] * sin(mphi) + coeffs[loc + 1] * cos(mphi)) * 2.0 * P_n_m * (double) n;
+      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI*factorial(2*n)));
+      rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,n,x_val))-(plgndr(n+1, n, x_val)))*
+                    ((coeffs[loc+1]*sin(mphi))-(coeffs[loc] * cos(mphi)));
+    }
+  }
+
+//  std::cout << "theta " << theta << " phi " << phi << " drdt " << rad_dtheta << " drdp " << rad_dphi << std::endl;
+  get_normal(theta, phi, rad_val, rad_dphi, rad_dtheta, rnorm);
+
+  return rad_val;
+}
+
+
 /* ----------------------------------------------------------------------
   Given a shape and a spherical coordinate (value of theta and phi), return
   the radius at the maximum degree of spherical harmonic expansion and its
@@ -1084,7 +1204,7 @@ void AtomVecSpherharm::get_normal(double theta, double phi, double r, double rp,
   sp = std::sin(phi);
   cp = std::cos(phi);
 
-  //sfac = r * std::sqrt((rp*rp)+(rt*rt*st*st)+(r*r*st*st));
+//  sfac = r * std::sqrt((rp*rp)+(rt*rt*st*st)+(r*r*st*st));
 
   rnorm[0] = r * ((cp*r*st*st) + (sp*rp) - (cp*ct*st*rt));
   rnorm[1] = r * ((r*sp*st*st) - (cp*rp) - (ct*sp*st*rt));
@@ -1215,4 +1335,216 @@ void AtomVecSpherharm::dump_ply(int ii, int shape, int plycount, double irot[3][
     outfile << std::setprecision(16) << ix_sf[0] << " " << ix_sf[1] << " " << ix_sf[2] << "\n";
   }
   outfile.close();
+}
+
+void AtomVecSpherharm::doRotate(int sht, double *coeffin, double *coeffout, double alpha, double beta, double gamma)
+{
+  using std::cos;
+  using std::sin;
+  using std::sqrt;
+  using std::pow;
+  using std::exp;
+
+  int i, klow,khigh;
+  std::complex<double> ddd,icmplx,aarg,garg;
+  double ***aa;
+  memory->create(aa, maxshexpan+1, (2*maxshexpan)+1, 2, "doRotate:aa");
+  double realnum,abc,cosbeta,sinbeta,total,sgn;
+
+
+  // Get all angles into their standard range
+
+//  sgn = 1.0;
+//  if (alpha < 0.0) sgn = -1.0;
+//  while (alpha < 0.0 || alpha >= 2.0 * MY_PI) {
+//    alpha -= (sgn * 2.0 * MY_PI);
+//  }
+//
+//  sgn = 1.0;
+//  if (beta < 0.0) sgn = -1.0;
+//  while (beta < 0.0 || beta >= 2.0 * MY_PI) {
+//    beta -= (sgn * 2.0 * MY_PI);
+//  }
+//
+//  sgn = 1.0;
+//  if (gamma < 0.0) sgn = -1.0;
+//  while (gamma < 0.0 || gamma >= 2.0 * MY_PI) {
+//    gamma -= (sgn * 2.0 * MY_PI);
+//  }
+
+//  sgn = 1.0;
+//  if (alpha < 0.0) sgn = -1.0;
+//  while (alpha < -MY_PI || alpha > MY_PI) {
+//    alpha -= (sgn * MY_2PI);
+//  }
+//
+//  sgn = 1.0;
+//  if (gamma < 0.0) sgn = -1.0;
+//  while (gamma < -MY_PI|| gamma > MY_PI) {
+//    gamma -= (sgn * MY_2PI);
+//  }
+//
+//  sgn = 1.0;
+//  if (beta < 0.0) sgn = -1.0;
+//  while (beta < 0.0 || beta > MY_PI) {
+//    beta -= (sgn * MY_PI);
+//  }
+
+  // aa is for temporary storage
+  for (int i = 0; i <= maxshexpan; i++) {
+    for (int j = 0; j <= 2*maxshexpan; j++) {
+      aa[i][j][0] = 0.0;
+      aa[i][j][1] = 0.0;
+    }
+  }
+
+  cosbeta = cos(beta/2.0);
+  sinbeta = sin(beta/2.0);
+  if (cosbeta == 0.0) {
+    beta += 1.0e-10;
+    cosbeta = cos(beta/2.0);
+  }
+  if (sinbeta == 0.0) {
+    beta += 1.0e-10;
+    sinbeta = sin(beta/2.0);
+  }
+
+  std::vector<std::vector<std::vector<double> > > dterm;
+  std::vector<std::vector<double> > dvec2;
+  std::vector<double> dvec1;
+
+  // Initialize matrix of rotations about beta
+
+  dterm.clear();
+  dvec2.clear();
+  dvec1.clear();
+  dvec1.resize(2*(maxshexpan + 1),0.0);
+  for (i = 0; i < 2*(maxshexpan + 1); i++) {
+    dvec2.push_back(dvec1);
+  }
+
+  for (i = 0; i <= maxshexpan; i++) {
+    dterm.push_back(dvec2);
+  }
+
+  // Now get all the dterm components at once using recursion relations
+  // First, seed the recursion with n = 0 and n = 1 degree elements
+
+  for (int n = 0; n <= 1; n++) {
+    for (int m = -n; m <= n; m++) {
+      for (int mp = -n; mp <= n; mp++) {
+        realnum = sqrt(factorial(n+mp)*factorial(n-mp)/factorial(n+m)/factorial(n-m));
+        ddd = std::complex<double>(realnum,0.0);
+        klow = std::max(0,m-mp);
+        khigh = std::min(n-mp,n+m);
+        total = 0.0;
+        for (int k = klow; k <= khigh; k++) {
+          abc = pow(-1.0,k+mp-m);
+          abc *= (factorial(n+m)/factorial(k)/factorial(n+m-k));
+          abc *= (factorial(n-m)/factorial(n-mp-k)/factorial(mp+k-m));
+          total += abc * (pow(cosbeta,2*n+m-mp-2*k)) * (pow(sinbeta,2*k+mp-m));
+        }
+        dterm[n][getIndex(n,mp)][getIndex(n,m)] = total * realnum;
+      }
+    }
+  }
+
+  // Now we have seeded the recursion relations, build the rest using recursion
+
+  double term = 0.0;
+  double a,b,nb,c,d,nd,rn,rm,rmp;
+  double ss,cc,sc,cms;
+  ss = sinbeta * sinbeta;
+  cc = cosbeta * cosbeta;
+  sc = sinbeta * cosbeta;
+  cms = (cosbeta * cosbeta) - (sinbeta * sinbeta);
+  for (int n = 2; n <= maxshexpan; n++) {
+    rn = (double)(n);
+    for (int m = -n; m <= n; m++) {
+      rm = (double)(m);
+      for (int mp = -n; mp <= n; mp++) {
+        rmp = (double)(mp);
+        term = 0.0;
+        if (mp > -n && mp < n) {
+          a = cms * sqrt((rn+rm)*(rn-rm)/(rn+rmp)/(rn-rmp));
+          b = sc * sqrt((rn+rm)*(rn+rm-1.0)/(rn+rmp)/(rn-rmp));
+          nb = -(sc * sqrt((rn-rm)*(rn-rm-1.0)/(rn+rmp)/(rn-rmp)));
+          term += a * dterm[n-1][getIndex(n-1,mp)][getIndex(n-1,m)];
+          term += b * dterm[n-1][getIndex(n-1,mp)][getIndex(n-1,m-1)];
+          term += nb * dterm[n-1][getIndex(n-1,mp)][getIndex(n-1,m+1)];
+          dterm[n][getIndex(n,mp)][getIndex(n,m)] = term;
+        } else if (mp == -n) {
+          c = 2.0 * sc * sqrt((rn+rm)*(rn-rm)/(rn-rmp)/(rn-rmp-1.0));
+          d = ss * sqrt((rn+rm)*(rn+rm-1.0)/(rn-rmp)/(rn-rmp-1.0));
+          nd = cc * sqrt((rn-rm)*(rn-rm-1.0)/(rn-rmp)/(rn-rmp-1.0));
+          term += c * dterm[n-1][getIndex(n-1,mp+1)][getIndex(n-1,m)];
+          term += d * dterm[n-1][getIndex(n-1,mp+1)][getIndex(n-1,m-1)];
+          term += nd * dterm[n-1][getIndex(n-1,mp+1)][getIndex(n-1,m+1)];
+          dterm[n][getIndex(n,mp)][getIndex(n,m)] = term;
+        } else {
+          c = -(2.0 * sc * sqrt((rn+rm)*(rn-rm)/(rn+rmp)/(rn+rmp-1.0)));
+          d = cc * sqrt((rn+rm)*(rn+rm-1.0)/(rn+rmp)/(rn+rmp-1.0));
+          nd = ss * sqrt((rn-rm)*(rn-rm-1.0)/(rn+rmp)/(rn+rmp-1.0));
+          term += c * dterm[n-1][getIndex(n-1,mp-1)][getIndex(n-1,m)];
+          term += d * dterm[n-1][getIndex(n-1,mp-1)][getIndex(n-1,m-1)];
+          term += nd * dterm[n-1][getIndex(n-1,mp-1)][getIndex(n-1,m+1)];
+          dterm[n][getIndex(n,mp)][getIndex(n,m)] = term;
+        }
+      }
+    }
+  }
+
+  // Now we have all dterm rotation matrix elements stored
+
+  int loc;
+  int mloc;
+  std::complex<double> anm;
+  for (int n = 0; n <= maxshexpan; n++) {
+    loc = (n + 1) * (n + 2) - 2;
+    for (int m = -n; m <= n; m++) {
+      for (int mp = -n; mp <= n; mp++) {
+        total = dterm[n][getIndex(n,mp)][getIndex(n,m)];
+        ddd = std::complex<double>(total,0.0);
+        aarg = std::complex<double>(0.0,double(mp)*alpha);
+        garg = std::complex<double>(0.0,double(mp)*gamma);
+        mloc = loc - 2*std::abs(mp);
+        anm = std::complex<double>(coeffin[mloc], coeffin[mloc+1]);
+        if (mp<0) anm = std::pow(-1.0,std::abs(mp))*std::conj(anm);
+        icmplx = exp(garg) * (ddd * (exp(aarg)*(anm)));
+//        std::cout <<  n << " " << m << " " << mp << " " << anm << " " << icmplx << " " << std::real(icmplx) << " " << std::imag(icmplx) << " " << aa[n][m+n][0]<< " " << aa[n][m+n][1] << " " << mloc << std::endl;
+//        std::cout <<  n << " " << m << " " << mp << " " << total << " " << exp(garg) << " " << ddd << " " << exp(aarg) << " " << anm << " " << icmplx << std::endl;
+//        std::cout<<icmplx<<std::endl;
+        aa[n][m+n][0] += std::real(icmplx);
+        aa[n][m+n][1] += std::imag(icmplx);
+      }
+//      std::cout <<  n << " " << m << " " << aa[n][n+m][0] << " " << aa[n][n+m][1] << " " << " " << mloc << std::endl;
+    }
+  }
+
+  for (int n = 0; n <= maxshexpan; n++) {
+    loc = n * (n + 1);
+    for (int m = n; m >= 0; m--) {
+      coeffout[loc] = aa[n][m+n][0];
+      coeffout[loc+1] = aa[n][m+n][1];
+//      std::cout << n << " " << m << " " << " " <<  coeffout[loc] << " " <<  coeffout[loc+1] << std::endl;
+      loc = loc + 2;
+    }
+  }
+
+  memory->sfree(aa);
+
+}
+
+void AtomVecSpherharm::get_coefficients(int sht, double *coeff){
+
+  int loc, k;
+
+  for (int n = 0; n <= maxshexpan; n++) {
+    loc = n * (n + 1);
+    for (int m = n; m >= 0; m--) {
+      coeff[loc] = shcoeffs_byshape[sht][loc];
+      coeff[loc+1] = shcoeffs_byshape[sht][loc+1];
+      loc = loc + 2;
+    }
+  }
 }

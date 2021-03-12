@@ -45,6 +45,7 @@ class AtomVecSpherharmUnitTests : public AtomVecSpherharm {
   void dump_ply();
   void dump_shapenormals();
   void compare_areas();
+  void validate_rotation();
 };
 
 }
