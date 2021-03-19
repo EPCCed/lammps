@@ -1511,13 +1511,9 @@ void AtomVecSpherharm::doRotate(int sht, double *coeffin, double *coeffout, doub
         anm = std::complex<double>(coeffin[mloc], coeffin[mloc+1]);
         if (mp<0) anm = std::pow(-1.0,std::abs(mp))*std::conj(anm);
         icmplx = exp(garg) * (ddd * (exp(aarg)*(anm)));
-//        std::cout <<  n << " " << m << " " << mp << " " << anm << " " << icmplx << " " << std::real(icmplx) << " " << std::imag(icmplx) << " " << aa[n][m+n][0]<< " " << aa[n][m+n][1] << " " << mloc << std::endl;
-//        std::cout <<  n << " " << m << " " << mp << " " << total << " " << exp(garg) << " " << ddd << " " << exp(aarg) << " " << anm << " " << icmplx << std::endl;
-//        std::cout<<icmplx<<std::endl;
         aa[n][m+n][0] += std::real(icmplx);
         aa[n][m+n][1] += std::imag(icmplx);
       }
-//      std::cout <<  n << " " << m << " " << aa[n][n+m][0] << " " << aa[n][n+m][1] << " " << " " << mloc << std::endl;
     }
   }
 
@@ -1526,7 +1522,6 @@ void AtomVecSpherharm::doRotate(int sht, double *coeffin, double *coeffout, doub
     for (int m = n; m >= 0; m--) {
       coeffout[loc] = aa[n][m+n][0];
       coeffout[loc+1] = aa[n][m+n][1];
-//      std::cout << n << " " << m << " " << " " <<  coeffout[loc] << " " <<  coeffout[loc+1] << std::endl;
       loc = loc + 2;
     }
   }

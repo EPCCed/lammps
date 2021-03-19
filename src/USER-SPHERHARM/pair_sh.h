@@ -54,7 +54,7 @@ class PairSH : public Pair {
   int refine_cap_angle(int &kk_count, int ishtype, int jshtype, double iang,  double radj,
                        double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
                        const double xj[3], double (&jrot)[3][3]);
-  void calc_force_torque(int kk_count, int ishtype, int jshtype, double iang,  double radj,
+  void calc_force_torque(int kk_count, int ishtype, int jshtype, double iang, double radi,  double radj,
                          double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
                          const double xj[3], double (&irot)[3][3],  double (&jrot)[3][3],
                          double &vol_overlap, double (&iforce)[3], double (&torsum)[3],
@@ -63,12 +63,11 @@ class PairSH : public Pair {
   double cur_time;
   int file_count;
   int write_surfpoints_to_file(double *x, bool append_file, int cont, int ifnorm, double *norm) const;
-  int write_spherecentre_to_file(double *x, bool append_file, double rad) const;
   int write_ellipsoid(double *xi, double *xj, double irotmat[3][3], double jrotmat[3][3]) const;
 
   // Gaussian quadrature arrays
   double *abscissa{};          // Abscissa of gaussian quadrature (same for all shapes)
-  double *weights{};            // Weights of gaussian quadrature (same for all shapes)
+  double *weights{};           // Weights of gaussian quadrature (same for all shapes)
   int num_pole_quad;
   double radius_tol;
 

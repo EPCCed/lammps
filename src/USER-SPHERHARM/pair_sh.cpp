@@ -44,12 +44,6 @@ using namespace MathConst;
 
 PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
 {
-  respa_enable = 1;
-  writedata = 1;
-  centroidstressflag = 1;
-
-  //  JY Added
-
   // Single steps are for force and energy of a single pairwise interaction between 2 atoms
   // Energy calculation not enabled, as we don't yet have pairwise potential
   single_enable = 0;
@@ -61,11 +55,11 @@ PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
   matchtypes = 0;
   exponent = -1.0;
 
-  cur_time = 0.0;
-  file_count = 0;
+  cur_time = 0.0; // for temp file writing
+  file_count = 0; // for temp file writing
 
   num_pole_quad = 30;
-  radius_tol = 1e-3;
+  radius_tol = 1e-3; // 0.1%
 }
 
 /* ---------------------------------------------------------------------- */
@@ -87,15 +81,13 @@ PairSH::~PairSH()
 /* ---------------------------------------------------------------------- */
 void PairSH::compute(int eflag, int vflag)
 {
-  int i,j,ii,jj,ll,kk;
+  int i,j,ii,jj;
   int inum,jnum,itype,jtype,ishtype,jshtype;
   int *ilist,*jlist,*numneigh,**firstneigh;
-  double fpair,radi,radj,r,rsq,rad_body;
-  double dtemp,phi_proj,theta_proj,finalrad;
-  double phi,theta,h,r_i,iang, evdwl;
-  double irot[3][3],jrot[3][3],jx_sf[3],ix_sf[3];
-  double x_testpoint[3],x_projtestpoint[3],delvec[3];
-  double iquat_sf_bf[4],iquat_cont[4],iquat_bf[4],quat_foo[4],quat_bar[4];
+  double fpair,radi,radj,r,rsq,iang;
+  double irot[3][3],jrot[3][3];
+  double x_testpoint[3],delvec[3];
+  double iquat_sf_bf[4],iquat_cont[4];
 
   ev_init(eflag,vflag);
 
@@ -106,7 +98,6 @@ void PairSH::compute(int eflag, int vflag)
   double **quat = atom->quat;
   int nlocal = atom->nlocal;
   double **torque = atom->torque;
-//  double **quatinit = atom->quatinit_byshape;
   double *max_rad = atom->maxrad_byshape;
 
   inum = list->inum;
@@ -114,21 +105,14 @@ void PairSH::compute(int eflag, int vflag)
   numneigh = list->numneigh;
   firstneigh = list->firstneigh;
 
-  int me,trap_L,kk_count;
+  int me,kk_count;
   bool first_call,candidates_found;
-  double vol_overlap,upper_bound,lower_bound,rad_sample;
-  double theta_pole,phi_pole,factor,dv,pn,fn;
-  double inorm_bf[3],inorm_sf[3],iforce[3];
-  double dtor[3],torsum[3],xcont[3];
+  double vol_overlap,factor,pn,fn;
+  double torsum[3],xcont[3], iforce[3];
   double irot_cont[3][3];
 
-  trap_L = 2*(num_pole_quad-1);
   file_count++;
   MPI_Comm_rank(world,&me);
-  evdwl = 0.0;
-
-  double zero_norm[3];
-  MathExtra::zero3(zero_norm);
 
   // loop over neighbors of my atoms
   for (ii = 0; ii < inum; ii++) {
@@ -146,7 +130,6 @@ void PairSH::compute(int eflag, int vflag)
     MathExtra::qconjugate(quat[i], iquat_sf_bf);
     MathExtra::qnormalize(iquat_sf_bf);
 
-
     for (jj = 0; jj < jnum; jj++) {
       j = jlist[jj];
       j &= NEIGHMASK;
@@ -157,96 +140,68 @@ void PairSH::compute(int eflag, int vflag)
       r = sqrt(rsq);
       jtype = type[j];
 
-      candidates_found = false;
       kk_count = -1;
       first_call = true;
       vol_overlap = 0.0;
       MathExtra::zero3(iforce);
       MathExtra::zero3(torsum);
 
-      if (r<radi+radj){
-        if (r>radj){ // Can use spherical cap from particle "i"
-          iang =  std::asin(radj/r) + (0.5 * MY_PI / 180.0); // Adding half a degree to ensure that circumference is populated
+      if (r<radi+radj) {
+        if (r > radj) { // Can use spherical cap from particle "i"
+//          iang =  std::asin(radj/r) + (0.5 * MY_PI / 180.0); // Adding half a degree to ensure that circumference is populated
+          iang = std::asin(radj / r);
         }
-//        else if (r>radj){ // Can use spherical cap from particle "j"
-//          jang =  std::asin(radi/r) + (0.5 * MY_PI / 180.0);
-//        }
-        else{ // Can't use either spherical cap
-          error->all(FLERR,"Error, centre within radius!");
+          // TODO Add condition for particle "j" were the code will swap to particle "j" becoming the primary if "i" is not feasible
+        else { // Can't use either spherical cap
+          error->all(FLERR, "Error, centre within radius!");
         }
-      }
 
-      // TODO require a check here to make sure that the COG of particle is not inside of other particle. Comparing
-      // max radii does not work as not a correct test for asymmetrical particles. Check should also look at minimum
-      // radius. There will then be a zone in which the COG of a particle *could* be inside another, but this can't be
-      // proven until the SH expansion has been tested.
-      //if (r < MAX(radi, radj)){
-      //  error->all(FLERR,"Error, centre within radius!");
-      //}
+        // Get the quaternion from north pole of atom "i" to the vector connecting the centre line of atom "i" and "j".
+        MathExtra::negate3(delvec);
+        get_contact_quat(delvec, iquat_cont);
+        // Quaternion of north pole to contact for atom "i"
+        MathExtra::quat_to_mat(iquat_cont, irot_cont);
+        // Calculate the rotation matrix for the quaternion for atom j
+        MathExtra::quat_to_mat(quat[j], jrot);
+        cur_time += (update->dt) / 1000; // for temp file writing
 
-      // Getting the radius of the lens and the swept angle of the lens w.r.t. atom i and j.
-      // https://gamedev.stackexchange.com/questions/75756/sphere-sphere-intersection-and-circle-sphere-intersection
-//      h = 0.5 + (((radi*radi) - (radj*radj)) / (2.0 * rsq));
-//      r_i = std::sqrt((radi*radi) - (h*h*r*r));
-//      iang =  std::asin(r_i/radi) + (0.5 * MY_PI / 180.0); // Adding half a degree to ensure that circumference is populated
+        candidates_found = refine_cap_angle(kk_count, ishtype, jshtype, iang, radj, iquat_cont, iquat_sf_bf, x[i], x[j],
+                                            jrot);
 
+        if (kk_count > num_pole_quad) kk_count = num_pole_quad; // don't refine if points on first layer
 
-      // Get the quaternion from north pole of atom "i" to the vector connecting the centre line of atom "i" and "j".
-      MathExtra::negate3(delvec);
-      get_contact_quat(delvec, iquat_cont);
-      // Quaternion of north pole to contact for atom "i"
-      MathExtra::quat_to_mat(iquat_cont, irot_cont);
+        if (candidates_found) {
 
-      // Calculate the rotation matrix for the quaternion for atom j
-      MathExtra::quat_to_mat(quat[j], jrot);
+          calc_force_torque(kk_count, ishtype, jshtype, iang, radi, radj, iquat_cont, iquat_sf_bf, x[i], x[j], irot,
+                            jrot, vol_overlap, iforce, torsum, factor, first_call, ii, jj);
 
-      cur_time += (update->dt)/1000;
+//        if (vol_overlap==0.0) continue;
 
-      candidates_found = refine_cap_angle(kk_count,ishtype,jshtype,iang,radj,iquat_cont,iquat_sf_bf,x[i],x[j],jrot);
+          fpair = normal_coeffs[itype][jtype][0];
+          pn = exponent * fpair * std::pow(vol_overlap, exponent - 1.0);
+          MathExtra::scale3(-pn, iforce);    // F_n = -p_n * S_n (S_n = factor*iforce)
+          MathExtra::scale3(-pn, torsum);    // M_n
 
-      if (kk_count == 0) kk_count = 1;
+          // Force and torque on particle a
+          MathExtra::add3(f[i], iforce, f[i]);
+          MathExtra::add3(torque[i], torsum, torque[i]);
 
-      if (candidates_found) {
+          // N.B on a single proc, N3L is always imposed, regardless of Newton On/Off
+          if (force->newton_pair || j < nlocal) {
 
+            // Force on particle b
+            MathExtra::sub3(f[j], iforce, f[j]);
 
-        calc_force_torque(kk_count,ishtype,jshtype,iang,radj,iquat_cont,iquat_sf_bf,x[i],x[j],irot,
-                      jrot,vol_overlap,iforce,torsum,factor,first_call,ii,jj);
-        std::cout<<"Vol i : " << std::setprecision(16) << vol_overlap << std::endl;
-        std::cout<<"A i : " << std::setprecision(16) << iforce[0] << " " << iforce[1] << " " << iforce[2] << " " << MathExtra::len3(iforce) << std::endl;
+            // Torque on particle b
+            fn = MathExtra::len3(iforce);
+            MathExtra::cross3(torsum, iforce, xcont);       // M_n x F_n
+            MathExtra::scale3(-1.0 / (fn * fn), xcont);     // (M_n x F_n)/|F_n|^2 [Swap direction due to cross, normally x_c X F_n]
+            MathExtra::add3(xcont, x[i], xcont);            // x_c global cords
+            MathExtra::sub3(xcont, x[j], x_testpoint);      // Vector from centre of "b" to contact point
+            MathExtra::cross3(iforce, x_testpoint, torsum); // M_n' = F_n x (x_c - x_b)
+            MathExtra::add3(torque[j], torsum, torque[j]);
 
-        fpair = normal_coeffs[itype][jtype][0];
-        pn  = exponent * fpair * std::pow(vol_overlap, exponent-1.0);
-        MathExtra::scale3(-pn, iforce);    // F_n = -p_n * S_n (S_n = factor*iforce)
-        MathExtra::scale3(-pn, torsum);    // M_n
-//        std::cout<<"F i : " << std::setprecision(16) << iforce[0] << " " << iforce[1] << " " << iforce[2] << " " << MathExtra::len3(iforce) << std::endl;
-
-
-        // Force and torque on particle a
-        MathExtra::add3(f[i], iforce, f[i]);
-        MathExtra::add3(torque[i], torsum, torque[i]);
-//        std::cout<<"torque[i] "<<torsum[0]<<" "<<torsum[1]<<" "<<torsum[2]<<std::endl;
-//        std::cout<<torsum[0]<<","<<torsum[1]<<","<<torsum[2]<<std::endl;
-
-        // N.B on a single proc, N3L is always imposed, regardless of Newton On/Off
-        if (force->newton_pair || j < nlocal) {
-
-          // Force on particle b
-          MathExtra::sub3(f[j], iforce, f[j]);
-
-          // Torque on particle b
-          fn = MathExtra::len3(iforce);
-          MathExtra::cross3(torsum, iforce, xcont);       // M_n x F_n
-          MathExtra::scale3(-1.0/(fn*fn), xcont);         // (M_n x F_n)/|F_n|^2 [Swap direction due to cross, normally x_c X F_n]
-          MathExtra::add3(xcont, x[i], xcont);            // x_c global cords
-          MathExtra::sub3(xcont, x[j], x_testpoint);      // Vector from centre of "b" to contact point
-          MathExtra::cross3(iforce, x_testpoint, torsum); // M_n' = F_n x (x_c - x_b)
-          MathExtra::add3(torque[j], torsum, torque[j]);
-
-//          std::cout<<"torque[j] "<<torsum[0]<<" "<<torsum[1]<<" "<<torsum[2]<<std::endl;
-//          std::cout<<torsum[0]<<","<<torsum[1]<<","<<torsum[2]<<std::endl;
-//          std::cout<<std::endl;
-
-        } // newton_pair
+          } // newton_pair
 
 //        if (eflag) {
 //          evdwl = fpair * std::pow(vol_overlap, exponent);
@@ -258,10 +213,10 @@ void PairSH::compute(int eflag, int vflag)
 //                       iforce[2], delvec[0], delvec[1], delvec[2]);
 //        }
 
-//      avec->dump_ply(i,ishtype,file_count,irot,x[i]);
-//      avec->dump_ply(j,jshtype,file_count,jrot,x[j]);
+      avec->dump_ply(i,ishtype,file_count,irot,x[i]);
+      avec->dump_ply(j,jshtype,file_count,jrot,x[j]);
 
-      } // candidates found
+        } // candidates found
 
 //      kk_count = -1;
 //      double jang =  std::asin(radi/r) + (0.5 * MY_PI / 180.0);
@@ -287,7 +242,7 @@ void PairSH::compute(int eflag, int vflag)
 //      MathExtra::scale3(-pn, torsum);    // M_n
 //      std::cout<<"F j : " << std::setprecision(16) << iforce[0] << " " << iforce[1] << " " << iforce[2] << " " << MathExtra::len3(iforce) << std::endl;
 
-
+      } // bounding spheres
     } // jj
   } // ii
 }
@@ -298,8 +253,6 @@ void PairSH::compute(int eflag, int vflag)
 
 void PairSH::allocate()
 {
-  std::cout << "in allocation" << std::endl;
-
   allocated = 1;
     int n = atom->ntypes;
 
@@ -312,7 +265,6 @@ void PairSH::allocate()
     memory->create(cut,n+1,n+1,"pair:cut");
     memory->create(normal_coeffs,n+1,n+1,1,"pair:normal_coeffs");
     memory->create(typetosh,n+1,"pair:typetosh");
-
 }
 
 /* ----------------------------------------------------------------------
@@ -337,15 +289,10 @@ void PairSH::settings(int narg, char **arg) {
 
 void PairSH::coeff(int narg, char **arg)
 {
-  std::cout << "Pair Coeff" << std::endl;
-
 
   if (narg != 4)
     error->all(FLERR,"Incorrect args for pair coefficients");
   if (!allocated) allocate();
-
-  std::cout << "before read" << std::endl;
-
 
   int ilo,ihi,jlo,jhi;
   double normal_coeffs_one, exponent_in;
@@ -354,9 +301,6 @@ void PairSH::coeff(int narg, char **arg)
   normal_coeffs_one = utils::numeric(FLERR,arg[2],false,lmp);// kn
   exponent_in = utils::numeric(FLERR,arg[3],false,lmp);// m
 
-  std::cout << "before exponent" << std::endl;
-
-
   if (exponent==-1){
     exponent=exponent_in;
   }
@@ -364,26 +308,12 @@ void PairSH::coeff(int narg, char **arg)
     error->all(FLERR,"Exponent must be equal for all type interactions, exponent mixing not developed");
   }
 
-//  normal_coeffs_one *=exponent;
-
-
-  std::cout << "before match type" << std::endl;
-
-
   // Linking the Types to the SH Types, needed for finding the cut per Type
   if (!matchtypes) matchtype();
 
-  std::cout << "after match type" << std::endl;
-
-
   int count = 0;
   int shi, shj;
-//  double *max_rad = avec->get_max_rads();
   double *max_rad = atom->maxrad_byshape;
-
-  std::cout <<max_rad[0] << std::endl;
-  std::cout << "after max rad" << std::endl;
-
 
   for (int i = ilo; i <= ihi; i++) {
     for (int j = MAX(jlo,i); j <= jhi; j++) {
@@ -397,10 +327,6 @@ void PairSH::coeff(int narg, char **arg)
   }
 
   if (count == 0) error->all(FLERR,"Incorrect args for pair coefficients");
-
-  std::cout << "End Coeff" << std::endl;
-
-
 }
 
 /* ----------------------------------------------------------------------
@@ -444,9 +370,7 @@ void PairSH::matchtype()
 void PairSH::init_style()
 {
   neighbor->request(this,instance_me);
-  std::cout << "About to get values" << std::endl;
   get_quadrature_values(num_pole_quad);
-  std::cout << "Got values" << std::endl;
 }
 
 /* ----------------------------------------------------------------------
@@ -461,7 +385,6 @@ void PairSH::init_style()
 double PairSH::init_one(int i, int j)
 {
   int shi, shj;
-//  double *max_rad = avec->get_max_rads();
   double *max_rad = atom->maxrad_byshape;
 
   // No epsilon and no sigma used for the spherical harmonic atom style
@@ -504,70 +427,7 @@ void PairSH::get_contact_quat(double (&xvecdist)[3], double (&quat)[4]){
 }
 
 
-int PairSH::write_surfpoints_to_file(double *x, bool append_file, int cont, int ifnorm, double *norm) const{
-
-  std::ofstream outfile;
-  if (append_file){
-//    outfile.open("test_dump/surfpoint_"+std::to_string(cur_time)+".csv", std::ios_base::app);
-    outfile.open("test_dump/surfpoint_"+std::to_string(file_count)+".csv", std::ios_base::app);
-    if (outfile.is_open()) {
-      if (ifnorm) {
-        outfile << std::setprecision(16) << x[0] << "," << x[1] << "," << x[2] << "," << cont <<
-          "," << norm[0] << "," << norm[1] << "," << norm[2] << "\n";
-      }
-      else{
-        outfile << std::setprecision(16) << x[0] << "," << x[1] << "," << x[2] << "," << cont <<
-          "," << norm[0] << "," << norm[1] << "," << norm[2] << "\n";
-      }
-      outfile.close();
-    } else std::cout << "Unable to open file";
-  }
-  else {
-//    cur_time += update->dt;
-//    outfile.open("test_dump/surfpoint_" + std::to_string(cur_time) + ".csv");
-    outfile.open("test_dump/surfpoint_" + std::to_string(file_count) + ".csv");
-    if (outfile.is_open()) {
-      outfile << "x,y,z,cont,nx,ny,nz" << "\n";
-      if (ifnorm) {
-        outfile << std::setprecision(16) << x[0] << "," << x[1] << "," << x[2] << "," << cont <<
-                "," << norm[0] << "," << norm[1] << "," << norm[2] << "\n";
-      }
-      else{
-        outfile << std::setprecision(16) << x[0] << "," << x[1] << "," << x[2] << "," << cont <<
-                "," << norm[0] << "," << norm[1] << "," << norm[2] << "\n";
-      }
-      outfile.close();
-    } else std::cout << "Unable to open file";
-  }
-  return 0;
-};
-
-int PairSH::write_spherecentre_to_file(double *x, bool append_file, double rad) const{
-
-  std::ofstream outfile;
-  if (append_file){
-//    outfile.open("test_dump/sphere_"+std::to_string(cur_time)+".csv", std::ios_base::app);
-    outfile.open("test_dump/sphere_"+std::to_string(file_count)+".csv", std::ios_base::app);
-    if (outfile.is_open()) {
-      outfile << std::setprecision(16) << x[0] << "," << x[1] << "," << x[2] << "," << rad << "\n";
-      outfile.close();
-    } else std::cout << "Unable to open file";
-  }
-  else {
-//    outfile.open("test_dump/sphere_" + std::to_string(cur_time) + ".csv");
-    outfile.open("test_dump/sphere_" + std::to_string(file_count) + ".csv");
-    if (outfile.is_open()) {
-      outfile << "x,y,z,r" << "\n";
-      outfile << std::setprecision(16) << x[0] << "," << x[1] << "," << x[2] << "," <<  rad << "\n";
-      outfile.close();
-    } else std::cout << "Unable to open file";
-  }
-  return 0;
-};
-
 void PairSH::get_quadrature_values(int num_quadrature) {
-
-  std::cout << "Inside get quad" << std::endl;
 
   memory->create(weights, num_quadrature, "PairSH:weights");
   memory->create(abscissa, num_quadrature, "PairSH:abscissa");
@@ -578,60 +438,9 @@ void PairSH::get_quadrature_values(int num_quadrature) {
     p = MathSpherharm::GLPair(num_quadrature, i + 1);
     weights[i] = p.weight;
     abscissa[i] = p.x();
-    std::cout << i << " " << abscissa[i]<< std::endl;
   }
-  std::cout << "Inside get quad" << std::endl;
 
 }
-
-int PairSH::write_ellipsoid(double *xi, double *xj, double irotmat[3][3], double jrotmat[3][3]) const{
-
-  double sa[3][3];
-  double rotmatinv[3][3];
-  double tempmat[3][3];
-  double icurmat[3][3];
-  double jcurmat[3][3];
-
-  MathExtra::zeromat3(sa);
-  sa[0][0] = 21.0;
-  sa[1][1] = 21.0;
-  sa[2][2] = 105.0;
-
-  MathExtra::times3(irotmat, sa, tempmat);
-  MathExtra::invert3(irotmat, rotmatinv);
-  MathExtra::times3(tempmat, rotmatinv, icurmat);
-
-  MathExtra::times3(jrotmat, sa, tempmat);
-  MathExtra::invert3(jrotmat, rotmatinv);
-  MathExtra::times3(tempmat, rotmatinv, jcurmat);
-
-  std::ofstream outfile;
-//  outfile.open("test_dump/ellipsoidpos_" + std::to_string(cur_time) + ".vtk");
-  outfile.open("test_dump/ellipsoidpos_" + std::to_string(file_count) + ".vtk");
-  if (outfile.is_open()) {
-    outfile << "# vtk DataFile Version 3.0" << "\n";
-    outfile << "vtk output" << "\n";
-    outfile << "ASCII" << "\n";
-    outfile << "DATASET POLYDATA" << "\n";
-    outfile << "POINTS 2 float" << "\n";
-    outfile << xi[0] << " " << xi[1] << " " << xi[2] << "\n";
-    outfile << "\n";
-    outfile << xj[0] << " " << xj[1] << " " << xj[2] << "\n";
-    outfile << "\n";
-    outfile << "POINT_DATA 2" << "\n";
-    outfile << "TENSORS tensorF float" << "\n";
-    outfile << icurmat[0][0] << " " << icurmat[0][1] << " " << icurmat[0][2] << "\n";
-    outfile << icurmat[1][0] << " " << icurmat[1][1] << " " << icurmat[1][2] << "\n";
-    outfile << icurmat[2][0] << " " << icurmat[2][1] << " " << icurmat[2][2] << "\n";
-    outfile << "\n";
-    outfile << jcurmat[0][0] << " " << jcurmat[0][1] << " " << jcurmat[0][2] << "\n";
-    outfile << jcurmat[1][0] << " " << jcurmat[1][1] << " " << jcurmat[1][2] << "\n";
-    outfile << jcurmat[2][0] << " " << jcurmat[2][1] << " " << jcurmat[2][2] << "\n";
-    outfile << "\n";
-    outfile.close();
-  } else std::cout << "Unable to open file";
-  return 0;
-};
 
 int PairSH::refine_cap_angle(int &kk_count, int ishtype, int jshtype, double iang,  double radj,
                              double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
@@ -653,7 +462,7 @@ int PairSH::refine_cap_angle(int &kk_count, int ishtype, int jshtype, double ian
   n = 2*(num_pole_quad-1);
   cosang = std::cos(iang);
 
-  for (kk = 0; kk < num_pole_quad; kk++) {
+  for (kk = num_pole_quad-1; kk >= 0; kk--) { // start from widest angle to allow early stopping
     theta_pole = std::acos((abscissa[kk]*((1.0-cosang)/2.0)) + ((1.0+cosang)/2.0));
     for (ll = 1; ll <= n+1; ll++) {
       phi_pole = MY_2PI * double(ll-1) / (double(n + 1));
@@ -691,7 +500,7 @@ int PairSH::refine_cap_angle(int &kk_count, int ishtype, int jshtype, double ian
 
       // Check for contact
       if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
-        kk_count = kk;
+        kk_count = kk+1; // refine the spherical cap angle to this index (+1 as points could exist between indexes)
         return 1;
       }
     }
@@ -699,14 +508,14 @@ int PairSH::refine_cap_angle(int &kk_count, int ishtype, int jshtype, double ian
   return 0;
 }
 
-void PairSH::calc_force_torque(int kk_count, int ishtype, int jshtype, double iang,  double radj,
+void PairSH::calc_force_torque(int kk_count, int ishtype, int jshtype, double iang, double radi, double radj,
                                double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
                                const double xj[3], double (&irot)[3][3],  double (&jrot)[3][3],
                                double &vol_overlap, double (&iforce)[3], double (&torsum)[3],
                                double &factor, bool &first_call, int ii, int jj){
 
   int kk, ll, n;
-  double cosang, fac;
+  double cosang, fac, radtol;
   double theta_pole, phi_pole, theta_proj, phi_proj;
   double theta_bf, phi_bf, theta_sf, phi_sf;
   double rad_body, dtemp, finalrad;
@@ -724,12 +533,15 @@ void PairSH::calc_force_torque(int kk_count, int ishtype, int jshtype, double ia
   MathExtra::qnormalize(quat);
   MathExtra::quat_to_mat(quat, rot_np_bf);
 
+  radtol = radius_tol*radi; // fraction of max radius
   n = 2*(num_pole_quad-1);
-  iang = (iang * 0.5 * abscissa[kk_count - 1]) + (iang * 0.5);
+  cosang = std::cos(iang);
+  iang = std::acos((abscissa[kk_count]*((1.0-cosang)/2.0)) + ((1.0+cosang)/2.0)); //refine spherical cap angle
   cosang = std::cos(iang);
   fac = ((1.0-cosang)/2.0)*(MY_2PI/double(n+1));
 
-  for (kk = 0; kk < num_pole_quad; kk++) {
+  for (kk = num_pole_quad-1; kk >= 0; kk--) {
+//  for (kk = 0; kk < num_pole_quad; kk++) {
     theta_pole = std::acos((abscissa[kk]*((1.0-cosang)/2.0)) + ((1.0+cosang)/2.0));
     for (ll = 1; ll <= n+1; ll++) {
       phi_pole = MY_2PI * double(ll-1) / (double(n + 1));
@@ -771,7 +583,7 @@ void PairSH::calc_force_torque(int kk_count, int ishtype, int jshtype, double ia
         upper_bound = rad_body;
         lower_bound = 0.0;
         rad_sample = (upper_bound + lower_bound) / 2.0;
-        while (upper_bound - lower_bound > radius_tol) {
+        while (upper_bound - lower_bound > radtol) {
           jx_sf[0] = (rad_sample * sin(theta_sf) * cos(phi_sf)) + xi[0]; // Global coordinates of point
           jx_sf[1] = (rad_sample * sin(theta_sf) * sin(phi_sf)) + xi[1];
           jx_sf[2] = (rad_sample * cos(theta_sf)) + xi[2];
@@ -829,3 +641,91 @@ void PairSH::calc_force_torque(int kk_count, int ishtype, int jshtype, double ia
   MathExtra::scale3(fac, iforce);
   MathExtra::scale3(fac, torsum);
 }
+
+
+int PairSH::write_surfpoints_to_file(double *x, bool append_file, int cont, int ifnorm, double *norm) const{
+
+  std::ofstream outfile;
+  if (append_file){
+//    outfile.open("test_dump/surfpoint_"+std::to_string(cur_time)+".csv", std::ios_base::app);
+    outfile.open("test_dump/surfpoint_"+std::to_string(file_count)+".csv", std::ios_base::app);
+    if (outfile.is_open()) {
+      if (ifnorm) {
+        outfile << std::setprecision(16) << x[0] << "," << x[1] << "," << x[2] << "," << cont <<
+                "," << norm[0] << "," << norm[1] << "," << norm[2] << "\n";
+      }
+      else{
+        outfile << std::setprecision(16) << x[0] << "," << x[1] << "," << x[2] << "," << cont <<
+                "," << norm[0] << "," << norm[1] << "," << norm[2] << "\n";
+      }
+      outfile.close();
+    } else std::cout << "Unable to open file";
+  }
+  else {
+//    cur_time += update->dt;
+//    outfile.open("test_dump/surfpoint_" + std::to_string(cur_time) + ".csv");
+    outfile.open("test_dump/surfpoint_" + std::to_string(file_count) + ".csv");
+    if (outfile.is_open()) {
+      outfile << "x,y,z,cont,nx,ny,nz" << "\n";
+      if (ifnorm) {
+        outfile << std::setprecision(16) << x[0] << "," << x[1] << "," << x[2] << "," << cont <<
+                "," << norm[0] << "," << norm[1] << "," << norm[2] << "\n";
+      }
+      else{
+        outfile << std::setprecision(16) << x[0] << "," << x[1] << "," << x[2] << "," << cont <<
+                "," << norm[0] << "," << norm[1] << "," << norm[2] << "\n";
+      }
+      outfile.close();
+    } else std::cout << "Unable to open file";
+  }
+  return 0;
+};
+
+int PairSH::write_ellipsoid(double *xi, double *xj, double irotmat[3][3], double jrotmat[3][3]) const{
+
+  double sa[3][3];
+  double rotmatinv[3][3];
+  double tempmat[3][3];
+  double icurmat[3][3];
+  double jcurmat[3][3];
+
+  MathExtra::zeromat3(sa);
+  sa[0][0] = 21.0;
+  sa[1][1] = 21.0;
+  sa[2][2] = 105.0;
+
+  MathExtra::times3(irotmat, sa, tempmat);
+  MathExtra::invert3(irotmat, rotmatinv);
+  MathExtra::times3(tempmat, rotmatinv, icurmat);
+
+  MathExtra::times3(jrotmat, sa, tempmat);
+  MathExtra::invert3(jrotmat, rotmatinv);
+  MathExtra::times3(tempmat, rotmatinv, jcurmat);
+
+  std::ofstream outfile;
+//  outfile.open("test_dump/ellipsoidpos_" + std::to_string(cur_time) + ".vtk");
+  outfile.open("test_dump/ellipsoidpos_" + std::to_string(file_count) + ".vtk");
+  if (outfile.is_open()) {
+    outfile << "# vtk DataFile Version 3.0" << "\n";
+    outfile << "vtk output" << "\n";
+    outfile << "ASCII" << "\n";
+    outfile << "DATASET POLYDATA" << "\n";
+    outfile << "POINTS 2 float" << "\n";
+    outfile << xi[0] << " " << xi[1] << " " << xi[2] << "\n";
+    outfile << "\n";
+    outfile << xj[0] << " " << xj[1] << " " << xj[2] << "\n";
+    outfile << "\n";
+    outfile << "POINT_DATA 2" << "\n";
+    outfile << "TENSORS tensorF float" << "\n";
+    outfile << icurmat[0][0] << " " << icurmat[0][1] << " " << icurmat[0][2] << "\n";
+    outfile << icurmat[1][0] << " " << icurmat[1][1] << " " << icurmat[1][2] << "\n";
+    outfile << icurmat[2][0] << " " << icurmat[2][1] << " " << icurmat[2][2] << "\n";
+    outfile << "\n";
+    outfile << jcurmat[0][0] << " " << jcurmat[0][1] << " " << jcurmat[0][2] << "\n";
+    outfile << jcurmat[1][0] << " " << jcurmat[1][1] << " " << jcurmat[1][2] << "\n";
+    outfile << jcurmat[2][0] << " " << jcurmat[2][1] << " " << jcurmat[2][2] << "\n";
+    outfile << "\n";
+    outfile.close();
+  } else std::cout << "Unable to open file";
+  return 0;
+};
