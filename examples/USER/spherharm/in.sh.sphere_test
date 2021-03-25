@@ -1,0 +1,54 @@
+# Test
+
+variable	name string spherical_harmonics_testing
+atom_style	spherharm 120 /home/james/lammps/examples/USER/spherharm/sphere.dat
+units		si
+newton off
+# newton on
+
+###############################################
+# Geometry-related parameters
+###############################################
+
+variable	boxx equal 1000
+variable	boxy equal 1000
+variable	boxz equal 1000
+
+#############
+processors * * 1
+region		boxreg block 0 ${boxx} 0 ${boxy} 0 ${boxz}
+create_box	2 boxreg
+change_box	all boundary f f f
+
+create_atoms 	1 single 445.0 500.0 500.0
+create_atoms 	2 single 555.0 505.0 505.0
+
+mass *      1.0
+
+set 		atom 1 vx 1.0 vy 0.0 vz 0.0
+set 		atom 2 vx -1.0 vy 0.0 vz 0.0
+
+
+set		atom 1 sh/shape 1
+set		atom 2 sh/shape 1
+set		group all sh/quat/random 4
+
+fix		time_fix all nve/sh
+
+neigh_modify	delay 0 every 1 check yes
+comm_modify	vel yes
+
+thermo 1
+
+compute TransKE all ke
+compute RotKE all erotate/spherharm
+compute PEcalc all efunction/spherharm
+variable ETotal equal "c_PEcalc + c_TransKE + c_RotKE"
+thermo_style custom step c_PEcalc c_TransKE c_RotKE v_ETotal
+
+pair_style 	spherharm
+pair_coeff 	* * 5.0e-9 2.0
+
+timestep	0.005e2
+
+run		50000

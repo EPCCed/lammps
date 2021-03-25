@@ -67,6 +67,7 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
   if (!atom->spherharm_flag)
     error->all(FLERR,"Fix wall/spherharm requires atom style spherharm");
 
+  //TODO - hardcoding the number of quadrature points is not a good idea here
   num_pole_quad = 30;
   create_attribute = 1;
   restart_peratom = 0;
@@ -368,6 +369,7 @@ void FixWallSpherharm::post_force(int /*vflag*/)
         else
           contact = nullptr;
 
+        // TODO - Fix this for cylindrical boundaries
         if (pairstyle == VOLUME_BASED)
           vol_based(dx,dy,dz,gamma,ishtype,quat[i],x[i],f[i],torque[i],contact);
       }
@@ -414,7 +416,12 @@ void FixWallSpherharm::vol_based(double dx, double dy, double dz, double iang,
   // Get the quaternion from north pole of atom "i" to the vector connecting the centre line of atom "i" to the wall
   get_contact_quat(delvec, iquat_cont);
 
-  candidates_found = refine_cap_angle(kk_count, ishtype, iang, iquat_cont, iquat_sf_bf, x, delvec);
+  if (wallstyle != ZCYLINDER) {
+    candidates_found = refine_cap_angle_plane(kk_count, ishtype, iang, iquat_cont, iquat_sf_bf, x, delvec);
+  }
+  else{
+    candidates_found = refine_cap_angle_cylinder(kk_count, ishtype, iang, iquat_cont, iquat_sf_bf, x, delvec);
+  }
 
   if (kk_count > num_pole_quad) kk_count = num_pole_quad; // don't refine if points on first layer
 
@@ -445,8 +452,8 @@ void FixWallSpherharm::vol_based(double dx, double dy, double dz, double iang,
 
 /* ----------------------------------------------------------------------
 ------------------------------------------------------------------------- */
-int FixWallSpherharm::refine_cap_angle(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
-                             double (&iquat_sf_bf)[4], const double xi[3], const double delvec[3]){
+int FixWallSpherharm::refine_cap_angle_plane(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
+                                             double (&iquat_sf_bf)[4], const double xi[3], const double delvec[3]){
 
   int kk, ll, n;
   double theta_pole, phi_pole, theta, phi;
@@ -505,6 +512,92 @@ int FixWallSpherharm::refine_cap_angle(int &kk_count, int ishtype, double iang, 
   }
   return 0;
 }
+
+/* ----------------------------------------------------------------------
+------------------------------------------------------------------------- */
+int FixWallSpherharm::refine_cap_angle_cylinder(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
+                                             double (&iquat_sf_bf)[4], const double xi[3], const double delvec[3]){
+
+  int kk, ll, n;
+  double theta_pole, phi_pole, theta, phi;
+  double rad_body, dtemp, cosang, delxy;
+  double aa, bb, cc, t, dist1, dist2;
+  double ix_sf[3], gp[3], gp_bf[3], gp_sf[3], line_normal[3];
+  double p[3], p1[3], p2[3];
+  double quat[4];
+  double rot_np_bf[3][3], rot_np_sf[3][3];
+
+  MathExtra::quat_to_mat(iquat_cont, rot_np_sf);
+  MathExtra::quatquat(iquat_sf_bf, iquat_cont, quat);
+  MathExtra::qnormalize(quat);
+  MathExtra::quat_to_mat(quat, rot_np_bf);
+
+  n = 2*(num_pole_quad-1);
+  cosang = std::cos(iang);
+
+  for (kk = num_pole_quad-1; kk >= 0; kk--) { // start from widest angle to allow early stopping
+    theta_pole = std::acos((abscissa[kk]*((1.0-cosang)/2.0)) + ((1.0+cosang)/2.0));
+    for (ll = 1; ll <= n+1; ll++) {
+      phi_pole = MY_2PI * double(ll-1) / (double(n + 1));
+
+      gp[0] = std::sin(theta_pole)*std::cos(phi_pole); // quadrature point at [0,0,1]
+      gp[1] = std::sin(theta_pole)*std::sin(phi_pole);
+      gp[2] = std::cos(theta_pole);
+
+      MathExtra::matvec(rot_np_bf, gp, gp_bf); // quadrature point at contact in body frame
+      phi = std::atan2(gp_bf[1], gp_bf[0]);
+      phi = phi > 0.0 ? phi : MY_2PI + phi;
+      theta = std::acos(gp_bf[2]);
+
+      rad_body = avec->get_shape_radius(ishtype, theta, phi);
+
+      MathExtra::matvec(rot_np_sf, gp, gp_sf); // quadrature point at contact in space frame
+      phi = std::atan2(gp_sf[1], gp_sf[0]);
+      phi = phi > 0.0 ? phi : MY_2PI + phi;
+      theta = std::acos(gp_sf[2]);
+
+      line_normal[0] = (rad_body * sin(theta) * cos(phi));  // direction vector from centre of particle to surface point
+      line_normal[1] = (rad_body * sin(theta) * sin(phi));
+      line_normal[2] = (rad_body * cos(theta));
+
+      MathExtra::add3(line_normal, xi, ix_sf); // space frame coord of surface point
+      aa = std::pow(line_normal[0],2) + std::pow(line_normal[1],2); // aa, bb, cc for quadratic equation
+      bb = (2.0*ix_sf[0]*line_normal[0]) + (2.0*ix_sf[1]*line_normal[1]);
+      cc = std::pow(ix_sf[0],2) + std::pow(ix_sf[1],2) - std::pow(cylradius,2);
+      t = (-bb + std::sqrt(bb*bb - 4.0*aa*cc)) / (2.0*aa); // first solution
+      p1[0] = ix_sf[0] + t*line_normal[0]; // sub back into parametrized equation of line to find cylinder intersection
+      p1[1] = ix_sf[1] + t*line_normal[1];
+      p1[2] = ix_sf[2] + t*line_normal[2];
+      t = (-bb - std::sqrt(bb*bb - 4.0*aa*cc)) / (2.0*aa); // second solution
+      p2[0] = ix_sf[0] + t*line_normal[0];
+      p2[1] = ix_sf[1] + t*line_normal[1];
+      p2[2] = ix_sf[2] + t*line_normal[2];
+      dist1 = MathExtra::distsq3(ix_sf, p1); // dist from space frame surface point to intersection with cylinder
+      dist2 = MathExtra::distsq3(ix_sf, p1);
+
+      if (dist1<dist2){ // picking the closest point to the particle surface point
+        p[0] = p1[0];
+        p[1] = p1[1];
+        p[2] = p1[2];
+      }
+      else{
+        p[0] = p2[0];
+        p[1] = p2[1];
+        p[2] = p2[2];
+      }
+
+      dtemp = MathExtra::distsq3(ix_sf, p); // particle centre to cylinder wall
+
+      // Check for contact
+      if (rad_body>dtemp) {
+        kk_count = kk+1; // refine the spherical cap angle to this index (+1 as points could exist between indexes)
+        return 1;
+      }
+    }
+  }
+  return 0;
+}
+
 /* ----------------------------------------------------------------------
 ------------------------------------------------------------------------- */
 void FixWallSpherharm::calc_force_torque(int kk_count, int ishtype, double iang, double (&iquat_cont)[4],
@@ -572,8 +665,6 @@ void FixWallSpherharm::calc_force_torque(int kk_count, int ishtype, double iang,
       MathExtra::normalize3(ix_sf, line_normal);
       denom = MathExtra::dot3(line_normal, wall_normal);
       rad_wall = numer/denom;
-
-//      std::cout<<kk<<" "<<ll<<" "<<" "<<rad_wall<<" "<<" "<<rad_body<<std::endl;
 
       // Check for contact
       if (rad_body>rad_wall) {
@@ -719,6 +810,7 @@ void FixWallSpherharm::get_quadrature_values(int num_quadrature){
   }
 }
 
+// TODO - Delete this temp method
 void FixWallSpherharm::write_surfpoints_to_file(double *x, int cont, double *norm, int file_count, bool first_call){
 
   std::ofstream outfile;

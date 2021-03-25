@@ -69,8 +69,10 @@ class FixWallSpherharm : public Fix {
 
   void get_quadrature_values(int num_quadrature);
   void get_contact_quat(double (&xvecdist)[3], double (&quat)[4]);
-  int refine_cap_angle(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
+  int refine_cap_angle_plane(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
                        double (&iquat_sf_bf)[4], const double xi[3], const double delvec[3]);
+  int refine_cap_angle_cylinder(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
+                             double (&iquat_sf_bf)[4], const double xi[3], const double delvec[3]);
   void calc_force_torque(int kk_count, int ishtype, double iang,
                          double (&iquat_cont)[4], double (&iquat_sf_bf)[4],
                          const double xi[3], double (&irot)[3][3], double &vol_overlap,
