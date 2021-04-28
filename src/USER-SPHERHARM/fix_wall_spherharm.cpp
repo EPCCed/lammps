@@ -34,6 +34,8 @@
 #include "math_spherharm.h"
 #include "atom_vec_spherharm.h"
 
+#include <limits>
+typedef std::numeric_limits< double > dbl;
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -45,17 +47,8 @@ enum{XPLANE=0,YPLANE=1,ZPLANE=2,ZCYLINDER,REGION};
 enum{VOLUME_BASED};
 enum{NONE,CONSTANT,EQUAL};
 
-#define PI27SQ 266.47931882941264802866    // 27*PI**2
-#define THREEROOT3 5.19615242270663202362  // 3*sqrt(3)
-#define SIXROOT6 14.69693845669906728801   // 6*sqrt(6)
-#define INVROOT6 0.40824829046386307274    // 1/sqrt(6)
-#define FOURTHIRDS 1.333333333333333       // 4/3
-#define THREEQUARTERS 0.75                 // 3/4
-#define TWOPI 6.28318530717959             // 2*PI
-
 #define EPSILON 1e-10
 #define BIG 1.0e20
-#define EPSILON 1e-10
 
 /* ---------------------------------------------------------------------- */
 
@@ -68,13 +61,12 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
     error->all(FLERR,"Fix wall/spherharm requires atom style spherharm");
 
   //TODO - hardcoding the number of quadrature points is not a good idea here
-  num_pole_quad = 30;
+  num_pole_quad = 40;
   create_attribute = 1;
   restart_peratom = 0;
 
   // set interaction style
   pairstyle = VOLUME_BASED;
-
   // wall/particle coefficients
 
   int iarg;
@@ -311,19 +303,19 @@ void FixWallSpherharm::post_force(int /*vflag*/)
         del2 = whi - x[i][0];
         if (del1 < del2) dx = del1;
         else dx = -del2;
-        gamma = std::acos(std::abs(dx) /radi) + (0.5 * MY_PI / 180.0);
+        gamma = std::acos(std::abs(dx) /radi); //TODO removing extra angle required for time convergence...
       } else if (wallstyle == YPLANE) {
         del1 = x[i][1] - wlo;
         del2 = whi - x[i][1];
         if (del1 < del2) dy = del1;
         else dy = -del2;
-        gamma = std::acos(std::abs(dy) /radi) + (0.5 * MY_PI / 180.0);
+        gamma = std::acos(std::abs(dy) /radi);// + (0.5 * MY_PI / 180.0);
       } else if (wallstyle == ZPLANE) {
         del1 = x[i][2] - wlo;
         del2 = whi - x[i][2];
         if (del1 < del2) dz = del1;
         else dz = -del2;
-        gamma = std::acos(std::abs(dz) /radi) + (0.5 * MY_PI / 180.0);
+        gamma = std::acos(std::abs(dz) /radi);// + (0.5 * MY_PI / 180.0);
       } else if (wallstyle == ZCYLINDER) {
         delxy = sqrt(x[i][0]*x[i][0] + x[i][1]*x[i][1]);
         delr = cylradius - delxy;
@@ -371,6 +363,14 @@ void FixWallSpherharm::post_force(int /*vflag*/)
 
         // TODO - Fix this for cylindrical boundaries
         if (pairstyle == VOLUME_BASED)
+
+
+          //std::cout.precision(dbl::max_digits10);
+          //std::cout.precision(std::numeric_limits<double>::digits10);
+          //std::cout << std::endl << dz << " ";
+          //std::cout << std::endl << dx << " ";
+          //std::cout << dx << " " <<MY_PI*(radi+dx)*(radi+dx)*(3.0*radi-(radi+dx))/3.0 << " ";
+
           vol_based(dx,dy,dz,gamma,ishtype,quat[i],x[i],f[i],torque[i],contact);
       }
     }
@@ -413,20 +413,27 @@ void FixWallSpherharm::vol_based(double dx, double dy, double dz, double iang,
   MathExtra::qconjugate(quat, iquat_sf_bf);
   MathExtra::qnormalize(iquat_sf_bf);
 
+  //std::cout << iquat_sf_bf[0] << " "<< iquat_sf_bf[1] << " "<< iquat_sf_bf[2] << " "<< iquat_sf_bf[3] << std::endl;
+
   // Get the quaternion from north pole of atom "i" to the vector connecting the centre line of atom "i" to the wall
   get_contact_quat(delvec, iquat_cont);
 
-  if (wallstyle != ZCYLINDER) {
-    candidates_found = refine_cap_angle_plane(kk_count, ishtype, iang, iquat_cont, iquat_sf_bf, x, delvec);
-  }
-  else{
-    candidates_found = refine_cap_angle_cylinder(kk_count, ishtype, iang, iquat_cont, iquat_sf_bf, x, delvec);
-  }
+  //if (wallstyle != ZCYLINDER) {
+  //  candidates_found = refine_cap_angle_plane(kk_count, ishtype, iang, iquat_cont, iquat_sf_bf, x, delvec);
+  //}
+  //else{
+  //  candidates_found = refine_cap_angle_cylinder(kk_count, ishtype, iang, iquat_cont, iquat_sf_bf, x, delvec);
+  //}
 
-  if (kk_count > num_pole_quad) kk_count = num_pole_quad; // don't refine if points on first layer
+  kk_count = num_pole_quad-1;
+  candidates_found = true;
+
+  if (kk_count == num_pole_quad) kk_count = num_pole_quad-1; // don't refine if points on first layer
 
   if (candidates_found) {
     calc_force_torque(kk_count, ishtype, iang, iquat_cont, iquat_sf_bf, x, irot, vol_overlap, iforce, torsum, delvec);
+
+    //std::cout << vol_overlap << std::endl;
 
     if (vol_overlap==0.0) return;
 
@@ -447,6 +454,10 @@ void FixWallSpherharm::vol_based(double dx, double dy, double dz, double iang,
     file_count++;
 
   }
+
+  std::cout.precision(std::numeric_limits<double>::digits10);
+  std::cout<<f[0]<<" "<<f[1]<<" "<<f[2]<<" "<<std::endl;
+  std::cout<<torque[0]<<" "<<torque[1]<<" "<<torque[2]<<" "<<std::endl;
 
 }
 
@@ -619,27 +630,48 @@ void FixWallSpherharm::calc_force_torque(int kk_count, int ishtype, double iang,
   double quat[4];
   double rot_np_bf[3][3], rot_np_sf[3][3];
 
+  //long double vol_sum=0.0l;
+  //long double flong[3], tlong[3];
+  //flong[0]=flong[1]=flong[2]=0.0l;
+  //tlong[0]=tlong[1]=tlong[2]=0.0l;
+
   static int file_count = 0;
   bool first_call = true;
 
   MathExtra::normalize3(delvec, wall_normal); // surface point to unit vector
   numer = MathExtra::dot3(delvec, wall_normal);
-
   MathExtra::quat_to_mat(iquat_cont, rot_np_sf);
   MathExtra::quatquat(iquat_sf_bf, iquat_cont, quat);
   MathExtra::qnormalize(quat);
   MathExtra::quat_to_mat(quat, rot_np_bf);
 
+  //std::cout << quat[0] << " "<< quat[1] << " "<< quat[2] << " "<< quat[3] << std::endl;
+
+  //std::cout << rot_np_bf[0][0] << " "<< rot_np_bf[0][1] << " "<< rot_np_bf[0][2] << std::endl;
+  //std::cout << rot_np_bf[1][0] << " "<< rot_np_bf[1][1] << " "<< rot_np_bf[1][2] << std::endl;
+  //std::cout << rot_np_bf[2][0] << " "<< rot_np_bf[2][1] << " "<< rot_np_bf[2][2] << std::endl<< std::endl;
+
+  //std::cout<<rot_np_sf[0][0]<<std::endl;
+
   n = 2*(num_pole_quad-1);
   cosang = std::cos(iang);
-  iang = std::acos((abscissa[kk_count]*((1.0-cosang)/2.0)) + ((1.0+cosang)/2.0)); //refine spherical cap angle
-  cosang = std::cos(iang);
+  // TODO Uncomment, this is just for the sphere tests with no angle refinement
+  //iang = std::acos((abscissa[kk_count]*((1.0-cosang)/2.0)) + ((1.0+cosang)/2.0)); //refine spherical cap angle
+  //cosang = std::cos(iang);
   fac = ((1.0-cosang)/2.0)*(MY_2PI/double(n+1));
+  //std::cout << std::fixed << n << " "  << (double)(n+1) << std::endl;
+
+  //std::cout.precision(std::numeric_limits<double>::digits10);
+  //std::cout << cosang << " " << fac << std::endl;
+  std::cout << delvec[0] << " " << delvec[1] << " " << delvec[2] << std::endl;
+
 
   for (kk = num_pole_quad-1; kk >= 0; kk--) {
     theta_pole = std::acos((abscissa[kk]*((1.0-cosang)/2.0)) + ((1.0+cosang)/2.0));
     for (ll = 1; ll <= n+1; ll++) {
       phi_pole = MY_2PI * double(ll-1) / (double(n + 1));
+
+      //std::cout<<theta_pole<<" "<<phi_pole<<std::endl;
 
       gp[0] = std::sin(theta_pole)*std::cos(phi_pole); // quadrature point at [0,0,1]
       gp[1] = std::sin(theta_pole)*std::sin(phi_pole);
@@ -657,8 +689,9 @@ void FixWallSpherharm::calc_force_torque(int kk_count, int ishtype, double iang,
 
       // Get the radius at the body frame theta and phi value and normal [not unit]
       rad_body = avec->get_shape_radius_and_normal(ishtype, theta_bf, phi_bf, inorm_bf); // inorm is in body frame
+      //std::cout<<ishtype<<" "<<theta_bf<<" "<<phi_bf<<" "<<rad_body<<" "<<std::endl;
 
-      ix_sf[0] = (rad_body * sin(theta_sf) * cos(phi_sf));
+      ix_sf[0] = (rad_body * sin(theta_sf) * cos(phi_sf)); //relative to body centre
       ix_sf[1] = (rad_body * sin(theta_sf) * sin(phi_sf));
       ix_sf[2] = (rad_body * cos(theta_sf));
 
@@ -667,28 +700,53 @@ void FixWallSpherharm::calc_force_torque(int kk_count, int ishtype, double iang,
       rad_wall = numer/denom;
 
       // Check for contact
-      if (rad_body>rad_wall) {
+      if (rad_body>rad_wall and rad_wall>0.0) {
+
+        //std::cout<<kk << " " << ll << " "<<rad_body<<" "<<rad_wall<<std::endl;
 
         MathExtra::add3(ix_sf, xi, ix_sf);
 
         dv = weights[kk] * (std::pow(rad_body, 3) - std::pow(rad_wall, 3));
+        //vol_sum += (long double) dv;
         vol_overlap += dv;
+
+        //std::cout.precision(std::numeric_limits<double>::digits10);
+        //std::cout<<rad_body<<" "<<rad_wall<<" "<<dv<<" "<<std::endl;
+        //std::cout<<inorm_bf[0]<<" "<<inorm_bf[1]<<" "<<inorm_bf[2]<<" "<<std::endl;
 
         MathExtra::scale3(weights[kk]/std::sin(theta_bf), inorm_bf); // w_i * n * Q
         MathExtra::matvec(irot, inorm_bf, inorm_sf);            // w_i * n * Q in space frame
         MathExtra::add3(iforce, inorm_sf, iforce);              // sum(w_i * n * Q)
+        //flong[0]+=(long double)inorm_sf[0];
+        //flong[1]+=(long double)inorm_sf[1];
+        //flong[2]+=(long double)inorm_sf[2];
         MathExtra::sub3(ix_sf, xi, x_testpoint);                // Vector u from centre of "a" to surface point
         MathExtra::cross3(x_testpoint, inorm_sf, dtor);         // u x n_s * Q * w_i
         MathExtra::add3(torsum, dtor, torsum);                  // sum(u x n_s * Q * w_i)
+        //tlong[0]+=(long double)dtor[0];
+        //tlong[1]+=(long double)dtor[1];
+        //tlong[2]+=(long double)dtor[2];
 
-        write_surfpoints_to_file(ix_sf, 1, inorm_sf, file_count, first_call);
-        first_call = false;
+        //write_surfpoints_to_file(ix_sf, 1, inorm_sf, file_count, first_call);
+        //first_call = false;
+
+        //std::cout.precision(std::numeric_limits<double>::digits10);
+        //std::cout<<iforce[0]<<" "<<iforce[1]<<" "<<iforce[2]<<" "<<std::endl;
+        //std::cout<<torsum[0]<<" "<<torsum[1]<<" "<<torsum[2]<<" "<<std::endl;
+
 
       } // check_contact
     } // ll (quadrature)
   } // kk (quadrature)
   file_count++;
+  //vol_overlap = fac*((double) vol_sum)/3.0;
   vol_overlap*=fac/3.0;
+  //iforce[0]+=(double)flong[0];
+  //iforce[1]+=(double)flong[1];
+  //iforce[2]+=(double)flong[2];
+  //torsum[0]+=(double)tlong[0];
+  //torsum[1]+=(double)tlong[1];
+  //torsum[2]+=(double)tlong[2];
   MathExtra::scale3(fac, iforce);
   MathExtra::scale3(fac, torsum);
 }
@@ -699,16 +757,32 @@ void FixWallSpherharm::calc_force_torque(int kk_count, int ishtype, double iang,
 void FixWallSpherharm::get_contact_quat(double (&xvecdist)[3], double (&quat)[4]){
   double vert_unit_vec[3], cross_vec[3], c;
   // North pole unit vector, points generated are with reference to this point
-  vert_unit_vec[0] = 0;
-  vert_unit_vec[1] = 0;
+  vert_unit_vec[0] = 0.0;
+  vert_unit_vec[1] = 0.0;
   vert_unit_vec[2] = 1.0;
-  c = MathExtra::dot3(vert_unit_vec, xvecdist);
-  MathExtra::cross3(vert_unit_vec, xvecdist, cross_vec);
-  quat[1] = cross_vec[0];
-  quat[2] = cross_vec[1];
-  quat[3] = cross_vec[2];
-  quat[0] = sqrt(MathExtra::lensq3(vert_unit_vec) * MathExtra::lensq3(xvecdist)) + c;
-  MathExtra::qnormalize(quat);
+  if (xvecdist[0]==0.0 and xvecdist[1]==0.0){
+    if(xvecdist[2]<0.0) { //rotation to south pole
+      quat[1] = 1.0;
+      quat[2] = 0.0;
+      quat[3] = 0.0;
+      quat[0] = 0.0;
+    }
+    else{
+      quat[1] = 0.0; //identity quaternion, no rotation, default case
+      quat[2] = 0.0;
+      quat[3] = 0.0;
+      quat[0] = 1.0;
+    }
+  }
+  else {
+    c = MathExtra::dot3(vert_unit_vec, xvecdist);
+    MathExtra::cross3(vert_unit_vec, xvecdist, cross_vec);
+    quat[1] = cross_vec[0];
+    quat[2] = cross_vec[1];
+    quat[3] = cross_vec[2];
+    quat[0] = sqrt(MathExtra::lensq3(vert_unit_vec) * MathExtra::lensq3(xvecdist)) + c;
+    MathExtra::qnormalize(quat);
+  }
 }
 
 /* ----------------------------------------------------------------------

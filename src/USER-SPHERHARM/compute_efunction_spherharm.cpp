@@ -31,6 +31,7 @@ ComputeEFunctionSpherharm::ComputeEFunctionSpherharm(LAMMPS *lmp, int narg, char
 
   scalar_flag = 1;
   extscalar = 1;
+  workstore = 0.0;
 
   // error check
 
@@ -114,7 +115,9 @@ double ComputeEFunctionSpherharm::compute_scalar()
   temp = 0.0;
   MPI_Allreduce(&efunction,&temp,1,MPI_DOUBLE,MPI_SUM,world);
   temp *= pfactor;
-  scalar += temp + dw_back;
+  workstore += (long double)(temp + dw_back);
+  scalar = double(workstore);
+  //scalar += temp + dw_back;
 
   temp = 0.0;
   MPI_Allreduce(&efuture,&temp,1,MPI_DOUBLE,MPI_SUM,world);

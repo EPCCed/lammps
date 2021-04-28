@@ -26,6 +26,15 @@
 #include "math_const.h"
 #include "math_spherharm.h"
 
+
+#include <boost/math/quadrature/gauss.hpp>
+#include <boost/math/policies/policy.hpp>
+#include <boost/multiprecision/cpp_bin_float.hpp>
+#include <boost/multiprecision/float128.hpp>
+#include <boost/math/special_functions/spherical_harmonic.hpp>
+#include <boost/concept_check.hpp>
+#include <complex>
+
 using namespace LAMMPS_NS;
 using namespace MathConst;
 using namespace MathSpherharm;
@@ -65,8 +74,41 @@ void AtomVecSpherharmUnitTests::process_args(int narg, char **arg) {
 //  dump_ply();
 //  dump_shapenormals();
 //  compare_areas();
-  validate_rotation();
+// validate_rotation();
+//  for (int i=1; i<=100; i++) {
+//    spher_sector_volumetest(i, MY_PI);
+//  }
+//  for (int i=1; i<=25; i++) {
+//    spher_cap_volumetest(i, MY_PI / 2.33435345768);
+//  }
 
+/*  //int m = 0;
+  double anm_calc, pc_diff;
+  std::cout<<std::endl;
+  //for (int n=2; n<=maxshexpan; n+=2) {
+  for (int n=1; n<=maxshexpan; n++) {
+    for (int m=n; m>=0; m--) {
+      for (int l = n; l <= maxshexpan + 5; l++) {
+        anm_calc = back_calc_coeff(n, m, l);
+        //pc_diff = 100.0*std::abs(shcoeffs_byshape[0][(n * (n + 1)) + (n - m) * 2] - anm_calc)/
+        //          shcoeffs_byshape[0][(n * (n + 1)) + (n - m) * 2];
+        pc_diff = 100.0 * std::abs(shcoeffs_byshape[0][(n * (n + 1)) + (n - m) * 2] - anm_calc) / std::abs(anm_calc);
+        if (pc_diff < .001) {
+          std::cout << maxshexpan << " " << n << " " << m << " " << l << " "<< std::endl;
+                    //<< shcoeffs_byshape[0][(n * (n + 1)) + (n - m) * 2] << " " << anm_calc << " " << pc_diff
+                    //<< std::endl;
+          break;
+        }
+      }
+    }
+  }*/
+  //boost_test();
+  //spher_sector_volumetest(32, MY_PI);
+  //volumetest_boost_test();
+  //surfacearea_boost_test();
+  //for (int i=1; i<=250; i++) {
+    surfarea_int_tests(250, MY_PI);
+  //}
 }
 
 void AtomVecSpherharmUnitTests::get_shape(int i, double &shapex, double &shapey, double &shapez)
@@ -724,4 +766,544 @@ void AtomVecSpherharmUnitTests::validate_rotation() {
 
   memory->sfree(rotcoeffs);
 
+}
+
+void AtomVecSpherharmUnitTests::spher_sector_volumetest(int num_pole_quad, double iang){
+
+  int kk, ll, n;
+  int ishtype=0;
+  double cosang, fac;
+  double theta_pole, phi_pole;
+  double rad_body;
+  double dv;
+  double inorm_bf[3];
+  //long double vol_sum=0.0l;
+  double vol_sum = 0.0;
+  double vol_overlap;
+
+  double abscissa[num_pole_quad];
+  double weights[num_pole_quad];
+  QuadPair p;
+  // Get the quadrature weights, and abscissa. Convert abscissa to theta angles
+  for (int i = 0; i < num_pole_quad; i++) {
+    p = GLPair(num_pole_quad, i + 1);
+    weights[i] = p.weight;
+    abscissa[i] = p.x();
+  }
+
+  n = 2*(num_pole_quad-1);
+  cosang = std::cos(iang);
+  fac = ((1.0-cosang)/2.0)*(MY_2PI/double(n+1));
+
+  double y,t,c;
+  c = 0.0;
+
+  for (kk = num_pole_quad-1; kk >= 0; kk--) {
+    theta_pole = std::acos((abscissa[kk]*((1.0-cosang)/2.0)) + ((1.0+cosang)/2.0));
+    for (ll = 1; ll <= n+1; ll++) {
+      phi_pole = MY_2PI * double(ll-1) / (double(n + 1));
+
+      // Get the radius at the body frame theta and phi value and normal [not unit]
+      rad_body = get_shape_radius_and_normal_compensated(ishtype, theta_pole, phi_pole, inorm_bf); // inorm is in body frame
+
+      dv = weights[kk]*(std::pow(rad_body, 3))* std::sin(theta_pole)/std::sqrt(1.0-abscissa[kk]*abscissa[kk]);
+
+      //y = dv - c;
+      //t = vol_sum + y;
+      //c = (t-vol_sum) - y;
+      //vol_sum = t;
+
+      //vol_sum += (long double) dv;
+
+      vol_sum += dv;
+
+    } // ll (quadrature)
+  } // kk (quadrature)
+  //vol_overlap = (double) vol_sum;
+  vol_overlap = vol_sum;
+  vol_overlap*=fac/3.0;
+
+  double vol_ana;
+  vol_ana = (MY_2PI/3.0)*std::pow(maxrad_byshape[0],3)*(1.0-cosang);
+
+  std::cout.precision(std::numeric_limits<double>::digits10);
+  //std::cout << iang << " " << num_pole_quad << " " << vol_overlap << " " << vol_ana << std::endl;
+  std::cout << num_pole_quad << " " << vol_overlap;
+
+
+  vol_sum = 0.0;
+  for (kk = num_pole_quad-1; kk >= 0; kk--) {
+    theta_pole = (abscissa[kk]*((MY_PI)/2.0)) + ((MY_PI)/2.0);
+    for (ll = 1; ll <= n+1; ll++) {
+      phi_pole = MY_2PI * double(ll-1) / (double(n + 1));
+
+      // Get the radius at the body frame theta and phi value and normal [not unit]
+      rad_body = get_shape_radius_and_normal_compensated(ishtype, theta_pole, phi_pole, inorm_bf); // inorm is in body frame
+
+      dv = weights[kk] * std::sin(theta_pole) * (std::pow(rad_body, 3));
+
+      //y = dv - c;
+      //t = vol_sum + y;
+      //c = (t-vol_sum) - y;
+      //vol_sum = t;
+
+      //vol_sum += (long double) dv;
+
+      vol_sum += dv;
+
+    } // ll (quadrature)
+  } // kk (quadrature)
+  //vol_overlap = (double) vol_sum;
+  vol_overlap = vol_sum;
+  fac = (MY_PI/2.0)*(MY_2PI/double(n+1));
+  vol_overlap*=fac/3.0;
+
+
+  std::cout.precision(std::numeric_limits<double>::digits10);
+  //std::cout << iang << " " << num_pole_quad << " " << vol_overlap << " " << vol_ana << std::endl;
+  std::cout << " " << vol_overlap << std::endl;
+
+}
+
+
+void AtomVecSpherharmUnitTests::surfarea_int_tests(int num_pole_quad, double iang){
+
+  int kk, ll, n;
+  double cosang, fac;
+  double theta_pole, phi_pole;
+  double surf_area = 0.0;
+
+  double abscissa[num_pole_quad];
+  double weights[num_pole_quad];
+  QuadPair p;
+  // Get the quadrature weights, and abscissa. Convert abscissa to theta angles
+  for (int i = 0; i < num_pole_quad; i++) {
+    p = GLPair(num_pole_quad, i + 1);
+    weights[i] = p.weight;
+    abscissa[i] = p.x();
+  }
+
+  std::cout.precision(std::numeric_limits<double>::digits10);
+  std::cout << weights[0] << " " << abscissa[0] << " " << std::acos(abscissa[0]) << std::endl;
+  std::cout << weights[num_pole_quad-1] << " " << abscissa[num_pole_quad-1] << " " << std::acos(abscissa[num_pole_quad-1]) << std::endl;
+
+  n = 2*(num_pole_quad-1);
+  cosang = std::cos(iang);
+  fac = (MY_2PI/double(n+1));
+
+  double rad, st;
+  double rp, rt;
+
+  double theta_pole_2, st2, surf_area2;
+  surf_area2 =0.0;
+
+  // Gauss legendre trap product and variable sub + trap product and limit change
+  for (kk = num_pole_quad-1; kk >= 0; kk--) {
+    theta_pole = std::acos(abscissa[kk]);
+    st = std::sin(theta_pole);
+    theta_pole_2 = (abscissa[kk]*((MY_PI)/2.0)) + ((MY_PI)/2.0);
+    st2 = std::sin(theta_pole_2);
+    for (ll = 1; ll <= n+1; ll++) {
+      phi_pole = MY_2PI * double(ll-1) / (double(n + 1));
+      rad = get_shape_radius_and_gradients(0, theta_pole, phi_pole, rp, rt);
+      surf_area += weights[kk]*rad*std::sqrt(rp*rp + rt*rt*st*st + rad*rad*st*st)/st;
+      rad = get_shape_radius_and_gradients(0, theta_pole_2, phi_pole, rp, rt);
+      surf_area2 += weights[kk]*rad*std::sqrt(rp*rp + rt*rt*st2*st2 + rad*rad*st2*st2);
+    } // ll (quadrature)
+  } // kk (quadrature)
+  surf_area*=fac;
+  fac = (MY_PI/2.0)*(MY_2PI/double(n+1));
+  surf_area2*=fac;
+
+  std::cout.precision(std::numeric_limits<double>::digits10);
+  std::cout << num_pole_quad << " " << surf_area << " " << surf_area2;
+
+  // Double Gauss Quad substitution on both  + double gauss quad limit change on both
+  surf_area = 0.0;
+  surf_area2 = 0.0;
+  double sa, sp, sa2;
+  for (kk = num_pole_quad-1; kk >= 0; kk--) {
+    theta_pole = std::acos(abscissa[kk]);
+    st = std::sin(theta_pole);
+    theta_pole_2 = (abscissa[kk]*((MY_PI)/2.0)) + ((MY_PI)/2.0);
+    st2 = std::sin(theta_pole_2);
+    //if (st==0) continue;
+    sa = 0.0;
+    sa2 = 0.0;
+    for (ll = num_pole_quad-1; ll >= 0; ll--) {
+      phi_pole = 2.0*std::acos(abscissa[ll]);
+      sp = std::sin(phi_pole/2.0);
+      rad = get_shape_radius_and_gradients(0, theta_pole, phi_pole, rp, rt);
+      sa += weights[ll]*rad*std::sqrt(rp*rp + rt*rt*st*st + rad*rad*st*st)/sp;
+      phi_pole = (abscissa[ll]*((MY_2PI)/2.0)) + ((MY_2PI)/2.0);
+      rad = get_shape_radius_and_gradients(0, theta_pole_2, phi_pole, rp, rt);
+      sa2 += weights[ll]*rad*std::sqrt(rp*rp + rt*rt*st2*st2 + rad*rad*st2*st2);
+    } // ll (quadrature)
+    surf_area += 2.0*weights[kk]*sa/st;
+    surf_area2 += weights[kk]*sa2;
+  } // kk (quadrature)
+  surf_area2 *= (MY_PI*MY_PI*0.5);
+
+  std::cout.precision(std::numeric_limits<double>::digits10);
+  std::cout << " " <<   surf_area << " " <<   surf_area2 << std::endl;
+
+  //double aa = get_shape_radius_and_gradients(0, MY_PI2, 0, rp, rt);
+  //double bb = get_shape_radius_and_gradients(0, MY_PI2, MY_PI2, rp, rt);
+  //double cc = get_shape_radius_and_gradients(0, 0, 0, rp, rt);
+  //std::cout << aa << " " << bb << " " << cc << std::endl;
+
+}
+
+void AtomVecSpherharmUnitTests::volumetest_boost_test(){
+  using namespace boost::math::quadrature;
+  using boost::multiprecision::cpp_bin_float_quad;
+
+
+
+
+  const int m = 64;
+  const int L = 2*(m-1);
+
+
+  auto vol = [this](const double& theta) {
+    double vol_sum = 0.0;
+    double inorm_bf[3];
+    for (int ll = 1; ll <= L+1; ll++) {
+      double phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      vol_sum += std::sin(theta)*std::pow(get_shape_radius_and_normal_compensated(0, theta, phi, inorm_bf),3);
+      //vol_sum += std::sin(theta)*std::pow(get_shape_radius_compensated_boost(0, theta, phi),3);
+    }
+    return vol_sum;
+  };
+
+  double fac = (MY_2PI/double(L+1))/3.0;
+  double Q2 = gauss<double, m>::integrate(vol, 0, MY_PI);
+  Q2 *= fac;
+
+  std::cout << std::setprecision(std::numeric_limits<double>::digits10) << std::endl;
+  std::cout<<Q2<<std::endl;
+
+
+
+  double phi = 0.0;
+  auto vol2 = [this, &phi](const double& theta) {
+    double inorm_bf[3];
+    return (std::sin(theta)*std::pow(get_shape_radius_and_normal_compensated(0, theta, phi, inorm_bf),3));
+  };
+
+  double vol_sum=0.0;
+  for (int ll = 1; ll <= L+1; ll++) {
+    phi = MY_2PI * double(ll - 1) / (double(L + 1));
+    Q2 = gauss<double, m>::integrate(vol2, 0, MY_PI);
+    vol_sum += Q2;
+  }
+  Q2 = vol_sum*fac;
+  std::cout << std::setprecision(std::numeric_limits<double>::digits10) << std::endl;
+  std::cout<<Q2<<std::endl;
+
+
+  auto vol3 = [this](const double& theta) {
+    double vol_sum = 0.0;
+    double inorm_bf[3];
+    double theta2 = std::acos(theta);
+    for (int ll = 1; ll <= L+1; ll++) {
+      double phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      vol_sum += std::pow(get_shape_radius_and_normal_compensated(0, theta2, phi, inorm_bf),3);
+      //vol_sum += std::pow(get_shape_radius_compensated_boost(0, theta2, phi),3);
+    }
+    return vol_sum;
+  };
+
+  fac = (MY_2PI/double(L+1))/3.0;
+  double Q3 = gauss<double, m>::integrate(vol3);
+  Q3 *= fac;
+
+  std::cout << std::setprecision(std::numeric_limits<double>::digits10) << std::endl;
+  std::cout<<Q3<<std::endl;
+
+
+
+
+  double inorm_bf[3];
+  vol_sum = 0.0;
+  Q2 = gauss<double, m>::integrate(vol, -1, 1);
+  const std::vector<double> nodes = gauss<double, m>::abscissa();
+  const std::vector<double> weights = gauss<double, m>::weights();
+  for (int kk = 0; kk <= (m/2)-1; kk++) {
+    double theta = std::acos(nodes[kk]);
+    for (int ll = 1; ll <= L+1; ll++) {
+      phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      // Get the radius at the body frame theta and phi value and normal [not unit]
+      double rad_body = get_shape_radius_and_normal_compensated(0, theta, phi, inorm_bf); // inorm is in body frame
+      double dv = weights[kk] * (std::pow(rad_body, 3));
+      vol_sum += dv;
+    }
+    theta = std::acos(-nodes[kk]);
+    for (int ll = 1; ll <= L+1; ll++) {
+      phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      // Get the radius at the body frame theta and phi value and normal [not unit]
+      double rad_body = get_shape_radius_and_normal_compensated(0, theta, phi, inorm_bf); // inorm is in body frame
+      double dv = weights[kk] * (std::pow(rad_body, 3));
+      vol_sum += dv;
+    }
+  } // kk (quadrature)
+  fac = (MY_2PI/double(L+1))/3.0;
+  vol_sum*=fac;
+  std::cout << std::setprecision(std::numeric_limits<double>::digits10) << std::endl;
+  std::cout<<vol_sum<<std::endl;
+
+
+
+  vol_sum = 0.0;
+  for (int kk = 0; kk <= (m/2)-1; kk++) {
+    double theta = nodes[kk]*(MY_PI/2.0)+(MY_PI/2.0);
+    for (int ll = 1; ll <= L+1; ll++) {
+      phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      // Get the radius at the body frame theta and phi value and normal [not unit]
+      double rad_body = get_shape_radius_and_normal_compensated(0, theta, phi, inorm_bf); // inorm is in body frame
+      double dv = weights[kk] * std::sin(theta) * (std::pow(rad_body, 3));
+      vol_sum += dv;
+    }
+    theta = -nodes[kk]*(MY_PI/2.0)+(MY_PI/2.0);
+    for (int ll = 1; ll <= L+1; ll++) {
+      phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      // Get the radius at the body frame theta and phi value and normal [not unit]
+      double rad_body = get_shape_radius_and_normal_compensated(0, theta, phi, inorm_bf); // inorm is in body frame
+      double dv = weights[kk] * std::sin(theta)  * (std::pow(rad_body, 3));
+      vol_sum += dv;
+    }
+  } // kk (quadrature)
+  fac = (MY_PI*MY_PI/double(L+1))/3.0;
+  vol_sum*=fac;
+  std::cout << std::setprecision(std::numeric_limits<double>::digits10) << std::endl;
+  std::cout<<vol_sum<<std::endl;
+
+
+}
+
+
+void AtomVecSpherharmUnitTests::surfacearea_boost_test(){
+  using namespace boost::math::quadrature;
+  using boost::multiprecision::cpp_bin_float_quad;
+
+  const int m = 110;
+  const int L = 2*(m-1);
+
+  auto vol = [this](const double& theta) {
+    double surf_area = 0.0;
+    double rad, rp, rt, st;
+    for (int ll = 1; ll <= L+1; ll++) {
+      double phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      rad = get_shape_radius_and_gradients(0, theta, phi, rp, rt);
+      st = std::sin(theta);
+      surf_area += rad*std::sqrt(rp*rp + rt*rt*st*st + rad*rad*st*st);
+    }
+    return surf_area;
+  };
+
+  double fac = (MY_2PI/double(L+1));
+  double Q2 = gauss<double, m>::integrate(vol, 0, MY_PI);
+  Q2 *= fac;
+
+  std::cout << std::setprecision(std::numeric_limits<double>::digits10) << std::endl;
+  std::cout<<Q2<<std::endl;
+
+
+
+  auto vol3 = [this](const double& actheta) {
+    double surf_area = 0.0;
+    double rad, rp, rt, st;
+    double theta = std::acos(actheta);
+    for (int ll = 1; ll <= L+1; ll++) {
+      double phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      rad = get_shape_radius_and_gradients(0, theta, phi, rp, rt);
+      st = std::sin(theta);
+      surf_area += (rad/st)*std::sqrt(rp*rp + rt*rt*st*st + rad*rad*st*st);
+    }
+    return surf_area;
+  };
+
+  fac = (MY_2PI/double(L+1));
+  double Q3 = gauss<double, m>::integrate(vol3);
+  Q3 *= fac;
+
+  std::cout << std::setprecision(std::numeric_limits<double>::digits10) << std::endl;
+  std::cout<<Q3<<std::endl;
+
+
+
+  double rad, rp, rt, st, phi, theta;
+  double surf_area = 0.0;
+  Q2 = gauss<double, m>::integrate(vol, -1, 1);
+  const std::vector<double> nodes = gauss<double, m>::abscissa();
+  const std::vector<double> weights = gauss<double, m>::weights();
+  for (int kk = 0; kk <= (m/2)-1; kk++) {
+    theta = std::acos(nodes[kk]);
+    for (int ll = 1; ll <= L+1; ll++) {
+      phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      rad = get_shape_radius_and_gradients(0, theta, phi, rp, rt);
+      st = std::sin(theta);
+      surf_area += weights[kk]*rad*std::sqrt(rp*rp + rt*rt*st*st + rad*rad*st*st)/st;
+    }
+    theta = std::acos(-nodes[kk]);
+    for (int ll = 1; ll <= L+1; ll++) {
+      phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      rad = get_shape_radius_and_gradients(0, theta, phi, rp, rt);
+      st = std::sin(theta);
+      surf_area += weights[kk]*rad*std::sqrt(rp*rp + rt*rt*st*st + rad*rad*st*st)/st;
+    }
+  } // kk (quadrature)
+  fac = (MY_2PI/double(L+1));
+  surf_area*=fac;
+  std::cout << std::setprecision(std::numeric_limits<double>::digits10) << std::endl;
+  std::cout<<surf_area<<std::endl;
+
+
+
+  surf_area = 0.0;
+  for (int kk = 0; kk <= (m/2)-1; kk++) {
+    theta = nodes[kk]*(MY_PI/2.0)+(MY_PI/2.0);
+    for (int ll = 1; ll <= L+1; ll++) {
+      phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      rad = get_shape_radius_and_gradients(0, theta, phi, rp, rt);
+      st = std::sin(theta);
+      surf_area += weights[kk]*rad*std::sqrt(rp*rp + rt*rt*st*st + rad*rad*st*st);
+    }
+    theta = -nodes[kk]*(MY_PI/2.0)+(MY_PI/2.0);
+    for (int ll = 1; ll <= L+1; ll++) {
+      phi = MY_2PI * double(ll - 1) / (double(L + 1));
+      rad = get_shape_radius_and_gradients(0, theta, phi, rp, rt);
+      st = std::sin(theta);
+      surf_area += weights[kk]*rad*std::sqrt(rp*rp + rt*rt*st*st + rad*rad*st*st);
+    }
+  } // kk (quadrature)
+  fac = (MY_PI*MY_PI/double(L+1));
+  surf_area*=fac;
+  std::cout << std::setprecision(std::numeric_limits<double>::digits10) << std::endl;
+  std::cout<<surf_area<<std::endl;
+
+}
+
+void AtomVecSpherharmUnitTests::spher_cap_volumetest(int num_pole_quad, double iang){
+
+  int kk, ll, n;
+  int ishtype=0;
+  double cosang, fac;
+  double theta_pole, phi_pole;
+  double rad_body;
+  double dv;
+  double inorm_bf[3];
+  long double vol_sum=0.0l;
+  double vol_overlap;
+
+  double delvec[3], wall_normal[3], line_normal[3], ix_sf[3];
+  double numer, denom, rad_wall;
+  delvec[0]=delvec[1]=0.0;
+  delvec[2]=maxrad_byshape[0]*std::cos(iang);
+  MathExtra::normalize3(delvec, wall_normal); // surface point to unit vector
+  numer = MathExtra::dot3(delvec, wall_normal);
+
+  double abscissa[num_pole_quad];
+  double weights[num_pole_quad];
+  QuadPair p;
+  // Get the quadrature weights, and abscissa. Convert abscissa to theta angles
+  for (int i = 0; i < num_pole_quad; i++) {
+    p = GLPair(num_pole_quad, i + 1);
+    weights[i] = p.weight;
+    abscissa[i] = p.x();
+  }
+
+  n = 2*(num_pole_quad-1);
+  cosang = std::cos(iang);
+  fac = ((1.0-cosang)/2.0)*(MY_2PI/double(n+1));
+
+  for (kk = num_pole_quad-1; kk >= 0; kk--) {
+    theta_pole = std::acos((abscissa[kk]*((1.0-cosang)/2.0)) + ((1.0+cosang)/2.0));
+    for (ll = 1; ll <= n+1; ll++) {
+      phi_pole = MY_2PI * double(ll-1) / (double(n + 1));
+
+      // Get the radius at the body frame theta and phi value and normal [not unit]
+      rad_body = get_shape_radius_and_normal(ishtype, theta_pole, phi_pole, inorm_bf); // inorm is in body frame
+
+      ix_sf[0] = (rad_body * sin(theta_pole) * cos(phi_pole));
+      ix_sf[1] = (rad_body * sin(theta_pole) * sin(phi_pole));
+      ix_sf[2] = (rad_body * cos(theta_pole));
+      MathExtra::normalize3(ix_sf, line_normal);
+      denom = MathExtra::dot3(line_normal, wall_normal);
+      rad_wall = numer/denom;
+
+      if (rad_body>rad_wall) {
+        dv = weights[kk] * (std::pow(rad_body, 3)-std::pow(rad_wall, 3));
+        vol_sum += (long double) dv;
+      }
+
+    } // ll (quadrature)
+  } // kk (quadrature)
+  vol_overlap = (double) vol_sum;
+  vol_overlap*=fac/3.0;
+
+  double vol_ana;
+  vol_ana = (MY_PI/3.0)*std::pow(maxrad_byshape[0],3)*(2.0+cosang)*(1.0-cosang)*(1.0-cosang);
+
+  std::cout.precision(std::numeric_limits<double>::digits10);
+  std::cout << iang << " " << num_pole_quad << " " << vol_overlap << " " << vol_ana << std::endl;
+}
+
+double AtomVecSpherharmUnitTests::back_calc_coeff(int l, int m, int num_pole_quad){
+
+  int kk, ll, n;
+  double fac, theta_pole, phi_pole;
+  double rad_body, anm, inorm_bf[3];
+  int ishtype=0;
+  long double anm_real = 0.0l;
+  long double anm_img = 0.0l;
+
+  double abscissa[num_pole_quad];
+  double weights[num_pole_quad];
+  QuadPair p;
+  // Get the quadrature weights, and abscissa. Convert abscissa to theta angles
+  for (int i = 0; i < num_pole_quad; i++) {
+    p = GLPair(num_pole_quad, i + 1);
+    weights[i] = p.weight;
+    abscissa[i] = p.x();
+  }
+
+  n = 2*(num_pole_quad-1);
+  fac = (MY_2PI/double(n+1));
+
+  for (kk = num_pole_quad-1; kk >= 0; kk--) {
+    theta_pole = std::acos(abscissa[kk]);
+    for (ll = 1; ll <= n+1; ll++) {
+      phi_pole = MY_2PI * double(ll-1) / (double(n + 1));
+
+      // Get the radius at the body frame theta and phi value and normal [not unit]
+      rad_body = get_shape_radius_and_normal(ishtype, theta_pole, phi_pole, inorm_bf); // inorm is in body frame
+
+      anm = weights[kk] * rad_body * plegendre(l, m, std::cos(theta_pole));
+      anm_real += anm*std::cos((double)m * phi_pole);
+      anm_img -= anm*std::sin((double)m * phi_pole);
+    } // ll (quadrature)
+  } // kk (quadrature)
+
+  double anm_r, anm_i;
+  anm_r=fac*(double)anm_real;
+  anm_i=fac*(double)anm_img;
+  std::cout.precision(std::numeric_limits<double>::digits10);
+  int nloc = (l * (l + 1))+(l-m)*2;
+  //std::cout << "n=" << l << " m=" << m << " quad= " << num_pole_quad<<std::endl;
+  //std::cout << shcoeffs_byshape[ishtype][nloc] << " " << anm_r << std::endl;
+  //std::cout << shcoeffs_byshape[ishtype][nloc+1] << " " << anm_i << std::endl;
+
+  return anm_r;
+}
+
+void AtomVecSpherharmUnitTests::boost_test() {
+
+  using namespace boost::math::quadrature;
+  using boost::multiprecision::cpp_bin_float_quad;
+  auto f2 = [](const cpp_bin_float_quad &t) { return t * t * atan(t); };
+  cpp_bin_float_quad Q2 = gauss<cpp_bin_float_quad, 20>::integrate(f2, 0, 1);
+
+  std::cout << std::setprecision(std::numeric_limits<boost::multiprecision::cpp_bin_float_quad>::digits10) << std::endl;
+  std::cout << Q2 << std::endl;
 }

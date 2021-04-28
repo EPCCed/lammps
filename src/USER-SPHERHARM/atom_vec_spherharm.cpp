@@ -29,9 +29,13 @@
 #include "math_eigen.h"
 #include "math_spherharm.h"
 
+#include <boost/math/special_functions/spherical_harmonic.hpp>
+
 using namespace LAMMPS_NS;
 using namespace MathConst;
 using namespace MathSpherharm;
+
+#define EPSILON 1e-10
 /* ---------------------------------------------------------------------- */
 
 AtomVecSpherharm::AtomVecSpherharm(LAMMPS *lmp) : AtomVec(lmp)
@@ -255,8 +259,6 @@ void AtomVecSpherharm::getI() {
   double ey[3];
   double ez[3];
 
-  static const double EPSILON   = 1.0e-7;
-
   for (int sht = 0; sht < nshtypes; sht++) {
 
     itensor.clear();
@@ -392,8 +394,7 @@ void AtomVecSpherharm::getI() {
       std::cout << std::endl;
       std::cout << "Initial Quaternion (Defined by Iniertia)" << std::endl;
       std::cout << quatinit_byshape[sht][0] << " " << quatinit_byshape[sht][1] << " "
-                << quatinit_byshape[sht][2] << " " << quatinit_byshape[sht][3] << " " << quatinit_byshape[sht][4]
-                << std::endl;
+                << quatinit_byshape[sht][2] << " " << quatinit_byshape[sht][3] << std::endl;
 
       MathExtra::q_to_exyz(quatinit_byshape[sht], ex, ey, ez);
       std::cout << std::endl;
@@ -850,8 +851,8 @@ double AtomVecSpherharm::get_shape_radius_and_normal(int sht, double theta, doub
   Pnm_m2.resize(maxshexpan+1, 0.0);
   Pnm_m1.resize(maxshexpan+1, 0.0);
 
-  if (sin(theta) == 0.0) theta += 1.0e-5; // otherwise dividing by sin(theta) for gradients will not work
-  if (sin(phi) == 0.0) phi += 1.0e-5; // To be consistent...
+  if (sin(theta) == 0.0) theta += EPSILON; // otherwise dividing by sin(theta) for gradients will not work
+  if (sin(phi) == 0.0) phi += EPSILON; // To be consistent...
   x_val = std::cos(theta);
   st = std::sin(theta);
 
@@ -953,6 +954,218 @@ double AtomVecSpherharm::get_shape_radius_and_normal(int sht, double theta, doub
   return rad_val;
 }
 
+double AtomVecSpherharm::get_shape_radius_compensated_boost(int sht, double theta, double phi) {
+
+  int n, loc;
+  double Y_n_m, fnm;
+  std::complex<double> Y_n_m_comp;
+  fnm = std::sqrt(1.0 / MY_4PI);
+  double rad_val = shcoeffs_byshape[sht][0] * fnm;
+  if (sin(theta) == 0.0) theta += EPSILON; // otherwise dividing by sin(theta) for gradients will not work
+  if (sin(phi) == 0.0) phi += EPSILON; // To be consistent...
+
+  double ksum, c, y, t;
+  c = 0.0;
+  ksum = rad_val;
+
+  for (n=1; n<=maxshexpan; n++){
+
+    // n=1
+    if (n == 1) {
+      // n=1, m=0
+      Y_n_m = boost::math::spherical_harmonic_r(1, 0, theta, phi);
+      rad_val = shcoeffs_byshape[sht][4] * Y_n_m;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+      // n=1, m=1
+      Y_n_m_comp = boost::math::spherical_harmonic(1, 1, theta, phi);
+      rad_val = (shcoeffs_byshape[sht][2] * Y_n_m_comp.real() - shcoeffs_byshape[sht][3] * Y_n_m_comp.imag()) * 2.0;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+
+
+      // 1 <= n > n-1
+    } else {
+      Y_n_m = boost::math::spherical_harmonic_r(n, 0, theta, phi);
+      loc = (n + 1) * (n + 2) - 2;
+      rad_val = shcoeffs_byshape[sht][loc] * Y_n_m;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+      loc -= 2;
+      for (int m = 1; m <= n; m++) {
+        Y_n_m_comp = boost::math::spherical_harmonic(n, m, theta, phi);
+        rad_val = (shcoeffs_byshape[sht][loc] * Y_n_m_comp.real() - shcoeffs_byshape[sht][loc + 1] * Y_n_m_comp.imag()) * 2.0;
+        y = rad_val - c;
+        t = ksum + y;
+        c = (t - ksum) -y;
+        ksum = t;
+        loc -= 2;
+      }
+    }
+  }
+  return ksum;
+}
+
+
+double AtomVecSpherharm::get_shape_radius_and_normal_compensated(int sht, double theta, double phi, double rnorm[3]) {
+
+  int n, nloc, loc;
+  double P_n_m, x_val, mphi, Pnm_nn, fnm, st;
+  std::vector<double> Pnm_m2, Pnm_m1;
+
+  fnm = std::sqrt(1.0 / MY_4PI);
+  double rad_val = shcoeffs_byshape[sht][0] * fnm;
+  double rad_dphi, rad_dtheta;
+  rad_dphi = rad_dtheta = 0.0;
+
+  Pnm_m2.resize(maxshexpan+1, 0.0);
+  Pnm_m1.resize(maxshexpan+1, 0.0);
+
+  if (sin(theta) == 0.0) theta += EPSILON; // otherwise dividing by sin(theta) for gradients will not work
+  if (sin(phi) == 0.0) phi += EPSILON; // To be consistent...
+  x_val = std::cos(theta);
+  st = std::sin(theta);
+
+  double ksum, c, y, t;
+  c = 0.0;
+  ksum = rad_val;
+
+  for (n=1; n<=maxshexpan; n++){
+    nloc = n * (n + 1);
+
+    // n=1
+    if (n == 1) {
+      // n=1, m=0
+      P_n_m = plegendre(1, 0, x_val);
+      Pnm_m2[0] = P_n_m;
+      rad_val = shcoeffs_byshape[sht][4] * P_n_m;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+      fnm = std::sqrt(3.0 / MY_4PI);
+      rad_dtheta -= (shcoeffs_byshape[sht][4]*fnm/st)*((2.0*x_val*plgndr(1,0,x_val))-(2.0*plgndr(2, 0, x_val)));
+      // n=1, m=1
+      P_n_m = plegendre(1, 1, x_val);
+      Pnm_m2[1] = P_n_m;
+      mphi = 1.0 * phi;
+      rad_val = (shcoeffs_byshape[sht][2] * cos(mphi) - shcoeffs_byshape[sht][3] * sin(mphi)) * 2.0 * P_n_m;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+      rad_dphi -= (shcoeffs_byshape[sht][2] * sin(mphi) + shcoeffs_byshape[sht][3] * cos(mphi)) * 2.0 * P_n_m;
+      fnm = std::sqrt(3.0 / (2.0 * MY_4PI));
+      rad_dtheta += 2.0*(fnm/st)*((2.0*x_val*plgndr(1,1,x_val))-(plgndr(2, 1, x_val)))*
+                    ((shcoeffs_byshape[sht][3]*sin(mphi))-(shcoeffs_byshape[sht][2] * cos(mphi))) ;
+      // n = 2
+    } else if (n == 2) {
+      // n=2, m=0
+      P_n_m = plegendre(2, 0, x_val);
+      Pnm_m1[0] = P_n_m;
+      rad_val = shcoeffs_byshape[sht][10] * P_n_m;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+      fnm = std::sqrt(5.0 / MY_4PI);
+      rad_dtheta -= (shcoeffs_byshape[sht][10]*fnm / st)*((3.0*x_val*plgndr(2,0,x_val))-(3.0*plgndr(3, 0, x_val)));
+      // n=2 2>=m>0
+      for (int m = 2; m >= 1; m--) {
+        P_n_m = plegendre(2, m, x_val);
+        Pnm_m1[m] = P_n_m;
+        mphi = (double) m * phi;
+        rad_val = (shcoeffs_byshape[sht][nloc] * cos(mphi) - shcoeffs_byshape[sht][nloc + 1] * sin(mphi)) * 2.0 * P_n_m;
+        y = rad_val - c;
+        t = ksum + y;
+        c = (t - ksum) -y;
+        ksum = t;
+        rad_dphi -= (shcoeffs_byshape[sht][nloc] * sin(mphi) + shcoeffs_byshape[sht][nloc + 1] * cos(mphi)) * 2.0 * P_n_m * (double) m;
+        fnm = std::sqrt((2.0*double(n)+1.0)*factorial(n-m)/(MY_4PI*factorial(n+m)));
+        rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,m,x_val))-(double(n-m+1)*plgndr(n+1, m, x_val)))*
+                      ((shcoeffs_byshape[sht][nloc+1]*sin(mphi))-(shcoeffs_byshape[sht][nloc] * cos(mphi)));
+        nloc += 2;
+      }
+      Pnm_nn = Pnm_m1[2];
+
+      // 2 < n > n-1
+    } else {
+      P_n_m = plegendre_recycle(n, 0, x_val, Pnm_m1[0], Pnm_m2[0]);
+      Pnm_m2[0] = Pnm_m1[0];
+      Pnm_m1[0] = P_n_m;
+      loc = (n + 1) * (n + 2) - 2;
+      rad_val = shcoeffs_byshape[sht][loc] * P_n_m;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI));
+      rad_dtheta -= (shcoeffs_byshape[sht][loc]*fnm / st)*
+                    ((double(n+1)*x_val*plgndr(n,0,x_val))-(double(n+1)*plgndr(n+1, 0, x_val)));
+
+      loc -= 2;
+      for (int m = 1; m < n - 1; m++) {
+        P_n_m = plegendre_recycle(n, m, x_val, Pnm_m1[m], Pnm_m2[m]);
+        Pnm_m2[m] = Pnm_m1[m];
+        Pnm_m1[m] = P_n_m;
+        mphi = (double) m * phi;
+        rad_val = (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+        y = rad_val - c;
+        t = ksum + y;
+        c = (t - ksum) -y;
+        ksum = t;
+        rad_dphi -= (shcoeffs_byshape[sht][loc] * sin(mphi) + shcoeffs_byshape[sht][loc + 1] * cos(mphi)) * 2.0 * P_n_m * (double) m;
+        fnm = std::sqrt((2.0*double(n)+1.0)*factorial(n-m)/(MY_4PI*factorial(n+m)));
+        rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,m,x_val))-(double(n-m+1)*plgndr(n+1, m, x_val)))*
+                      ((shcoeffs_byshape[sht][loc+1]*sin(mphi))-(shcoeffs_byshape[sht][loc] * cos(mphi)));
+        loc -= 2;
+      }
+
+      // m = n-1
+      P_n_m = x_val * std::sqrt((2.0 * ((double) n - 1.0)) + 3.0) * Pnm_nn;
+      Pnm_m2[n - 1] = Pnm_m1[n - 1];
+      Pnm_m1[n - 1] = P_n_m;
+      mphi = (double) (n - 1) * phi;
+      rad_val = (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+      rad_dphi -= (shcoeffs_byshape[sht][loc] * sin(mphi) + shcoeffs_byshape[sht][loc + 1] * cos(mphi)) * 2.0 * P_n_m * (double) (n-1);
+      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI*factorial(2*n-1)));
+      rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,n-1,x_val))-(2.0*plgndr(n+1, n-1, x_val)))*
+                    ((shcoeffs_byshape[sht][loc+1]*sin(mphi))-(shcoeffs_byshape[sht][loc] * cos(mphi)));
+      loc -= 2;
+
+      // m = n
+      P_n_m = plegendre_nn(n, x_val, Pnm_nn);
+      Pnm_nn = P_n_m;
+      Pnm_m1[n] = P_n_m;
+      mphi = (double) n * phi;
+      rad_val = (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+      rad_dphi -= (shcoeffs_byshape[sht][loc] * sin(mphi) + shcoeffs_byshape[sht][loc + 1] * cos(mphi)) * 2.0 * P_n_m * (double) n;
+      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI*factorial(2*n)));
+      rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,n,x_val))-(plgndr(n+1, n, x_val)))*
+                    ((shcoeffs_byshape[sht][loc+1]*sin(mphi))-(shcoeffs_byshape[sht][loc] * cos(mphi)));
+    }
+  }
+
+//  std::cout << "theta " << theta << " phi " << phi << " drdt " << rad_dtheta << " drdp " << rad_dphi << std::endl;
+  get_normal(theta, phi, ksum, rad_dphi, rad_dtheta, rnorm);
+
+  return ksum;
+}
+
 double AtomVecSpherharm::get_shape_radius_and_normal(double theta, double phi, double rnorm[3], const double *coeffs) {
 
   int n, nloc, loc;
@@ -967,8 +1180,8 @@ double AtomVecSpherharm::get_shape_radius_and_normal(double theta, double phi, d
   Pnm_m2.resize(maxshexpan+1, 0.0);
   Pnm_m1.resize(maxshexpan+1, 0.0);
 
-  if (sin(theta) == 0.0) theta += 1.0e-5; // otherwise dividing by sin(theta) for gradients will not work
-  if (sin(phi) == 0.0) phi += 1.0e-5; // To be consistent...
+  if (sin(theta) == 0.0) theta += EPSILON; // otherwise dividing by sin(theta) for gradients will not work
+  if (sin(phi) == 0.0) phi += EPSILON; // To be consistent...
   x_val = std::cos(theta);
   st = std::sin(theta);
 
@@ -1089,8 +1302,8 @@ double AtomVecSpherharm::get_shape_radius_and_gradients(int sht, double theta, d
   Pnm_m2.resize(maxshexpan+1, 0.0);
   Pnm_m1.resize(maxshexpan+1, 0.0);
 
-  if (sin(theta) == 0.0) theta += 1.0e-5; // otherwise dividing by sin(theta) for gradients will not work
-  if (sin(phi) == 0.0) phi += 1.0e-5; // To be consistent...
+  if (sin(theta) == 0.0) theta += EPSILON; // otherwise dividing by sin(theta) for gradients will not work
+  if (sin(phi) == 0.0) phi += EPSILON; // To be consistent...
   x_val = std::cos(theta);
   st = std::sin(theta);
 
@@ -1401,11 +1614,11 @@ void AtomVecSpherharm::doRotate(int sht, double *coeffin, double *coeffout, doub
   cosbeta = cos(beta/2.0);
   sinbeta = sin(beta/2.0);
   if (cosbeta == 0.0) {
-    beta += 1.0e-10;
+    beta += EPSILON;
     cosbeta = cos(beta/2.0);
   }
   if (sinbeta == 0.0) {
-    beta += 1.0e-10;
+    beta += EPSILON;
     sinbeta = sin(beta/2.0);
   }
 

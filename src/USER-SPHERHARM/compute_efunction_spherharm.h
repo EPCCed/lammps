@@ -35,6 +35,7 @@ class ComputeEFunctionSpherharm : public Compute {
   double pfactor;
   double dw_back;
   double dw_back_nextstep;
+  long double workstore;
 };
 
 }

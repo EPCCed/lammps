@@ -46,6 +46,13 @@ class AtomVecSpherharmUnitTests : public AtomVecSpherharm {
   void dump_shapenormals();
   void compare_areas();
   void validate_rotation();
+  void spher_sector_volumetest(int num_pole_quad, double iang);
+  void spher_cap_volumetest(int num_pole_quad, double iang);
+  double back_calc_coeff(int n, int m, int num_pole_quad);
+  void boost_test();
+  void volumetest_boost_test();
+  void surfacearea_boost_test();
+  void surfarea_int_tests(int num_pole_quad, double iang);
 };
 
 }

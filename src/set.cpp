@@ -1043,6 +1043,7 @@ void Set::set(int keyword)
       MathExtra::qconjugate(quatinit[ishtype],quat_bar);
       MathExtra::quatquat(quat_foo, quat_bar, quat);
       MathExtra::qnormalize(quat);
+      std::cout << quat[0] << " "<< quat[1] << " "<< quat[2] << " "<< quat[3] << std::endl;
     }
 
     count++;
