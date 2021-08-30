@@ -21,7 +21,7 @@
 namespace MathSpherharm {
 
   // Inline methods
-  inline void quat_to_spherical(double m[4], double &theta, double &phi);
+  inline void quat_to_spherical(double q[4], double &theta, double &phi);
   inline void spherical_to_quat(double theta, double phi, double q[4]);
   inline int quat_to_euler(double q[4], double &alpha, double &beta, double &gamma, const std::string& seq = "ZYX");
   inline int quat_to_euler_test(double q[4], double &alpha, double &beta, double &gamma, const std::string& seq = "ZXZ");
@@ -60,6 +60,22 @@ namespace MathSpherharm {
   // For calculating factorials, borrowed from compute_orientorder_atom.cpp
   double factorial(int);
 
+  // Finding the intersections with a ray defined by origin and normal with a sphere, plane and cylinder
+  int line_sphere_intersection(double rad, double circcentre[3], double linenorm[3], double lineorigin[3],
+                               double &sol1, double &sol2);
+  int line_plane_intersection(double (&p0)[3], double (&l0)[3], double (&l)[3], double (&n)[3], double &sol);
+  int line_cylinder_intersection(const double xi[3], const double (&unit_line_normal)[3], double &t1,
+          double &t2, double cylradius);
+
+  // Contact point between bounding sphere and plane or cylinder
+  int get_contact_point_plane(double rada, double xi[3], double (&linenorm)[3],
+                               double (&lineorigin)[3], double (&p0)[3],
+                               double (&cp)[3]);
+  int get_contact_point_cylinder(double rada, double xi[3], double (&linenorm)[3],
+                                  double(&lineorigin)[3], double (&cp)[3], double cylradius, bool inside);
+
+  void get_contact_quat(double (&xvecdist)[3], double (&quat)[4]);
+  double get_sphere_overlap_volume(double r1, double r2, double d);
 }
 
 /* ----------------------------------------------------------------------
@@ -205,7 +221,6 @@ inline int MathSpherharm::quat_to_euler_test(double q[4], double &alpha, double 
   }
   return 1;
 }
-
 
 /* ----------------------------------------------------------------------
   Convert spherical theta, phi values into a quaternion

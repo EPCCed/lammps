@@ -53,6 +53,8 @@ class AtomVecSpherharmUnitTests : public AtomVecSpherharm {
   void volumetest_boost_test();
   void surfacearea_boost_test();
   void surfarea_int_tests(int num_pole_quad, double iang);
+  void sphere_line_intersec_tests();
+  void print_normals();
 };
 
 }

@@ -29,8 +29,8 @@ set		atom 1 sh/shape 1
 set		group all sh/quat/random 4
 
 fix		time_fix all nve/sh
-fix     xwall all wall/spherharm 2.0e-11 2.0 xplane NULL 115.0
-#fix     xwall all wall/spherharm 2.0e-11 2.0 xplane NULL 66.6556
+fix     xwall all wall/spherharm 2.0e-11 2.0 NULL xplane NULL 115.0
+#fix     xwall all wall/spherharm 2.0e-11 2.0 NULL xplane NULL 66.6556
 
 neigh_modify	delay 0 every 1 check yes
 comm_modify	vel yes
@@ -43,7 +43,7 @@ compute PEcalc all efunction/spherharm
 variable ETotal equal "c_PEcalc + c_TransKE + c_RotKE"
 thermo_style custom step c_PEcalc c_TransKE c_RotKE v_ETotal
 
-timestep	3.0e-3
+timestep	1.0e-1
 
 run	200000
 #run	1

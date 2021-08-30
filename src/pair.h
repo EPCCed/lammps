@@ -143,6 +143,11 @@ class Pair : protected Pointers {
                 double *, double *, double *);
   void ev_tally_xyz(int, int, int, int, double, double,
                     double, double, double, double, double, double);
+  void ev_tally_spherharm_sphere(int, int, int, int,
+                          double, double, double,
+                          double, double, double, double,
+                          double, double, double, double,
+                          double, double) const;
 
   // general child-class methods
 

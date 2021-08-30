@@ -817,7 +817,7 @@ void Pair::ev_setup(int eflag, int vflag, int alloc)
 
   evflag = eflag_either || vflag_either;
   if (!evflag) return;
-  
+
   // reallocate per-atom arrays if necessary
 
   if (eflag_atom && atom->nmax > maxeatom) {
@@ -1386,6 +1386,80 @@ void Pair::ev_tally_tip4p(int key, int *list, double *v,
           vatom[list[4]][i] += 0.25*v[i]*alpha;
           vatom[list[5]][i] += 0.25*v[i]*alpha;
         }
+      }
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+   Calculates the stress tensor for each grain - see Potyondy and
+   Cundall (2004) for details of the formula used. Called by spherical
+   harmonic pairs
+------------------------------------------------------------------------- */
+void Pair::ev_tally_spherharm_sphere(int i, int j, int nlocal, int newton_pair,
+                         double fx, double fy, double fz,
+                         double xi, double yi, double zi, double voli,
+                         double xj, double yj, double zj, double volj,
+                         double radi, double radj) const
+{
+
+  double nx, ny, nz;
+  double dist;
+  double cx, cy, cz;
+
+  //distance between the center i and j
+  dist = sqrt((xj-xi)*(xj-xi)+(yj-yi)*(yj-yi)+(zj-zi)*(zj-zi));
+  //normal to the contact plane
+  nx = (xj-xi) / dist;
+  ny = (yj-yi) / dist;
+  nz = (zj-zi) / dist;
+  //coordinates of the contact
+  cx = xi + (radi- 0.5 * (radi + radj - dist)) * nx;
+  cy = yi + (radi- 0.5 * (radi + radj - dist)) * ny;
+  cz = zi + (radi- 0.5 * (radi + radj - dist)) * nz;
+
+  //calculate stresses and assign it to vatom array
+
+  if (vflag_either)
+  {
+    if (vflag_atom) {
+      if (newton_pair || i < nlocal)
+      {
+
+        // todo - Kevin had a dimension check here where he set the volume accordingly
+
+        vatom[i][0] -= cx * fx / voli;
+        vatom[i][1] -= cy * fy / voli;
+        vatom[i][2] -= cz * fz / voli;
+        vatom[i][3] -= cx * fy / voli;
+        vatom[i][4] -= cx * fz / voli;
+        vatom[i][5] -= cy * fz / voli;
+
+//        vatom[i][0] += (cx-xi) * fx / voli;
+//        vatom[i][1] += (cy-yi) * fy / voli;
+//        vatom[i][2] += (cz-zi) * fz / voli;
+//        vatom[i][3] += (cx-xi) * fy / voli;
+//        vatom[i][4] += (cx-xi) * fz / voli;
+//        vatom[i][5] += (cy-yi) * fz / voli;
+      }
+      if (newton_pair || j < nlocal)
+      {
+
+        // todo - Kevin had a dimension check here where he set the volume accordingly
+
+        vatom[j][0] += cx * fx / volj;
+        vatom[j][1] += cy * fy / volj;
+        vatom[j][2] += cz * fz / volj;
+        vatom[j][3] += cx * fy / volj;
+        vatom[j][4] += cx * fz / volj;
+        vatom[j][5] += cy * fz / volj;
+
+//        vatom[j][0] -= (cx-xj) * fx / volj;
+//        vatom[j][1] -= (cy-yj) * fy / volj;
+//        vatom[j][2] -= (cz-zj) * fz / volj;
+//        vatom[j][3] -= (cx-xj) * fy / volj;
+//        vatom[j][4] -= (cx-xj) * fz / volj;
+//        vatom[j][5] -= (cy-yj) * fz / volj;
       }
     }
   }

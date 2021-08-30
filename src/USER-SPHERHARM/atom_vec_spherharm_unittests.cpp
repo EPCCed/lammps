@@ -35,6 +35,7 @@
 #include <boost/concept_check.hpp>
 #include <complex>
 
+
 using namespace LAMMPS_NS;
 using namespace MathConst;
 using namespace MathSpherharm;
@@ -73,7 +74,7 @@ void AtomVecSpherharmUnitTests::process_args(int narg, char **arg) {
 //  get_cog();
 //  dump_ply();
 //  dump_shapenormals();
-//  compare_areas();
+  compare_areas();
 // validate_rotation();
 //  for (int i=1; i<=100; i++) {
 //    spher_sector_volumetest(i, MY_PI);
@@ -107,8 +108,11 @@ void AtomVecSpherharmUnitTests::process_args(int narg, char **arg) {
   //volumetest_boost_test();
   //surfacearea_boost_test();
   //for (int i=1; i<=250; i++) {
-    surfarea_int_tests(250, MY_PI);
+  //  surfarea_int_tests(250, MY_PI);
   //}
+//  sphere_line_intersec_tests();
+ // print_normals();
+//  cgaltest(narg, arg);
 }
 
 void AtomVecSpherharmUnitTests::get_shape(int i, double &shapex, double &shapey, double &shapez)
@@ -443,7 +447,8 @@ void AtomVecSpherharmUnitTests::compare_areas() {
   int sht, trap_L;
 
   sht = 0;
-  iang = 4.0*MY_PI/5.0;
+//  iang = 4.0*MY_PI/5.0;
+  iang = MY_PI;
   trap_L = 2*(num_quadrature-1);
   factor = (MY_PI*iang/((double(trap_L)+1.0)));
 
@@ -1306,4 +1311,74 @@ void AtomVecSpherharmUnitTests::boost_test() {
 
   std::cout << std::setprecision(std::numeric_limits<boost::multiprecision::cpp_bin_float_quad>::digits10) << std::endl;
   std::cout << Q2 << std::endl;
+}
+
+void AtomVecSpherharmUnitTests::sphere_line_intersec_tests() {
+
+  int num_ints;
+  double rad, sol1, sol2;
+  double circcentre[3], linenorm[3], lineorigin[3];
+  std::vector<double> vec;
+
+  rad = 10.0;
+  circcentre[0] = 5.0;
+  circcentre[1] = 5.0;
+  circcentre[2] = 5.0;
+  lineorigin[0] = 5.0;
+  lineorigin[1] = 5.0;
+  lineorigin[2] = 5.0;
+  linenorm[0] = 0.7;
+  linenorm[1] = 0.3;
+  linenorm[2] = 0.2;
+  MathExtra::norm3(linenorm);
+
+  num_ints = MathSpherharm::line_sphere_intersection(rad, circcentre, linenorm, lineorigin, sol1, sol2);
+
+  std::cout << "Number of intersections : " << num_ints << std::endl;
+  std::cout << "Intersection 1 : " << sol1 << std::endl;
+  std::cout << "Intersection 2 : " << sol2 << std::endl;
+
+  vec.push_back(sol1);
+  vec.push_back(sol2);
+
+  circcentre[0] = -4.0;
+  circcentre[1] = -4.0;
+  circcentre[2] = -4.0;
+  num_ints = MathSpherharm::line_sphere_intersection(rad, circcentre, linenorm, lineorigin, sol1, sol2);
+  vec.push_back(sol1);
+  vec.push_back(sol2);
+
+  std::cout << "Number of intersections : " << num_ints << std::endl;
+  std::cout << "Intersection 1 : " << sol1 << std::endl;
+  std::cout << "Intersection 2 : " << sol2 << std::endl;
+
+  sort( vec.begin(), vec.end() );
+  for (double it : vec) {
+    std::cout << it << " ";
+  }
+  std::cout<<std::endl;
+
+  std::cout << vec[1] << " " << vec[2] << std::endl;
+}
+
+void AtomVecSpherharmUnitTests::print_normals() {
+
+  double rad, norm[3];
+  int num_angs = 20;
+  double ang_res = MY_PI / double(num_angs);
+  double theta = MY_PI/100.0;
+  double phi;
+
+  while (theta<0.99*MY_PI){
+    phi = MY_PI/100.0;
+    while (phi<1.99*MY_PI){
+      rad = get_shape_radius_and_normal(0, theta, phi, norm);
+      MathExtra::norm3(norm);
+      std::cout << theta << " "<< phi << " " << rad << " " << norm[0] << " " << norm[1] << " " << norm[2] << " " <<
+      std::endl;
+      phi += ang_res;
+    }
+    theta += ang_res;
+  }
+
 }

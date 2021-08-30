@@ -69,12 +69,12 @@ void FixNVESh::initial_integrate(int /*vflag*/)
   double **f = atom->f;
   double **angmom = atom->angmom;
   double **torque = atom->torque;
-  double *mass = atom->mass;
+  double *mass = atom->rmass;
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
   if (igroup == atom->firstgroup) nlocal = atom->nfirst;
   int *shtype = atom->shtype;
-  int *type = atom->type;
+//  int *type = atom->type;
   int itype, ishtype;
 
   // set timestep here since dt may have changed or come via rRESPA
@@ -83,8 +83,10 @@ void FixNVESh::initial_integrate(int /*vflag*/)
 
   for (int i = 0; i < nlocal; i++)
     if (mask[i] & groupbit) {
-      itype = type[i];
-      dtfm = dtf / mass[itype];
+//      itype = type[i];
+//      dtfm = dtf / mass[itype];
+
+      dtfm = dtf / mass[i];
       v[i][0] += dtfm * f[i][0];
       v[i][1] += dtfm * f[i][1];
       v[i][2] += dtfm * f[i][2];
@@ -119,17 +121,19 @@ void FixNVESh::final_integrate()
   double **f = atom->f;
   double **angmom = atom->angmom;
   double **torque = atom->torque;
-  double *mass = atom->mass;
+  double *mass = atom->rmass;
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
   if (igroup == atom->firstgroup) nlocal = atom->nfirst;
-  int *type = atom->type;
+//  int *type = atom->type;
   int itype;
 
   for (int i = 0; i < nlocal; i++)
     if (mask[i] & groupbit) {
-      itype = type[i];
-      dtfm = dtf / mass[itype];
+//      itype = type[i];
+//      dtfm = dtf / mass[itype];
+
+      dtfm = dtf / mass[i];
       v[i][0] += dtfm * f[i][0];
       v[i][1] += dtfm * f[i][1];
       v[i][2] += dtfm * f[i][2];

@@ -40,6 +40,7 @@ class AtomVecSpherharm : public AtomVec {
 
   // Public methods used for contact detection. These are called by the pair_style and ensure that shcoeffs_byshape and
   // expfacts_byshape remain local to the atom style.
+  int get_max_expansion(); // Get the maximum spherical harmonic expansion
   double get_shape_radius(int sht, double theta, double phi); // Get the shape radius given theta and phi
   double get_shape_radius_and_normal(int sht, double theta, double phi, double rnorm[3]); // As above, with unit normal
   double get_shape_radius_and_normal_compensated(int sht, double theta, double phi, double rnorm[3]); // As above, compensated sum
@@ -48,6 +49,8 @@ class AtomVecSpherharm : public AtomVec {
   double get_shape_radius_and_gradients(int sht, double theta, double phi, double &rad_dphi, double &rad_dtheta); // As above, with unit normal
   void get_normal(double theta, double phi, double r, double rp, double rt, double rnorm[3]);
   int check_contact(int, double, double, double, double &); // Check for contact given shape, theta, phi, and distance
+
+  double get_shape_volume(int sht); // Get the shape volume
 
   void get_coefficients(int sht, double *coeff);
   void doRotate(int sht, double *coeffin,  double *coeffout, double alpha, double beta, double gamma);
@@ -59,6 +62,8 @@ protected:
   int *shtype;                 // Links atom to the SH shape type that it uses
   double **angmom;             // Angular momentum
   double **quat;               // Current quat of the atom
+  double *rmass;               // Per-atom mass, read in as density
+  double rmass_one;
 
   // per-shape arrays
   double **shcoeffs_byshape;   // Array of coefficients for each shape
@@ -67,6 +72,7 @@ protected:
   double **expfacts_byshape;   // The expansion factors for each shape, each SH degree has an expansion factor
   double *maxrad_byshape;      // The maximum radius of each shape at the maximum SH degree (maxshexpan)
   double **quad_rads_byshape;  // Radii at each point of guassian quadrature, for each shape (index is [shape][point])
+  double *vol_byshape;         // Volume of each shape
 
   // Gaussian quadrature arrays
   int num_quadrature;         // Order of quadrature used (used defined in input file)

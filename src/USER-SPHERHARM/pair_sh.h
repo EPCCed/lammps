@@ -54,11 +54,20 @@ class PairSH : public Pair {
   int refine_cap_angle(int &kk_count, int ishtype, int jshtype, double iang,  double radj,
                        double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
                        const double xj[3], double (&jrot)[3][3]);
-  void calc_force_torque(int kk_count, int ishtype, int jshtype, double iang, double radi,  double radj,
+  void calc_norm_force_torque(int kk_count, int ishtype, int jshtype, double iang, double radi,  double radj,
                          double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
                          const double xj[3], double (&irot)[3][3],  double (&jrot)[3][3],
                          double &vol_overlap, double (&iforce)[3], double (&torsum)[3],
                          double &factor, bool &first_call, int ii, int jj);
+  void calc_tang_force_torque(double mu, int ishtype, int jshtype, double const (&normforce)[3], double const (&vr)[3],
+                           double const (&omegaa)[3], double const (&omegab)[3], double const (&cp)[3],
+                           double const (&rot_sf_bf_a)[3][3], double const (&rot_sf_bf_b)[3][3],
+                           double (&tforce)[3]);
+  void get_contact_point_bounds(double rada, double radb, double xi[3], double xj[3], double (&linenorm)[3],
+                             double (&lineorigin)[3], double &lambdamin, double &lambdamax);
+  static void sphere_sphere_norm_force_torque(double ri, double rj, double delta, const double x1[3],
+                                       const double x2[3], double (&iforce)[3], double (&torsum)[3],
+                                       double &voloverlap);
 
   double cur_time;
   int file_count;

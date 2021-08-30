@@ -20,7 +20,9 @@ FixStyle(wall/spherharm,FixWallSpherharm)
 #ifndef LMP_FIX_WALL_SPHERHARM_H
 #define LMP_FIX_WALL_SPHERHARM_H
 
+#include <math_extra.h>
 #include "fix.h"
+#include "math_spherharm.h"
 
 namespace LAMMPS_NS {
 
@@ -46,15 +48,12 @@ class FixWallSpherharm : public Fix {
 //  virtual int maxsize_restart();
   void reset_dt();
 
-  void vol_based(double dx, double dy, double dz, double iang, int ishtype,
-                 double *quat, double *x, double *f,
-                 double *torque, double *contact);
-
  protected:
   int wallstyle,wiggle,wshear,axis;
   int pairstyle;
   bigint time_origin;
-  double kn,mexpon;
+  double kn,mexpon,tangcoeff;
+  bool tang;
 
   double lo,hi,cylradius;
   double amplitude,period,omega,vshear;
@@ -63,20 +62,49 @@ class FixWallSpherharm : public Fix {
 
   class AtomVecSpherharm *avec{};
 
+  // Creating a vector of functions, should be C++11 compliant, can't use auto lambdas.
+  // https://stackoverflow.com/questions/30268507/in-c-how-to-choose-to-run-a-specific-member-function-without-using-if-stateme
+  // https://stackoverflow.com/questions/7582546/using-generic-stdfunction-objects-with-member-functions-in-one-class
+  std::vector<std::function<int(const double[3], const double(&)[3], const double(&)[3], double &, const double)>>
+  wall_fns =
+  {[this](const double ix[3], const double (&wall_normal)[3], const double (&unit_line_normal)[3],
+          double &rad, const double numer)-> int{
+      double denom;
+      denom = MathExtra::dot3(unit_line_normal, wall_normal);
+      if (denom==0.0) return 1; // wall and line normal are parallel
+      rad = numer/denom;
+      return 0;
+  },
+   [this](const double ix[3], const double (&wall_normal)[3], const double (&unit_line_normal)[3],
+          double &rad, const double numer)-> int{
+       double t1, t2;
+       int not_ok;
+       not_ok = MathSpherharm::line_cylinder_intersection(ix, unit_line_normal,t1,t2, cylradius);
+       rad = t1*t2 > 0.0 ? std::min(t1,t2) : std::max(t1,t2);
+       return(not_ok);
+   }
+  };
+
   // store particle interactions
-
   void clear_stored_contacts();
-
   void get_quadrature_values(int num_quadrature);
-  void get_contact_quat(double (&xvecdist)[3], double (&quat)[4]);
+  void vol_based(double dx, double dy, double dz, double iang, int ishtype,
+                 double *quat, double *x, double *f,
+                 double *torque, double *v, double *omega, double *contact, double *maxrad, double (&vwall)[3]);
   int refine_cap_angle_plane(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
                        double (&iquat_sf_bf)[4], const double xi[3], const double delvec[3]);
   int refine_cap_angle_cylinder(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
                              double (&iquat_sf_bf)[4], const double xi[3], const double delvec[3]);
-  void calc_force_torque(int kk_count, int ishtype, double iang,
-                         double (&iquat_cont)[4], double (&iquat_sf_bf)[4],
-                         const double xi[3], double (&irot)[3][3], double &vol_overlap,
-                         double (&iforce)[3], double (&torsum)[3], double delvec[3]);
+  void calc_velCoulomb_force_torque(int ishtype, double const (&normforce)[3],
+                                    double const (&vr)[3], const double *omegaa,
+                                    double const (&cp)[3], double const xi[3], double (&iquat_sf_bf)[4],
+                                    double (&tforce)[3], double (&ttorque)[3]);
+  void calc_force_torque(int wall_type, int ishtype, double iang, double (&iquat_cont)[4],
+                          double (&iquat_sf_bf)[4], const double xi[3], double (&irot)[3][3],
+                          double &vol_overlap, double (&iforce)[3], double (&torsum)[3],
+                          double delvec[3]);
+
+
   // Gaussian quadrature arrays
   double *abscissa{};          // Abscissa of gaussian quadrature (same for all shapes)
   double *weights{};           // Weights of gaussian quadrature (same for all shapes)

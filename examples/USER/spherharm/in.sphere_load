@@ -1,0 +1,37 @@
+###############################################
+# Initialisation
+###############################################
+units           cgs # This means m, kg, s for base units.
+boundary        p p p
+atom_style      sphere
+#atom-ID atom-type diameter density x y z
+dimension       3
+newton          off
+
+
+###############################################
+# Geometry-related parameters
+###############################################
+
+variable	boxx equal 10
+variable	boxy equal 10
+variable	boxz equal 10
+
+
+###############################################
+# Particle-related parameters
+###############################################
+read_data       /home/james/lammps/examples/USER/spherharm/input_points.dat
+
+neighbor	0.15 bin
+neigh_modify	delay 0 every 1 check yes
+comm_modify	vel yes
+
+fix     mesh all particle_meshs 1.0
+
+pair_style	granular 
+pair_coeff	1 * hertz/material 1e5 0.2 0.3 tangential mindlin NULL 1.0 0.5 damping tsuji
+
+timestep	0.005
+
+run		1

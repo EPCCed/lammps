@@ -24,13 +24,13 @@ change_box	all boundary f f f
 create_atoms 	1 single 50.0 50.0 50.0
 
 mass *      1.0
-set 		atom 1 vx 1.0 vy 0.0 vz 1.0
+set 		atom 1 vx -1.0 vy 0.0 vz -1.0
 set		atom 1 sh/shape 1
 set		group all sh/quat 0 1 0 45.0
 
 fix		time_fix all nve/sh
-fix     wall1 all wall/spherharm 1.0e-7 2.0 zplane NULL 90.0
-#fix     wall2 all wall/spherharm 1.0e-7 2.0 zplane NULL 10.0
+#fix     wall1 all wall/spherharm 1.0e-7 2.0 zplane NULL 90.0
+fix     wall2 all wall/spherharm 1.0e-7 2.0 zplane NULL 10.0
 
 neigh_modify	delay 0 every 1 check yes
 comm_modify	vel yes

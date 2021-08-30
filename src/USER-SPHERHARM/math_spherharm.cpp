@@ -222,7 +222,7 @@ namespace MathSpherharm {
 /* ---------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------
-   factorial n, wrapper for precomputed table
+ * factorial n, wrapper for precomputed table
 ------------------------------------------------------------------------- */
 
   double factorial(int n)
@@ -232,4 +232,196 @@ namespace MathSpherharm {
 
     return nfac_table[n];
   }
-}
+
+  /* ----------------------------------------------------------------------
+   * Return 0 for 2 or 1 intersection. Return 1 for no intersections. Points
+   * are measured as distances along the line from its origin.
+  ------------------------------------------------------------------------- */
+  int line_sphere_intersection(double rad, double circcentre[3], double linenorm[3], double lineorigin[3],
+                               double &sol1, double &sol2){
+
+    double omc[3], discr;
+    MathExtra::sub3(lineorigin, circcentre, omc);
+    double udomc = MathExtra::dot3(linenorm, omc);
+    discr = (udomc*udomc) -  MathExtra::lensq3(omc) + (rad*rad);
+
+    if (discr > 0.0){
+      double sqd = std::sqrt(discr);
+      sol1 = -udomc + sqd;
+      sol2 = -udomc - sqd;
+      return 0;
+    }
+    else if (discr == 0.0){
+      double sqd = std::sqrt(discr);
+      sol1 = -udomc + sqd;
+      sol2 = sol1;
+      return 0;
+    }
+    else{
+      return 1;
+    }
+  }
+
+    /* ----------------------------------------------------------------------
+   * Return 0 for intersection. Return 1 for no intersections. Points
+   * are measured as distances along the line from its origin.
+  ------------------------------------------------------------------------- */
+  int line_plane_intersection(double (&p0)[3], double (&l0)[3], double (&l)[3], double (&n)[3], double &sol){
+
+    double numer, denom;
+    denom = MathExtra::dot3(l, n);
+    if (denom==0) return 1;
+    numer = (p0[0]-l0[0])*n[0] + (p0[1]-l0[1])*n[1] + (p0[2]-l0[2])*n[2];
+    sol = numer/denom;
+    return 0;
+  }
+
+  /* ----------------------------------------------------------------------
+ * Return 0,1 corresponding success and failure. Points
+ * are measured as distances along the line from its origin. Cylinder
+   * must be located along z-axis at (0,0)
+------------------------------------------------------------------------- */
+  int line_cylinder_intersection(const double xi[3], const double (&unit_line_normal)[3], double &t1,
+          double &t2, double cylradius){
+
+    double aa, bb, cc, discrim;
+
+    // Parameterize line from particle centre to surface point and plug into the equation for a cylinder to find
+    // intersections points (solve quadratic equation)
+    aa = unit_line_normal[0]*unit_line_normal[0] + unit_line_normal[1]*unit_line_normal[1]; // aa, bb, cc for quadratic equation
+    bb = 2.0*(xi[0]*unit_line_normal[0] + xi[1]*unit_line_normal[1]);
+    cc = xi[0]*xi[0] + xi[1]*xi[1] - cylradius*cylradius;
+    discrim = bb*bb - 4.0*aa*cc;
+
+    if (discrim > 0.0){
+      discrim = std::sqrt(discrim);
+      t1 = (-bb + discrim) / (2.0*aa); // first solution
+      t2 = (-bb - discrim) / (2.0*aa); // first solution
+      return 0;
+    }
+    else if (discrim == 0.0){ //
+      discrim = std::sqrt(discrim);
+      t1 = (-bb + discrim) / (2.0*aa); // first solution
+      t2 = t1;
+      return 0;
+    }
+    else{
+      return 1;
+    }
+  }
+
+  // contact point cp is relative to particle a's centre
+  int get_contact_point_plane(double rada, double xi[3], double (&linenorm)[3], double (&lineorigin)[3], double
+  (&p0)[3], double (&cp)[3]){
+    int not_ok;
+    double sol1, sol2;
+    double n[3];
+
+    MathExtra::copy3(p0, n); // Planes are always perpendicular to the particle centre, can normalise for the plane normal
+    MathExtra::normalize3(n, n); // Ensuring that the plane normal is a unit vector
+
+    //Intersection of the contact line with particle A's bounding sphere
+    not_ok = line_sphere_intersection(rada, xi, linenorm, lineorigin, sol1, sol2);
+    if (not_ok) return not_ok;
+
+    cp[0] = lineorigin[0] + linenorm[0]*sol1; // finding the point's 3d coordinates
+    cp[1] = lineorigin[1] + linenorm[1]*sol1;
+    cp[2] = lineorigin[2] + linenorm[2]*sol1;
+
+    // Save the point that's on the positive side of the wall plane (i.e. outside the boundary)(assumes boundary faces
+    // outwards
+    if ((n[0]*cp[0] + n[1]*cp[1] + n[2]*cp[2] - n[0]*p0[0] + n[1]*p0[1] + n[2]*p0[2])<0) sol1 = sol2;
+
+    //Intersection of the contact line with plane
+    not_ok = line_plane_intersection(p0, lineorigin, linenorm, n, sol2);
+    if (not_ok) return not_ok;
+
+    sol1 = 0.5*(sol1+sol2); // Average of the bounds
+    cp[0] = lineorigin[0] + linenorm[0]*sol1; // finding the contact point's 3d coordinates
+    cp[1] = lineorigin[1] + linenorm[1]*sol1;
+    cp[2] = lineorigin[2] + linenorm[2]*sol1;
+    return 0;
+  }
+
+  // contact point cp is relative to particle a's centre
+  int get_contact_point_cylinder(double rada, double xi[3], double (&linenorm)[3], double(&lineorigin)[3], double
+  (&cp)[3], double cylrad, bool inside){
+
+    int not_ok;
+    double sol1, sol2;
+    double sol3, sol4;
+    double tmp;
+    double lineorigin_global[3];
+
+    MathExtra::add3(lineorigin, xi, lineorigin_global);
+
+    //Intersection of the contact line with particle A's bounding sphere
+    not_ok = line_sphere_intersection(rada, xi, linenorm, lineorigin_global, sol1, sol2);
+    if (not_ok) return not_ok;
+
+    // Cylinder must be at (x=y=0) so the line origin must be in global coordinates
+    not_ok = line_cylinder_intersection(lineorigin_global, linenorm, sol3, sol4, cylrad);
+    if (not_ok) return not_ok;
+
+    std::cout <<"sol1 " << sol1 << std::endl;
+    std::cout <<"sol2 " << sol2 << std::endl;
+    std::cout <<"sol3 " << sol3 << std::endl;
+    std::cout <<"sol4 " << sol4 << std::endl;
+
+    // Now need to find the inner values of the 4 solutions.
+    if (sol1 > sol2) { tmp = sol1; sol1 = sol2; sol2 = tmp; }
+    if (sol3 > sol4) { tmp = sol3; sol3 = sol4; sol4 = tmp; }
+    if (sol1 > sol3) { tmp = sol1; sol1 = sol3; sol3 = tmp; }
+    if (sol2 > sol4) { tmp = sol2; sol2 = sol4; sol4 = tmp; }
+    if (sol2 > sol3) { tmp = sol2; sol2 = sol3; sol3 = tmp; } // middle of sorted values is sol2 and sol3
+
+    if (inside){
+      sol1 = 0.5*(sol1+sol2); // Average of the minimum bounds
+    } else sol1 = 0.5*(sol2+sol3); // Average of the bounds
+    cp[0] = lineorigin[0] + linenorm[0]*sol1; // finding the contact point's 3d coordinates
+    cp[1] = lineorigin[1] + linenorm[1]*sol1;
+    cp[2] = lineorigin[2] + linenorm[2]*sol1;
+
+    return 0;
+  }
+
+
+  // Get the quaternion between the north pole and a given vector
+  void get_contact_quat(double (&xvecdist)[3], double (&quat)[4]) {
+    double vert_unit_vec[3], cross_vec[3], c;
+    // North pole unit vector, points generated are with reference to this point
+    vert_unit_vec[0] = 0.0;
+    vert_unit_vec[1] = 0.0;
+    vert_unit_vec[2] = 1.0;
+    if (xvecdist[0]==0.0 and xvecdist[1]==0.0){
+      if(xvecdist[2]<0.0) { //rotation to south pole
+        quat[1] = 1.0;
+        quat[2] = 0.0;
+        quat[3] = 0.0;
+        quat[0] = 0.0;
+      }
+      else{
+        quat[1] = 0.0; //identity quaternion, no rotation, default case
+        quat[2] = 0.0;
+        quat[3] = 0.0;
+        quat[0] = 1.0;
+      }
+    }
+    else {
+      c = MathExtra::dot3(vert_unit_vec, xvecdist);
+      MathExtra::cross3(vert_unit_vec, xvecdist, cross_vec);
+      quat[1] = cross_vec[0];
+      quat[2] = cross_vec[1];
+      quat[3] = cross_vec[2];
+      quat[0] = sqrt(MathExtra::lensq3(vert_unit_vec) * MathExtra::lensq3(xvecdist)) + c;
+      MathExtra::qnormalize(quat);
+    }
+  }
+
+  // Get the volume of overlap between two spheres
+  double get_sphere_overlap_volume(double r1, double r2, double d) {
+    return LAMMPS_NS::MathConst::MY_PI*(r1+r2-d)*(r1+r2-d)*
+      (d*d + 2.0*d*(r1+r2) - 3.0*(r1-r2)*(r1-r2))/(12.0*d);
+  }
+
+} //end namespace
