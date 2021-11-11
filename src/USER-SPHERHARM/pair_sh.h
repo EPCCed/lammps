@@ -68,6 +68,19 @@ class PairSH : public Pair {
   static void sphere_sphere_norm_force_torque(double ri, double rj, double delta, const double x1[3],
                                        const double x2[3], double (&iforce)[3], double (&torsum)[3],
                                        double &voloverlap);
+  double find_intersection_by_bisection(double rad_body, double radtol, double theta_sf, double phi_sf,
+                                                const double xi[3], const double xj[3], double radj, int jshtype,
+                                                double (&jrot)[3][3]);
+  double find_intersection_by_bisection_gradient(double rad_body, double radtol, double theta_sf, double phi_sf,
+                                                         const double xi[3], const double xj[3], double radi,
+                                                         double radj, int jshtype,
+                                                         double (&jrot)[3][3]);
+  bool skew_lines_check(const double a[3], const double b[3], const double c[3], const double d[3]);
+  double calc_nearest_point(const double p1[3], const double p2[3], const double d1[3], const double d2[3],
+                            const double (xi)[3], double (&intersect)[3]);
+  double find_intersection_by_newton(const double ix_sf[3], const double xi[3], const double xj[3],
+                                     double theta_n, double phi_n, double t_n, double radtol,
+                                     int sht, const double jrot[3][3]);
 
   double cur_time;
   int file_count;

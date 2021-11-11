@@ -40,6 +40,7 @@
 using namespace LAMMPS_NS;
 using namespace MathConst;
 
+#define EPSILON 1e-10
 /* ---------------------------------------------------------------------- */
 
 PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
@@ -65,7 +66,7 @@ PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
 //  radius_tol = 1e-3; // 0.1%
 
   num_pole_quad = 30;
-  radius_tol = 1e-10; // %, for very small overlaps this percentage tolerance must be very fine
+  radius_tol = 1e-8; // %, for very small overlaps this percentage tolerance must be very fine
 }
 
 /* ---------------------------------------------------------------------- */
@@ -161,7 +162,10 @@ void PairSH::compute(int eflag, int vflag)
 
       //std::cout << std::setprecision(12)<< i << " " << j << " " << r  << " " << x[i][0] << " " << x[i][1] << " " << x[i][2] << " " << x[j][0] << " " << x[j][1] << " " << x[j][2] << std::endl;
 
+      std::cout << radi << " " << radj << " " << r << std::endl;
+
       if (r<radi+radj) {
+
         if (r > radj) { // Particle i's centre is not inside Particle j, can use spherical cap from particle i
 //          iang =  std::asin(radj/r) + (0.5 * MY_PI / 180.0); // Adding half a degree to ensure that circumference is populated
 //          iang = std::asin(radj / r);
@@ -193,28 +197,29 @@ void PairSH::compute(int eflag, int vflag)
         if (maxshexpan!=0) {
           candidates_found = refine_cap_angle(kk_count, ishtype, jshtype, iang, radj, iquat_cont,
                                               iquat_sf_bf, x[i], x[j], jrot);
+          if (kk_count == num_pole_quad) kk_count = num_pole_quad-1;
         }
         else{
           candidates_found = true;
+          kk_count = num_pole_quad-1;
         }
 
-        if (kk_count == num_pole_quad) kk_count = num_pole_quad-1;
 
         if (candidates_found) {
 
           // If the max expansion is !=0, then we require quadrature points
-          if (maxshexpan!=0){
+//          if (maxshexpan!=0){
             calc_norm_force_torque(kk_count, ishtype, jshtype, iang, radi, radj, iquat_cont, iquat_sf_bf, x[i], x[j],
                                    irot,jrot, vol_overlap, iforce, torsum, factor, first_call, ii, jj);
-          }
-          else{ // simplified case of sphere-sphere overlap
-            sphere_sphere_norm_force_torque(radi, radj, radi+radj-r, x[i], x[j], iforce, torsum, vol_overlap);
-          }
+//          }
+//          else{ // simplified case of sphere-sphere overlap
+//            sphere_sphere_norm_force_torque(radi, radj, radi+radj-r, x[i], x[j], iforce, torsum, vol_overlap);
+//          }
 
 //        if (vol_overlap==0.0) continue;
 
-//          double vol_check = MathSpherharm::get_sphere_overlap_volume(radi, radj, r);
-//          std::cout<<vol_overlap<<" "<<vol_check<<" "<<100.0*std::abs(vol_overlap-vol_check)/vol_overlap <<std::endl;
+          double vol_check = MathSpherharm::get_sphere_overlap_volume(radi, radj, r);
+          std::cout<<vol_overlap<<" "<<vol_check<<" "<<100.0*std::abs(vol_overlap-vol_check)/vol_overlap <<std::endl;
 
           fpair = normal_coeffs[itype][jtype][0];
           pn = exponent * fpair * std::pow(vol_overlap, exponent - 1.0);
@@ -567,15 +572,14 @@ void PairSH::calc_norm_force_torque(int kk_count, int ishtype, int jshtype, doub
                                double &factor, bool &first_call, int ii, int jj){
 
   int kk, ll, n;
-  double cosang, fac, radtol, st, ct;
+  double cosang, fac, radtol, st;
   double theta_pole, phi_pole, theta_proj, phi_proj;
   double theta_bf, phi_bf, theta_sf, phi_sf;
   double rad_body, dtemp, finalrad;
   double ix_sf[3], x_testpoint[3], x_projtestpoint[3];
 
   double rad_sample, dv;
-  double upper_bound, lower_bound;
-  double inorm_bf[3], inorm_sf[3], dtor[3], jx_sf[3];
+  double inorm_bf[3], inorm_sf[3], dtor[3];
   double gp[3], gp_bf[3], gp_sf[3];
   double quat[4];
   double rot_np_bf[3][3], rot_np_sf[3][3];
@@ -630,42 +634,22 @@ void PairSH::calc_norm_force_torque(int kk_count, int ishtype, int jshtype, doub
       if (dtemp > radj) continue;
       // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
       MathExtra::transpose_matvec(jrot, x_testpoint, x_projtestpoint);
-      // Get projected phi and theta angle of gauss point in atom i's body frame
+      // Get projected phi and theta angle of gauss point in atom j's body frame
       phi_proj = std::atan2(x_projtestpoint[1], x_projtestpoint[0]);
       phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
       theta_proj = std::acos(x_projtestpoint[2] / dtemp);
 
-      // Check for contact
+      // Check for contact between the quadrature point on atom i and the surface of atom j (at the angular coordinates
+      // as projected from the quadrature point onto the surface of particle j
       if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
-        upper_bound = rad_body;
-        lower_bound = 0.0;
-        rad_sample = (upper_bound + lower_bound) / 2.0;
-        while (upper_bound - lower_bound > radtol) {
-          st = rad_sample*std::sin(theta_sf);
-          jx_sf[0] = (st * cos(phi_sf)) + xi[0]; // Global coordinates of point
-          jx_sf[1] = (st * sin(phi_sf)) + xi[1];
-          jx_sf[2] = (rad_sample * cos(theta_sf)) + xi[2];
-          // vector distance from COG of atom j (in space frame) to test point on atom i
-          MathExtra::sub3(jx_sf, xj, x_testpoint);
-          // scalar distance
-          dtemp = MathExtra::len3(x_testpoint);
-          if (dtemp > radj) {
-            lower_bound = rad_sample;  // sampled radius outside of particle j, increase the lower bound
-          } else {
-            // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
-            MathExtra::transpose_matvec(jrot, x_testpoint, x_projtestpoint);
-            // Get projected phi and theta angle of gauss point in atom i's body frame
-            phi_proj = std::atan2(x_projtestpoint[1], x_projtestpoint[0]);
-            phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
-            theta_proj = std::acos(x_projtestpoint[2] / dtemp);
-            if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
-              upper_bound = rad_sample; // sampled radius inside of particle j, decrease the upper bound
-            } else {
-              lower_bound = rad_sample;  // sampled radius outside of particle j, increase the lower bound
-            }
-          }
-          rad_sample = (upper_bound + lower_bound) / 2.0;
-        }
+
+        // Get the intersection between the straight line from the quadrature point on atom i to the intersection with
+        // the surface of atom j.
+//        rad_sample = find_intersection_by_bisection(rad_body, radtol, theta_sf, phi_sf, xi, xj, radj, jshtype,jrot);
+//        rad_sample = find_intersection_by_bisection_gradient(rad_body, radtol, theta_sf, phi_sf, xi, xj, radi, radj,
+//                                                             jshtype,jrot);
+        rad_sample = find_intersection_by_newton(ix_sf, xi, xj, theta_proj, phi_proj, rad_body, radtol, jshtype, jrot);
+        std::cout << "done" <<std::endl;
 
         dv = weights[kk] * (std::pow(rad_body, 3) - std::pow(rad_sample, 3));
         vol_overlap += dv;
@@ -885,4 +869,482 @@ void PairSH::sphere_sphere_norm_force_torque(double ri, double rj, double delta,
 
   MathExtra::scale3(Sn, iforce);
   voloverlap = MathSpherharm::get_sphere_overlap_volume(ri, rj, d);
+}
+
+double PairSH::find_intersection_by_bisection(double rad_body, double radtol, double theta_sf, double phi_sf,
+                                            const double xi[3], const double xj[3], double radj, int jshtype,
+                                            double (&jrot)[3][3]){
+
+  double upper_bound, lower_bound, finalrad, rad_sample;
+  double st, phi_proj, theta_proj, dtemp;
+  double jx_sf[3], x_testpoint[3], x_projtestpoint[3];
+
+  upper_bound = rad_body;
+  lower_bound = 0.0;
+  rad_sample = (upper_bound + lower_bound) / 2.0;
+  while (upper_bound - lower_bound > radtol) {
+    st = rad_sample*std::sin(theta_sf);
+    jx_sf[0] = (st * cos(phi_sf)) + xi[0]; // Global coordinates of point
+    jx_sf[1] = (st * sin(phi_sf)) + xi[1];
+    jx_sf[2] = (rad_sample * cos(theta_sf)) + xi[2];
+    // vector distance from COG of atom j (in space frame) to test point on atom i
+    MathExtra::sub3(jx_sf, xj, x_testpoint);
+    // scalar distance
+    dtemp = MathExtra::len3(x_testpoint);
+    if (dtemp > radj) {
+      lower_bound = rad_sample;  // sampled radius outside of particle j, increase the lower bound
+    } else {
+      // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
+      MathExtra::transpose_matvec(jrot, x_testpoint, x_projtestpoint);
+      // Get projected phi and theta angle of gauss point in atom i's body frame
+      phi_proj = std::atan2(x_projtestpoint[1], x_projtestpoint[0]);
+      phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
+      theta_proj = std::acos(x_projtestpoint[2] / dtemp);
+      if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
+        upper_bound = rad_sample; // sampled radius inside of particle j, decrease the upper bound
+      } else {
+        lower_bound = rad_sample;  // sampled radius outside of particle j, increase the lower bound
+      }
+    }
+    rad_sample = (upper_bound + lower_bound) / 2.0;
+  }
+  return rad_sample;
+}
+
+/* ----------------------------------------------------------------------
+   Finds the intersection between the line projected from the quadrature point
+   on the surface of atom i to the centre of mass of atom i and the surface of
+   atom j. Initially a bisection method is used to reduce the size of the line
+   segment. Next, the intersection of the upper and lower bounds of the line
+   segment and the line formed by their intersections with atom j's surface is
+   used as an approximation. (Note that these may not actually intersect and
+   a skewness check is required)
+ ------------------------------------------------------------------------- */
+double PairSH::find_intersection_by_bisection_gradient(double rad_body, double radtol, double theta_sf, double phi_sf,
+                                              const double xi[3], const double xj[3], double radi, double radj, int jshtype,
+                                              double (&jrot)[3][3]){
+
+  double upper_bound, lower_bound, finalrad, rad_sample;
+  double st, phi_proj, theta_proj, dtemp;
+  double p1rad, p2rad;
+  double jx_sf[3], x_testpoint[3], x_projtestpoint[3];
+  int num_bisects = 3;
+
+  upper_bound = rad_body;
+  lower_bound = 0.0;
+  rad_sample = (upper_bound + lower_bound) / 2.0;
+
+
+  st = upper_bound*std::sin(theta_sf);
+  jx_sf[0] = (st * cos(phi_sf)) + xi[0]; // Global coordinates of point
+  jx_sf[1] = (st * sin(phi_sf)) + xi[1];
+  jx_sf[2] = (upper_bound * cos(theta_sf)) + xi[2];
+  MathExtra::sub3(jx_sf, xj, x_testpoint);
+  dtemp = MathExtra::len3(x_testpoint);
+  // theta and phi from COG of atom j (in space frame) to p1
+  phi_proj = std::atan2(x_testpoint[1], x_testpoint[0]);
+  phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
+  theta_proj = std::acos(x_testpoint[2] / dtemp);
+  // Get the radius of atom j associated with lower bound
+  p2rad = avec->get_shape_radius(jshtype, theta_proj, phi_proj);
+
+  //collinearity check
+//  MathExtra::sub3(jx_sf, xi, x_testpoint);
+//  p1rad = MathExtra::len3(x_testpoint);
+//  MathExtra::sub3(xi, xj, x_testpoint);
+//  st = MathExtra::len3(x_testpoint);
+////  std::cout<<2.0*std::max({dtemp, p1rad, st})-dtemp-p1rad-st<<std::endl;
+//  if(std::abs(2.0*std::max({dtemp, p1rad, st})-dtemp-p1rad-st)<1.0e-5*radius_tol) return rad_body-p2rad;
+//  if(skew_lines_check(xi, jx_sf, xj, jx_sf)) return rad_body-p2rad;
+
+  // Bisect for num_bisects times prior to using the gradient approach
+  for (int i=0; i<num_bisects; i++) {
+    st = rad_sample*std::sin(theta_sf);
+    jx_sf[0] = (st * cos(phi_sf)) + xi[0]; // Global coordinates of point
+    jx_sf[1] = (st * sin(phi_sf)) + xi[1];
+    jx_sf[2] = (rad_sample * cos(theta_sf)) + xi[2];
+    // vector distance from COG of atom j (in space frame) to test point on atom i
+    MathExtra::sub3(jx_sf, xj, x_testpoint);
+    // scalar distance
+    dtemp = MathExtra::len3(x_testpoint);
+    if (dtemp > radj & rad_sample>lower_bound) {
+      lower_bound = rad_sample;  // sampled radius outside of particle j, increase the lower bound
+    } else {
+      // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
+      MathExtra::transpose_matvec(jrot, x_testpoint, x_projtestpoint);
+      // Get projected phi and theta angle of gauss point in atom i's body frame
+      phi_proj = std::atan2(x_projtestpoint[1], x_projtestpoint[0]);
+      phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
+      theta_proj = std::acos(x_projtestpoint[2] / dtemp);
+      if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
+        upper_bound = rad_sample; // sampled radius inside of particle j, decrease the upper bound
+        p2rad = finalrad; // point inside, store the radius of atom j associated with upper bound
+      } else {
+        lower_bound = rad_sample;  // sampled radius outside of particle j, increase the lower bound
+      }
+    }
+    rad_sample = (upper_bound + lower_bound) / 2.0;
+  }
+
+  double p1[3], p2[3], p3[3], p4[3];
+  double d1[3], d2[3];
+
+  // Use the line connecting subsequent samples to guess where the intersection with the surface is
+  while (std::abs(upper_bound - lower_bound) > radtol) {
+
+    // point 1 (line 1 - atom i centre to quadrature point)
+    st = lower_bound*std::sin(theta_sf);
+    p1[0] = (st * cos(phi_sf)) + xi[0]; // Global coordinates of point
+    p1[1] = (st * sin(phi_sf)) + xi[1];
+    p1[2] = (lower_bound * cos(theta_sf)) + xi[2];
+
+    // point 2 (line 1 - atom i centre to quadrature point)
+    st = upper_bound*std::sin(theta_sf);
+    p2[0] = (st * cos(phi_sf)) + xi[0]; // Global coordinates of point
+    p2[1] = (st * sin(phi_sf)) + xi[1];
+    p2[2] = (upper_bound * cos(theta_sf)) + xi[2];
+
+    // TODO - store phi and theta rather than recalculating them here
+    // vector distance from COG of atom j (in space frame) to p1
+    MathExtra::sub3(p1, xj, x_testpoint);
+    dtemp = MathExtra::len3(x_testpoint);
+    // theta and phi from COG of atom j (in space frame) to p1
+    phi_proj = std::atan2(x_testpoint[1], x_testpoint[0]);
+    phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
+    theta_proj = std::acos(x_testpoint[2] / dtemp);
+    // Get the radius of atom j associated with lower bound
+    p1rad = avec->get_shape_radius(jshtype, theta_proj, phi_proj);
+    // point 1 (line 2 - atom j centre to surface (as projected by quadrature point))
+    st = p1rad*std::sin(theta_proj);
+    p3[0] = (st * cos(phi_proj)) + xj[0]; // Global coordinates of point
+    p3[1] = (st * sin(phi_proj)) + xj[1];
+    p3[2] = (p1rad * cos(theta_proj)) + xj[2];
+
+    // TODO - store phi and theta rather than recalculating them here
+    // vector distance from COG of atom j (in space frame) to p1
+    MathExtra::sub3(p2, xj, x_testpoint);
+    dtemp = MathExtra::len3(x_testpoint);
+    // theta and phi from COG of atom j (in space frame) to p1
+    phi_proj = std::atan2(x_testpoint[1], x_testpoint[0]);
+    phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
+    theta_proj = std::acos(x_testpoint[2] / dtemp);
+    // point 1 (line 2 - atom j centre to surface (as projected by quadrature point))
+    st = p2rad*std::sin(theta_proj);
+    p4[0] = (st * cos(phi_proj)) + xj[0]; // Global coordinates of point
+    p4[1] = (st * sin(phi_proj)) + xj[1];
+    p4[2] = (p2rad * cos(theta_proj)) + xj[2];
+
+    MathExtra::sub3(p2,p1, d1); //p2-p1=d1; p2=d1+p1;
+    MathExtra::norm3(d1);
+    MathExtra::sub3(p4,p3, d2);
+    MathExtra::norm3(d2);
+    rad_sample = calc_nearest_point(p1, p3, d1, d2, xi, jx_sf);
+
+    // vector distance from COG of atom j (in space frame) to test point on atom i
+    MathExtra::sub3(jx_sf, xj, x_testpoint);
+    // scalar distance
+    dtemp = MathExtra::len3(x_testpoint);
+
+//    std::cout<<std::setprecision(11)<<p1[0]<<" "<<p1[1]<<" "<<p1[2]<<" "<<std::endl;
+//    std::cout<<std::setprecision(11)<<p2[0]<<" "<<p2[1]<<" "<<p2[2]<<" "<<std::endl;
+//    std::cout<<std::setprecision(11)<<p3[0]<<" "<<p3[1]<<" "<<p3[2]<<" "<<std::endl;
+//    std::cout<<std::setprecision(11)<<p4[0]<<" "<<p4[1]<<" "<<p4[2]<<" "<<std::endl;
+//    std::cout<<std::setprecision(11)<<jx_sf[0]<<" "<<jx_sf[1]<<" "<<jx_sf[2]<<" "<<std::endl;
+//    std::cout<<std::setprecision(15)<<lower_bound<<" "<< upper_bound<<" "<< rad_sample<< " " <<radj<<" "<<p2rad<<" "<<upper_bound - lower_bound <<" "<< dtemp<< std::endl;
+//    std::cout<<std::setprecision(15)<<((dtemp >= radj) & (rad_sample>lower_bound))<< " " << std::abs(dtemp-radj) << " " << (std::abs(dtemp-radj)<radtol) << " " << (rad_sample>lower_bound)<<std::endl<<std::endl;
+
+    if (rad_sample<lower_bound) error->all(FLERR, "Error, centre within radius!");
+
+    if ((std::abs(dtemp-radj)<radtol) & (rad_sample>lower_bound)) {
+      lower_bound = rad_sample;  // sampled radius outside of particle j, increase the lower bound
+    } else {
+//      std::cout << "TRUE"<<std::endl;
+      // Rotating the projected point into atom j's body frame (rotation matrix transpose = inverse)
+      MathExtra::transpose_matvec(jrot, x_testpoint, x_projtestpoint);
+      // Get projected phi and theta angle of gauss point in atom i's body frame
+      phi_proj = std::atan2(x_projtestpoint[1], x_projtestpoint[0]);
+      phi_proj = phi_proj > 0.0 ? phi_proj : MY_2PI + phi_proj; // move atan2 range from 0 to 2pi
+      theta_proj = std::acos(x_projtestpoint[2] / dtemp);
+      if (avec->check_contact(jshtype, phi_proj, theta_proj, dtemp, finalrad)) {
+        upper_bound = rad_sample; // sampled radius inside of particle j, decrease the upper bound
+        p2rad = finalrad; // point inside, store the radius of atom j associated with upper bound
+      } else if (rad_sample>lower_bound) {
+        lower_bound = rad_sample;  // sampled radius outside of particle j, increase the lower bound
+      }
+    }
+    rad_sample = (upper_bound + lower_bound) / 2.0;
+
+//    if (std::abs(dtemp-radj)<radtol){
+//      std::cout << std::abs(upper_bound - lower_bound) << " " <<radtol<<" "<<(std::abs(upper_bound - lower_bound) > radtol)<<std::endl;
+//    }
+  }
+
+  std::cout << std::setprecision(12)<<"dtemp " <<dtemp << std::endl;
+
+  //  error->all(FLERR, "Error, centre within radius!");
+  return rad_sample;
+}
+
+/* ----------------------------------------------------------------------
+   Takes two lines and checks whether they are skew. Each line is defined
+   by two points (a,b) and (c,d). The volume associated with these points,
+   if they were the vertices of a tetrahedron, is calculated. If this volume
+   is below a threshold then the points are determined to be coplanar and
+   the lines are not skew.
+   Algorithm taken from https://en.wikipedia.org/wiki/Skew_lines
+ ------------------------------------------------------------------------- */
+bool PairSH::skew_lines_check(const double a[3], const double b[3], const double c[3], const double d[3]){
+
+  double m00, m01, m02;
+  double m10, m11, m12;
+  double m20, m21, m22;
+  double det;
+  double skew_vol_tol = 1e-20;
+
+  m00 = a[0] - b[0];
+  m01 = a[1] - b[1];
+  m02 = a[2] - b[2];
+
+  m10 = b[0] - c[0];
+  m11 = b[1] - c[1];
+  m12 = b[2] - c[2];
+
+  m20 = c[0] - d[0];
+  m21 = c[1] - d[1];
+  m22 = c[2] - d[2];
+
+  det = m00*m11*m22 - m00*m12*m21 -
+        m10*m01*m22 + m10*m02*m21 +
+        m20*m01*m12 - m20*m02*m11;
+
+  det = std::abs(det)/6.0;
+
+  std::cout<<"det" << det<<std::endl;
+
+  if (det>skew_vol_tol) return false;
+  return true;
+}
+
+/* ----------------------------------------------------------------------
+   Takes the origins and unit normals of two skew lines and finds the point on
+   the first line that is nearest to the seconds line. Returns the length of
+   this first line from its start to this nearest point.
+   Algorithm taken from https://en.wikipedia.org/wiki/Skew_lines
+ ------------------------------------------------------------------------- */
+double PairSH::calc_nearest_point(const double p1[3], const double p2[3], const double d1[3], const double d2[3],
+                                  const double (xi)[3], double (&intersect)[3]){
+
+  double n[3], n2[3];
+  double dot;
+
+  MathExtra::cross3(d1, d2, n);
+  MathExtra::cross3(d2, n, n2);
+  MathExtra::sub3(p2, p1, intersect);
+  dot = MathExtra::dot3(intersect, n2);
+  dot /= MathExtra::dot3(d1, n2);
+  intersect[0] = p1[0] + dot * d1[0];
+  intersect[1] = p1[1] + dot * d1[1];
+  intersect[2] = p1[2] + dot * d1[2];
+  MathExtra::sub3(intersect, xi, n); // reusing n
+  return(MathExtra::len3(n));
+}
+
+
+/* ----------------------------------------------------------------------
+    Find the intersection between two surfaces where the ray cast from the
+    centre of particle "A" to it's surface with some fixed angle meets the
+    ray cast from the centre of particle "B" to it's surface
+    Problem is phrased as:
+     |xb - xa|                        |cos(phi)sin(theta)|    | a |
+     |yb - ya| + r(N,theta,phi) * R * |sin(phi)sin(theta)| - t| b | = 0
+     |zb - za|                        |   cos(theta)     |    | c |
+    where, (a,b,c) is the normal vector from the centre of particle "A" to
+    its surface and "t" is the length along this normal vector to the intersection,
+    (xa,ya,za) is the centre of Particle "A", R is the rotation matrix rotating the
+    particle "B" from its local frame to space frame, and "r" is the radius of particle
+    "B" at the given theta and phi value.
+    Solved using Newton's Method and Guassian Elimination.
+ ------------------------------------------------------------------------- */
+double PairSH::find_intersection_by_newton(const double ix_sf[3], const double xi[3], const double xj[3],
+                                           double theta_n, double phi_n, double t_n, const double radtol,
+                                           const int sht, const double jrot[3][3]){
+
+  double J[3][3], Ji[3][3], vec[3], temp[3], centre_diff[3];
+  double a, b, c;
+  double rp, rt, r, tmax;
+  double ct, st, cp, sp, cpct, spst, spct, cpst;
+  double Am[3][4];
+
+  // Vector between particle centres
+  centre_diff[0] = xi[0] - xj[0];
+  centre_diff[1] = xi[1] - xj[1];
+  centre_diff[2] = xi[2] - xj[2];
+
+  // Vector from centre of Particle A to the given surface point
+  temp[0] = ix_sf[0] - xi[0];
+  temp[1] = ix_sf[1] - xi[1];
+  temp[2] = ix_sf[2] - xi[2];
+//  std::cout << "a " << std::setprecision(14) << std::endl << temp[0]  << " " << temp[1]  << " " << temp[2]  << std::endl;
+
+  // Unit vector describing the direction from the centre of Particle A to the given surface point
+  MathExtra::norm3(temp);
+  a = temp[0];
+  b = temp[1];
+  c = temp[2];
+
+  // Testing with the analytical line/ellipsoid intersection
+//  double t_analytical = -1.0;
+//  double ea = 105.0/2.0;
+//  double eb = 21.0/2.0;
+//  double ec = 21.0/2.0;
+//  double elipse_a[3] = {std::sqrt(ea), 0.0, 0.0};
+//  double elipse_b[3] = {0.0, std::sqrt(eb), 0.0};
+//  double elipse_c[3] = {0.0, 0.0, std::sqrt(ec)};
+//  std::cout<< "b " << std::setprecision(14) << std::endl << a << " " << b << " " << c << std::endl;
+//
+//  std::cout << xj[0] << " " <<xj[1] << "  " << xj[2] << std::endl;
+//  std::cout << elipse_a[0] << " " <<elipse_a[1] << "  " << elipse_a[2] << std::endl;
+//  std::cout << elipse_b[0] << " " <<elipse_b[1] << "  " << elipse_b[2] << std::endl;
+//  std::cout << elipse_c[0] << " " <<elipse_c[1] << "  " << elipse_c[2] << std::endl;
+//  std::cout << xi[0] << " " <<xi[1] << "  " << xi[2] << std::endl;
+//  std::cout << temp[0] << " " <<temp[1] << "  " << temp[2] << std::endl;
+//  if(MathSpherharm::line_ellipsoid_intersection(xj, elipse_a, elipse_b, elipse_c, xi, temp, t_analytical)){
+//    error->all(FLERR, "Error, couldn't find ellipsoid-ray intersection");
+//  }
+//  error->all(FLERR, "Error, couldn't find ellipsoid-ray intersection");
+
+//  double t_analytical = -1.0;
+//  double ec = 2.0;
+//  double eb = 1.0;
+//  double ea = 10.0;
+//  double elipsoid_centre[3] = {0.0, 0.0, 0.0};
+//  double line_centre[3] = {0.0, 6.0, 6.0};
+//  double line_normal[3] = {0.0, -1.0, -1.0};
+//  double elipse_a[3] = {std::sqrt(ea), 0.0, 0.0};
+//  double elipse_b[3] = {0.0, std::sqrt(eb), 0.0};
+//  double elipse_c[3] = {0.0, 0.0, std::sqrt(ec)};
+//  MathSpherharm::line_ellipsoid_intersection(elipsoid_centre,elipse_a, elipse_b,elipse_c,
+//                                             line_centre, line_normal, t_analytical);
+//  error->all(FLERR, "Error, couldn't find ellipsoid-ray intersection");
+
+  // Testing for a sphere
+//    double t_analytical;
+//    double sol1, sol2;
+//    MathSpherharm::line_sphere_intersection(t_n, xj, temp, xi, sol1, sol2);
+//    t_analytical = sol1 < sol2 ? sol1 : sol2;
+
+//  double t_analytical=0.0;
+//  std::cout<< "x " << theta_n << " " << phi_n << " " << t_n << std::endl <<std::endl;
+
+  tmax = t_n;
+  r = 2*radtol;
+
+  // Not radius, just recycling variable for the while condition
+  while (r>radtol){
+
+    // Calculating repetitive terms
+    ct = cos(theta_n);
+    cp = cos(phi_n);
+    st = sin(theta_n);
+    sp = sin(phi_n);
+    cpct = cp*ct;
+    spst = sp*st;
+    spct = sp*ct;
+    cpst = cp*st;
+
+    // Get the radius and gradients for the current iteration of theta and theta.
+    r = avec->get_shape_radius_and_gradients(sht, theta_n, phi_n, rp, rt);
+
+    // TODO - Compare Gaussian Elimination to direct matrix inversion method
+    // Calculating the Jacobian of the three functions (i.e the three-dimensional coordiantes) and storing this in
+    // the augmented matrix
+    Am[0][0] = rt*(jrot[0][0]*cpst + jrot[0][1]*spst - jrot[0][2]*ct) + r*(jrot[0][0]*cpct + jrot[0][1]*spct - jrot[0][2]*st);
+    Am[1][0] = rt*(jrot[1][0]*cpst + jrot[1][1]*spst - jrot[1][2]*ct) + r*(jrot[1][0]*cpct + jrot[1][1]*spct - jrot[1][2]*st);
+    Am[2][0] = rt*(jrot[2][0]*cpst + jrot[2][1]*spst - jrot[2][2]*ct) + r*(jrot[2][0]*cpct + jrot[2][1]*spct - jrot[2][2]*st);
+    Am[0][1] = rp*(jrot[0][0]*cpst + jrot[0][1]*spst - jrot[0][2]*ct) + r*(-jrot[0][0]*spst + jrot[0][1]*cpst);
+    Am[1][1] = rp*(jrot[1][0]*cpst + jrot[1][1]*spst - jrot[1][2]*ct) + r*(-jrot[1][0]*spst + jrot[1][1]*cpst);
+    Am[2][1] = rp*(jrot[2][0]*cpst + jrot[2][1]*spst - jrot[2][2]*ct) + r*(-jrot[2][0]*spst + jrot[2][1]*cpst);
+    Am[0][2] = -a;
+    Am[1][2] = -b;
+    Am[2][2] = -c;
+
+    // Calculating the value of the three functions
+    temp[0] = r * cpst;
+    temp[1] = r * spst;
+    temp[2] = r * ct;
+    MathExtra::matvec(jrot, temp, vec); // from Particle B's body frame back to space frame
+    vec[0] -= (t_n * a + centre_diff[0]);
+    vec[1] -= (t_n * b + centre_diff[1]);
+    vec[2] -= (t_n * c + centre_diff[2]);
+    temp[0] = vec[0];
+    temp[1] = vec[1];
+    temp[2] = vec[2];
+
+    // Finishing the augmented matrix to be solved using Gaussian elimination
+    Am[0][3] = -vec[0];
+    Am[1][3] = -vec[1];
+    Am[2][3] = -vec[2];
+
+    // Solving for (x_{n+1} - x_{n}) using Gaussian Elimination.
+    // https://martin-thoma.com/solving-linear-equations-with-gaussian-elimination/
+    for (int i=0; i<3; i++) {
+      // Search for maximum in this column
+      double maxEl = std::abs(Am[i][i]);
+      int maxRow = i;
+      for (int k=i+1; k<3; k++) {
+        if (std::abs(Am[k][i]) > maxEl) {
+          maxEl = std::abs(Am[k][i]);
+          maxRow = k;
+        }
+      }
+
+      // Swap maximum row with current row (column by column)
+      for (int k=i; k<3+1;k++) {
+        double tmp = Am[maxRow][k];
+        Am[maxRow][k] = Am[i][k];
+        Am[i][k] = tmp;
+      }
+
+      // Make all rows below this one 0 in current column
+      for (int k=i+1; k<3; k++) {
+        double z = -Am[k][i]/Am[i][i];
+        for (int j=i; j<3+1; j++) {
+          if (i==j) {
+            Am[k][j] = 0;
+          } else {
+            Am[k][j] += z * Am[i][j];
+          }
+        }
+      }
+    }
+
+    // Solve equation Ax=b for an upper triangular matrix A
+    for (int i=3-1; i>=0; i--) {
+      vec[i] = Am[i][3]/Am[i][i];
+      for (int k=i-1;k>=0; k--) {
+        Am[k][3] -= Am[k][i] * vec[i];
+      }
+    }
+
+    // Updating the function variables.
+    theta_n += vec[0];
+    phi_n += vec[1];
+    t_n += vec[2];
+
+    // Not radius, just recycling variable for the while condition. Using the magnitude of the error vector to
+    // determine when the Newton's Method has converged. We want each term in this vector to be as close to zero as
+    // possible
+    r = MathExtra::len3(vec);
+
+//    std::cout<< "dx " << vec[0] << " " << vec[1] << " " << vec[2] << std::endl;
+//    std::cout<< "x " << theta_n << " " << phi_n << " " << t_n << " " << t_analytical <<std::endl;
+//    std::cout<< "f " << temp[0] << " " << temp[1] << " " << temp[2] << std::endl<<std::endl;
+
+  }
+
+  std::cout<< "f " <<std::endl << "theta    phi   t"<<std::endl;
+  std::cout<< "g " << theta_n << " " << phi_n << " " << t_n << std::endl;
+//  exit(0);
+
+  return t_n;
 }

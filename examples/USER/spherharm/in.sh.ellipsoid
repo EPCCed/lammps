@@ -1,7 +1,7 @@
 # Test
 
 variable	name string spherical_harmonics_testing
-atom_style	shperatom 0 120 /Users/jamesyoung/Documents/Postdoc/lammps/examples/USER/spherharm/ellipsoid.dat
+atom_style	spherharm 30 120 /home/james/lammps/examples/USER/spherharm/ellipsoid.dat
 units		lj
 
 
@@ -9,34 +9,34 @@ units		lj
 # Geometry-related parameters
 ###############################################
 
-variable	boxx equal 10
-variable	boxy equal 10
-variable	boxz equal 10
+variable	boxx equal 200
+variable	boxy equal 200
+variable	boxz equal 200
 
 
 #############
 processors * * 1
 region		boxreg block 0 ${boxx} 0 ${boxy} 0 ${boxz}
-create_box	1 boxreg
+create_box	2 boxreg
 change_box	all boundary f f f
-create_atoms 	1 single 1.0 1.0 1.0
-create_atoms 	1 single 9.0 9.0 9.0
+create_atoms 	1 single 0.0 0.0 0.0
+create_atoms 	2 single 110.0 0.0 0.0
 
-set 		atom 1 vx 1.0 vy 1.0 vz 1.0
-set 		atom 2 vx -1.0 vy -1.0 vz -1.0
+set 		atom 1 vx 1.0 vy 0.0 vz 0.0
+set 		atom 2 vx -1.0 vy 0.0 vz 0.0
 set 		group all mass 1.0
-set		group all sh/type 1
-set		group all sh/quat/random 4
+set		    group all sh/shape 1
+set		    group all sh/quat 0 1 0 90.0
 
 fix		1 all nve/sh
 
 neigh_modify	delay 0 every 1 check yes
 comm_modify	vel yes
 
-pair_style 	shresquared 10.0
-pair_coeff 	* * 1.0 1.0 1.7 3.4 3.4 1.0 1.0 1.0
+pair_style 	spherharm
+pair_coeff 	* * 9.0e-6 2.0
 
 
 timestep	0.005
 
-run		1000
+run		10000
