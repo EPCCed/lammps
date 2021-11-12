@@ -66,7 +66,7 @@ double ComputeEFunctionSpherharm::compute_scalar()
   double **inertia = atom->pinertia_byshape;
   int *mask = atom->mask;
   int *shtype = atom->shtype;
-  double *mass = atom->mass;
+  double *mass = atom->rmass;
   int *type = atom->type;
   int nlocal = atom->nlocal;
   double dt = update->dt;

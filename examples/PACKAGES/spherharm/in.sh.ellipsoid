@@ -1,7 +1,7 @@
 # Test
 
 variable	name string spherical_harmonics_testing
-atom_style	spherharm 30 120 /home/james/lammps/examples/USER/spherharm/ellipsoid.dat
+atom_style	spherharm 30 120 /home/james/lammps/examples/PACKAGES/spherharm/ellipsoid.dat
 units		lj
 
 

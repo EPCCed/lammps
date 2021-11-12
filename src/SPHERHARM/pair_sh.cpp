@@ -162,7 +162,7 @@ void PairSH::compute(int eflag, int vflag)
 
       //std::cout << std::setprecision(12)<< i << " " << j << " " << r  << " " << x[i][0] << " " << x[i][1] << " " << x[i][2] << " " << x[j][0] << " " << x[j][1] << " " << x[j][2] << std::endl;
 
-      std::cout << radi << " " << radj << " " << r << std::endl;
+//      std::cout << radi << " " << radj << " " << r << std::endl;
 
       if (r<radi+radj) {
 
@@ -218,8 +218,8 @@ void PairSH::compute(int eflag, int vflag)
 
 //        if (vol_overlap==0.0) continue;
 
-          double vol_check = MathSpherharm::get_sphere_overlap_volume(radi, radj, r);
-          std::cout<<vol_overlap<<" "<<vol_check<<" "<<100.0*std::abs(vol_overlap-vol_check)/vol_overlap <<std::endl;
+//          double vol_check = MathSpherharm::get_sphere_overlap_volume(radi, radj, r);
+//          std::cout<<vol_overlap<<" "<<vol_check<<" "<<100.0*std::abs(vol_overlap-vol_check)/vol_overlap <<std::endl;
 
           fpair = normal_coeffs[itype][jtype][0];
           pn = exponent * fpair * std::pow(vol_overlap, exponent - 1.0);
@@ -648,8 +648,9 @@ void PairSH::calc_norm_force_torque(int kk_count, int ishtype, int jshtype, doub
 //        rad_sample = find_intersection_by_bisection(rad_body, radtol, theta_sf, phi_sf, xi, xj, radj, jshtype,jrot);
 //        rad_sample = find_intersection_by_bisection_gradient(rad_body, radtol, theta_sf, phi_sf, xi, xj, radi, radj,
 //                                                             jshtype,jrot);
-        rad_sample = find_intersection_by_newton(ix_sf, xi, xj, theta_proj, phi_proj, rad_body, radtol, jshtype, jrot);
-        std::cout << "done" <<std::endl;
+        rad_sample = find_intersection_by_newton(ix_sf, xi, xj, theta_proj, phi_proj, rad_body, radtol, jshtype,
+         jrot);
+        //std::cout<<"Done"<<std::endl;
 
         dv = weights[kk] * (std::pow(rad_body, 3) - std::pow(rad_sample, 3));
         vol_overlap += dv;
@@ -1174,6 +1175,7 @@ double PairSH::find_intersection_by_newton(const double ix_sf[3], const double x
   double rp, rt, r, tmax;
   double ct, st, cp, sp, cpct, spst, spct, cpst;
   double Am[3][4];
+  double alpha=0.5; // not described in paper, used to prevent "back and forth" infinite action, slows convergence
 
   // Vector between particle centres
   centre_diff[0] = xi[0] - xj[0];
@@ -1327,23 +1329,25 @@ double PairSH::find_intersection_by_newton(const double ix_sf[3], const double x
     }
 
     // Updating the function variables.
-    theta_n += vec[0];
-    phi_n += vec[1];
-    t_n += vec[2];
+    theta_n += alpha*vec[0];
+    phi_n += alpha*vec[1];
+    t_n += alpha*vec[2];
 
     // Not radius, just recycling variable for the while condition. Using the magnitude of the error vector to
     // determine when the Newton's Method has converged. We want each term in this vector to be as close to zero as
     // possible
     r = MathExtra::len3(vec);
 
-//    std::cout<< "dx " << vec[0] << " " << vec[1] << " " << vec[2] << std::endl;
-//    std::cout<< "x " << theta_n << " " << phi_n << " " << t_n << " " << t_analytical <<std::endl;
-//    std::cout<< "f " << temp[0] << " " << temp[1] << " " << temp[2] << std::endl<<std::endl;
+    if (update->ntimestep>=67) {
+      std::cout << "dx " << vec[0] << " " << vec[1] << " " << vec[2] << std::endl;
+      std::cout << "x " << theta_n << " " << phi_n << " " << t_n << " " << std::endl;
+      std::cout<< "f " << temp[0] << " " << temp[1] << " " << temp[2] << std::endl<<std::endl;
+    }
 
   }
 
-  std::cout<< "f " <<std::endl << "theta    phi   t"<<std::endl;
-  std::cout<< "g " << theta_n << " " << phi_n << " " << t_n << std::endl;
+//  std::cout<< "f " <<std::endl << "theta    phi   t"<<std::endl;
+//  std::cout<< "g " << theta_n << " " << phi_n << " " << t_n << std::endl;
 //  exit(0);
 
   return t_n;
