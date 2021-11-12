@@ -1,6 +1,7 @@
+// clang-format off
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://lammps.sandia.gov/, Sandia National Laboratories
+   https://www.lammps.org/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -14,7 +15,6 @@
 #include "neb.h"
 
 #include "atom.h"
-#include "comm.h"
 #include "domain.h"
 #include "error.h"
 #include "finish.h"
@@ -42,7 +42,7 @@ using namespace MathConst;
 
 /* ---------------------------------------------------------------------- */
 
-NEB::NEB(LAMMPS *lmp) : Pointers(lmp) {}
+NEB::NEB(LAMMPS *lmp) : Command(lmp), all(nullptr), rdist(nullptr) {}
 
 /* ----------------------------------------------------------------------
    internal NEB constructor, called from TAD
@@ -50,7 +50,7 @@ NEB::NEB(LAMMPS *lmp) : Pointers(lmp) {}
 
 NEB::NEB(LAMMPS *lmp, double etol_in, double ftol_in, int n1steps_in,
          int n2steps_in, int nevery_in, double *buf_init, double *buf_final)
-  : Pointers(lmp)
+  : Command(lmp), fp(nullptr), all(nullptr), rdist(nullptr)
 {
   double delx,dely,delz;
 
@@ -59,6 +59,7 @@ NEB::NEB(LAMMPS *lmp, double etol_in, double ftol_in, int n1steps_in,
   n1steps = n1steps_in;
   n2steps = n2steps_in;
   nevery = nevery_in;
+  verbose = false;
 
   // replica info
 
@@ -69,9 +70,7 @@ NEB::NEB(LAMMPS *lmp, double etol_in, double ftol_in, int n1steps_in,
   MPI_Comm_rank(world,&me);
 
   // generate linear interpolate replica
-
   double fraction = ireplica/(nreplica-1.0);
-
   double **x = atom->x;
   int nlocal = atom->nlocal;
 
@@ -94,7 +93,11 @@ NEB::~NEB()
 {
   MPI_Comm_free(&roots);
   memory->destroy(all);
-  delete [] rdist;
+  delete[] rdist;
+  if (fp) {
+    if (compressed) platform::pclose(fp);
+    else fclose(fp);
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -379,8 +382,8 @@ void NEB::readfile(char *file, int flag)
   char line[MAXLINE];
   double xx,yy,zz,delx,dely,delz;
 
-  if (me_universe == 0 && screen)
-    fprintf(screen,"Reading NEB coordinate file(s) ...\n");
+  if (me_universe == 0 && universe->uscreen)
+    fprintf(universe->uscreen,"Reading NEB coordinate file(s) ...\n");
 
   // flag = 0, universe root reads header of file, bcast to universe
   // flag = 1, each replica's root reads header of file, bcast to world
@@ -389,7 +392,7 @@ void NEB::readfile(char *file, int flag)
   if (flag == 0) {
     if (me_universe == 0) {
       open(file);
-      while (1) {
+      while (true) {
         eof = fgets(line,MAXLINE,fp);
         if (eof == nullptr) error->one(FLERR,"Unexpected end of NEB file");
         start = &line[strspn(line," \t\n\v\f\r")];
@@ -405,7 +408,7 @@ void NEB::readfile(char *file, int flag)
     if (me == 0) {
       if (ireplica) {
         open(file);
-        while (1) {
+        while (true) {
           eof = fgets(line,MAXLINE,fp);
           if (eof == nullptr) error->one(FLERR,"Unexpected end of NEB file");
           start = &line[strspn(line," \t\n\v\f\r")];
@@ -438,9 +441,10 @@ void NEB::readfile(char *file, int flag)
   while (nread < nlines) {
     nchunk = MIN(nlines-nread,CHUNK);
     if (flag == 0)
-      eofflag = comm->read_lines_from_file_universe(fp,nchunk,MAXLINE,buffer);
+      eofflag = utils::read_lines_from_file(fp,nchunk,MAXLINE,buffer,
+                                            universe->me,universe->uworld);
     else
-      eofflag = comm->read_lines_from_file(fp,nchunk,MAXLINE,buffer);
+      eofflag = utils::read_lines_from_file(fp,nchunk,MAXLINE,buffer,me,world);
     if (eofflag) error->all(FLERR,"Unexpected end of NEB file");
 
     buf = buffer;
@@ -465,13 +469,12 @@ void NEB::readfile(char *file, int flag)
       // adjust atom coord based on replica fraction
       // for flag = 0, interpolate for intermediate and final replicas
       // for flag = 1, replace existing coord with new coord
-      // ignore image flags of final x
-      // for interpolation:
-      //   new x is displacement from old x via minimum image convention
-      //   if final x is across periodic boundary:
-      //     new x may be outside box
-      //     will be remapped back into box when simulation starts
-      //     its image flags will then be adjusted
+      // ignore image flags of replica x
+      // displacement from first replica is via minimum image convention
+      // if x of some replica is across periodic boundary:
+      //   new x may be outside box
+      //   will be remapped back into box when simulation starts
+      //   its image flags will then be adjusted
 
       tag = ATOTAGINT(values[0]);
       m = atom->map(tag);
@@ -481,18 +484,20 @@ void NEB::readfile(char *file, int flag)
         yy = atof(values[2]);
         zz = atof(values[3]);
 
+        delx = xx - x[m][0];
+        dely = yy - x[m][1];
+        delz = zz - x[m][2];
+
+        domain->minimum_image(delx,dely,delz);
+
         if (flag == 0) {
-          delx = xx - x[m][0];
-          dely = yy - x[m][1];
-          delz = zz - x[m][2];
-          domain->minimum_image(delx,dely,delz);
           x[m][0] += fraction*delx;
           x[m][1] += fraction*dely;
           x[m][2] += fraction*delz;
         } else {
-          x[m][0] = xx;
-          x[m][1] = yy;
-          x[m][2] = zz;
+          x[m][0] += delx;
+          x[m][1] += dely;
+          x[m][2] += delz;
         }
       }
 
@@ -523,49 +528,34 @@ void NEB::readfile(char *file, int flag)
 
   if (flag == 0) {
     if (me_universe == 0) {
-      if (compressed) pclose(fp);
+      if (compressed) platform::pclose(fp);
       else fclose(fp);
     }
   } else {
     if (me == 0 && ireplica) {
-      if (compressed) pclose(fp);
+      if (compressed) platform::pclose(fp);
       else fclose(fp);
     }
   }
+  fp = nullptr;
 }
 
 /* ----------------------------------------------------------------------
    universe proc 0 opens NEB data file
-   test if gzipped
+   test if compressed
 ------------------------------------------------------------------------- */
 
 void NEB::open(char *file)
 {
   compressed = 0;
-  char *suffix = file + strlen(file) - 3;
-  if (suffix > file && strcmp(suffix,".gz") == 0) compressed = 1;
-  if (!compressed) fp = fopen(file,"r");
-  else {
-#ifdef LAMMPS_GZIP
-    char gunzip[128];
-    snprintf(gunzip,128,"gzip -c -d %s",file);
+  if (platform::has_compress_extension(file)) {
+    compressed = 1;
+    fp = platform::compressed_read(file);
+    if (!fp) error->one(FLERR,"Cannot open compressed file");
+  } else fp = fopen(file,"r");
 
-#ifdef _WIN32
-    fp = _popen(gunzip,"rb");
-#else
-    fp = popen(gunzip,"r");
-#endif
-
-#else
-    error->one(FLERR,"Cannot open gzipped file");
-#endif
-  }
-
-  if (fp == nullptr) {
-    char str[128];
-    snprintf(str,128,"Cannot open file %s",file);
-    error->one(FLERR,str);
-  }
+  if (fp == nullptr)
+    error->one(FLERR,"Cannot open file {}: {}",file,utils::getsyserror());
 }
 
 /* ----------------------------------------------------------------------

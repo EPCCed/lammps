@@ -22,8 +22,8 @@ protected:
     void *lmp;
     std::string INPUT_DIR = STRINGIFY(TEST_INPUT_FOLDER);
 
-    LibraryConfig(){};
-    ~LibraryConfig() override{};
+    LibraryConfig() = default;
+    ~LibraryConfig() override = default;
 
     void SetUp() override
     {
@@ -35,7 +35,7 @@ protected:
         int argc    = sizeof(args) / sizeof(char *);
 
         ::testing::internal::CaptureStdout();
-        lmp = lammps_open_no_mpi(argc, argv, NULL);
+        lmp = lammps_open_no_mpi(argc, argv, nullptr);
         lammps_command(lmp, "fix charge all property/atom q ghost yes");
         lammps_command(lmp, "region box block 0 1 0 1 0 1");
         lammps_command(lmp, "create_box 1 box");
@@ -74,7 +74,7 @@ TEST(LAMMPSConfig, package_name)
         EXPECT_EQ(lammps_config_package_name(numpkgs + 10, buf, 128), 0);
         EXPECT_THAT(buf, StrEq(""));
     } else {
-        EXPECT_EQ(lammps_config_package_name(0, buf, 128), 1);
+        EXPECT_EQ(lammps_config_package_name(0, buf, 128), 0);
         EXPECT_THAT(buf, StrEq(""));
     }
 };
@@ -200,7 +200,10 @@ TEST(LAMMPSConfig, exceptions)
 
 TEST(LAMMPSConfig, mpi_support)
 {
-    EXPECT_EQ(lammps_config_has_mpi_support(), LAMMPS_HAS_MPI);
+    if (LAMMPS_HAS_MPI)
+        EXPECT_GT(lammps_config_has_mpi_support(), 0);
+    else
+        EXPECT_EQ(lammps_config_has_mpi_support(), 0);
 };
 
 TEST(LAMMPSConfig, png_support)

@@ -1,6 +1,7 @@
+// clang-format off
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://lammps.sandia.gov/, Sandia National Laboratories
+   https://www.lammps.org/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -13,6 +14,7 @@
 
 #include "fix_halt.h"
 
+#include "arg_info.h"
 #include "atom.h"
 #include "comm.h"
 #include "error.h"
@@ -32,7 +34,7 @@ using namespace FixConst;
 enum{BONDMAX,TLIMIT,DISKFREE,VARIABLE};
 enum{LT,LE,GT,GE,EQ,NEQ,XOR};
 enum{HARD,SOFT,CONTINUE};
-enum{NOMSG,YESMSG};
+enum{NOMSG=0,YESMSG=1};
 
 /* ---------------------------------------------------------------------- */
 
@@ -52,20 +54,25 @@ FixHalt::FixHalt(LAMMPS *lmp, int narg, char **arg) :
     attribute = TLIMIT;
   } else if (strcmp(arg[iarg],"diskfree") == 0) {
     attribute = DISKFREE;
-    dlimit_path = new char[2];
-    strcpy(dlimit_path,".");
+    dlimit_path = utils::strdup(".");
   } else if (strcmp(arg[iarg],"bondmax") == 0) {
     attribute = BONDMAX;
-  } else if (strncmp(arg[iarg],"v_",2) == 0) {
+  } else {
+    ArgInfo argi(arg[iarg],ArgInfo::VARIABLE);
+
+    if ((argi.get_type() == ArgInfo::UNKNOWN)
+        || (argi.get_type() == ArgInfo::NONE)
+        || (argi.get_dim() != 0))
+      error->all(FLERR,"Invalid fix halt attribute");
+
     attribute = VARIABLE;
-    int n = strlen(arg[iarg]);
-    idvar = new char[n];
-    strcpy(idvar,&arg[iarg][2]);
+    idvar = argi.copy_name();
     ivar = input->variable->find(idvar);
+
     if (ivar < 0) error->all(FLERR,"Could not find fix halt variable name");
     if (input->variable->equalstyle(ivar) == 0)
       error->all(FLERR,"Fix halt variable is not equal-style variable");
-  } else error->all(FLERR,"Invalid fix halt attribute");
+  }
 
   ++iarg;
   if (strcmp(arg[iarg],"<") == 0) operation = LT;
@@ -95,9 +102,7 @@ FixHalt::FixHalt(LAMMPS *lmp, int narg, char **arg) :
       iarg += 2;
     } else if (strcmp(arg[iarg],"message") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal fix halt command");
-      if (strcmp(arg[iarg+1],"no") == 0) msgflag = NOMSG;
-      else if (strcmp(arg[iarg+1],"yes") == 0) msgflag = YESMSG;
-      else error->all(FLERR,"Illegal fix halt command");
+      msgflag = utils::logical(FLERR,arg[iarg+1],false,lmp);
       iarg += 2;
     } else if (strcmp(arg[iarg],"path") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal fix halt command");
@@ -107,7 +112,7 @@ FixHalt::FixHalt(LAMMPS *lmp, int narg, char **arg) :
       dlimit_path = new char[len];
       // strip off quotes, if present
       if ( ((arg[iarg][0] == '"') || (arg[iarg][0] == '\''))
-           && (arg[iarg][0] == arg[iarg][len-2]) ) {
+           && (arg[iarg][0] == arg[iarg][len-2])) {
         strcpy(dlimit_path,&arg[iarg][1]);
         dlimit_path[len-3] = '\0';
       } else strcpy(dlimit_path,arg[iarg]);

@@ -1,6 +1,7 @@
+// clang-format off
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   http://lammps.sandia.gov, Sandia National Laboratories
+   https://www.lammps.org/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -25,6 +26,8 @@ class CommKokkos : public CommBrick {
 
   bool exchange_comm_classic;
   bool forward_comm_classic;
+  bool forward_pair_comm_classic;
+  bool forward_fix_comm_classic;
   bool reverse_comm_classic;
   bool exchange_comm_on_host;
   bool forward_comm_on_host;
@@ -47,6 +50,8 @@ class CommKokkos : public CommBrick {
   void reverse_comm_compute(class Compute *);  // reverse from a Compute
   void forward_comm_dump(class Dump *);    // forward comm from a Dump
   void reverse_comm_dump(class Dump *);    // reverse comm from a Dump
+
+  void forward_comm_array(int, double **);            // forward comm of array
 
   template<class DeviceType> void forward_comm_device(int dummy);
   template<class DeviceType> void reverse_comm_device();

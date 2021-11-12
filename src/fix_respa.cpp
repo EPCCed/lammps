@@ -1,6 +1,7 @@
+// clang-format off
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://lammps.sandia.gov/, Sandia National Laboratories
+   https://www.lammps.org/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -43,7 +44,7 @@ FixRespa::FixRespa(LAMMPS *lmp, int narg, char **arg) :
 
   f_level = nullptr;
   t_level = nullptr;
-  grow_arrays(atom->nmax);
+  FixRespa::grow_arrays(atom->nmax);
   atom->add_callback(Atom::GROW);
 }
 
@@ -74,8 +75,8 @@ int FixRespa::setmask()
 
 double FixRespa::memory_usage()
 {
-  double bytes = atom->nmax*nlevels*3 * sizeof(double);
-  if (store_torque) bytes += atom->nmax*nlevels*3 * sizeof(double);
+  double bytes = (double)atom->nmax*nlevels*3 * sizeof(double);
+  if (store_torque) bytes += (double)atom->nmax*nlevels*3 * sizeof(double);
   return bytes;
 }
 

@@ -1,6 +1,7 @@
+// clang-format off
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://lammps.sandia.gov/, Sandia National Laboratories
+   https://www.lammps.org/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -39,17 +40,22 @@
 #include "pair.h"
 #include "pair_hybrid.h"
 #include "region.h"
-#include "universe.h"
+#include "text_file_reader.h"
 #include "update.h"
 #include "variable.h"
+#include "fmt/chrono.h"
 
 #include <cctype>
 #include <cmath>
 #include <cstring>
 #include <ctime>
+#include <exception>
 #include <map>
 
 #ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #define PSAPI_VERSION 1
 #include <windows.h>
 #include <cstdint>
@@ -64,9 +70,6 @@
 #endif
 
 namespace LAMMPS_NS {
-// same as in variable.cpp
-enum {INDEX,LOOP,WORLD,UNIVERSE,ULOOP,STRING,GETENV,
-      SCALARFILE,ATOMFILE,FORMAT,EQUAL,ATOM,VECTOR,PYTHON,INTERNAL};
 
 enum {COMPUTES=1<<0,
       DUMPS=1<<1,
@@ -94,6 +97,7 @@ enum {COMPUTES=1<<0,
       REGION_STYLES=1<<23,
       DUMP_STYLES=1<<24,
       COMMAND_STYLES=1<<25,
+      ACCELERATOR=1<<26,
       ALL=~0};
 
 static const int STYLES = ATOM_STYLES | INTEGRATE_STYLES | MINIMIZE_STYLES
@@ -105,9 +109,11 @@ static const int STYLES = ATOM_STYLES | INTEGRATE_STYLES | MINIMIZE_STYLES
 
 using namespace LAMMPS_NS;
 
+// must match enumerator in variable.h
 static const char *varstyles[] = {
   "index", "loop", "world", "universe", "uloop", "string", "getenv",
-  "file", "atomfile", "format", "equal", "atom", "vector", "python", "internal", "(unknown)"};
+  "file", "atomfile", "format", "equal", "atom", "vector", "python",
+  "internal", "(unknown)"};
 
 static const char *mapstyles[] = { "none", "array", "hash", "yes" };
 
@@ -198,6 +204,9 @@ void Info::command(int narg, char **arg)
     } else if (strncmp(arg[idx],"coeffs",3) == 0) {
       flags |= COEFFS;
       ++idx;
+    } else if (strncmp(arg[idx],"accelerator",3) == 0) {
+      flags |= ACCELERATOR;
+      ++idx;
     } else if (strncmp(arg[idx],"styles",3) == 0) {
       if (idx+1 < narg) {
         ++idx;
@@ -262,8 +271,8 @@ void Info::command(int narg, char **arg)
   if (out == nullptr) return;
 
   fputs("\nInfo-Info-Info-Info-Info-Info-Info-Info-Info-Info-Info\n",out);
-  time_t now = time(nullptr);
-  fmt::print(out,"Printed on {}\n",ctime(&now));
+  std::time_t now = std::time(nullptr);
+  fmt::print(out,"Printed on {:%a %b %d %H:%M:%S %Y}\n", fmt::localtime(now));
 
   if (flags & CONFIG) {
     fmt::print(out,"\nLAMMPS version: {} / {}\n",
@@ -273,7 +282,7 @@ void Info::command(int narg, char **arg)
       fmt::print(out,"Git info: {} / {} / {}\n",
                  lmp->git_branch, lmp->git_descriptor,lmp->git_commit);
 
-    fmt::print(out,"\nOS information: {}\n\n",get_os_info());
+    fmt::print(out,"\nOS information: {}\n\n",platform::os_info());
 
     fmt::print(out,"sizeof(smallint): {}-bit\n"
                "sizeof(imageint): {}-bit\n"
@@ -283,13 +292,14 @@ void Info::command(int narg, char **arg)
                sizeof(tagint)*8, sizeof(bigint)*8);
 
     fmt::print(out,"\nCompiler: {} with {}\nC++ standard: {}\n",
-               get_compiler_info(),get_openmp_info(),get_cxx_info());
+               platform::compiler_info(),platform::openmp_standard(),platform::cxx_standard());
 
     fputs("\nActive compile time flags:\n\n",out);
     if (has_gzip_support()) fputs("-DLAMMPS_GZIP\n",out);
     if (has_png_support()) fputs("-DLAMMPS_PNG\n",out);
     if (has_jpeg_support()) fputs("-DLAMMPS_JPEG\n",out);
     if (has_ffmpeg_support()) fputs("-DLAMMPS_FFMPEG\n",out);
+    if (has_fft_single_support()) fputs("-DFFT_SINGLE\n",out);
     if (has_exceptions()) fputs("-DLAMMPS_EXCEPTIONS\n",out);
 
 #if defined(LAMMPS_BIGBIG)
@@ -299,6 +309,7 @@ void Info::command(int narg, char **arg)
 #else // defined(LAMMPS_SMALLSMALL)
     fputs("-DLAMMPS_SMALLSMALL\n",out);
 #endif
+    if (has_gzip_support()) fmt::print(out,"\n{}\n",platform::compress_info());
 
     int ncword, ncline = 0;
     fputs("\nInstalled packages:\n\n",out);
@@ -312,6 +323,13 @@ void Info::command(int narg, char **arg)
       ncline += ncword + 1;
     }
     fputs("\n",out);
+  }
+
+  if (flags & ACCELERATOR) {
+    fmt::print(out,"\nAccelerator configuration:\n\n{}",
+               get_accelerator_info());
+    if (Info::has_gpu_device())
+      fmt::print(out,"\nAvailable GPU devices:\n{}\n",get_gpu_device_info());
   }
 
   if (flags & MEMORY) {
@@ -337,7 +355,7 @@ void Info::command(int narg, char **arg)
 
   if (flags & COMM) {
     int major,minor;
-    std::string version = get_mpi_info(major,minor);
+    std::string version = platform::mpi_info(major,minor);
 
     fmt::print(out,"\nCommunication information:\n"
                "MPI library level: MPI v{}.{}\n"
@@ -357,9 +375,24 @@ void Info::command(int narg, char **arg)
       if (comm->mode == 1) {
         fputs("Communication mode = multi\n",out);
         double cut;
+        for (int i=0; i < neighbor->ncollections; ++i) {
+          if (comm->cutusermulti) cut = comm->cutusermulti[i];
+          else cut = 0.0;
+          for (int j=0; j < neighbor->ncollections; ++j) {
+            cut = MAX(cut,sqrt(neighbor->cutcollectionsq[i][j]));
+          }
+
+          if (comm->cutusermulti) cut = MAX(cut,comm->cutusermulti[i]);
+          fmt::print(out,"Communication cutoff for collection {} = {:.8}\n", i, cut);
+        }
+      }
+
+      if (comm->mode == 2) {
+        fputs("Communication mode = multi/old\n",out);
+        double cut;
         for (int i=1; i <= atom->ntypes && neighbor->cuttype; ++i) {
           cut = neighbor->cuttype[i];
-          if (comm->cutusermulti) cut = MAX(cut,comm->cutusermulti[i]);
+          if (comm->cutusermultiold) cut = MAX(cut,comm->cutusermultiold[i]);
           fmt::print(out,"Communication cutoff for type {} = {:.8}\n", i, cut);
         }
       }
@@ -375,7 +408,7 @@ void Info::command(int narg, char **arg)
     fmt::print(out,"Units         = {}\n", update->unit_style);
     fmt::print(out,"Atom style    = {}\n", atom->atom_style);
     fmt::print(out,"Atom map      = {}\n", mapstyles[atom->map_style]);
-    if (atom->molecular > 0) {
+    if (atom->molecular != Atom::ATOMIC) {
       const char *msg;
       msg = (atom->molecular == Atom::TEMPLATE) ? "template" : "standard";
       fmt::print(out,"Molecule type = {}\n",msg);
@@ -390,7 +423,7 @@ void Info::command(int narg, char **arg)
         fmt::print(out," {}", hybrid->keywords[i]);
       fputc('\n',out);
     }
-    if (atom->molecular > 0) {
+    if (atom->molecular != Atom::ATOMIC) {
       const char *msg;
       msg = force->bond_style ? force->bond_style : "none";
       fmt::print(out,"Bonds     = {:12},  types = {:8},  style = {}\n",
@@ -534,16 +567,13 @@ void Info::command(int narg, char **arg)
   }
 
   if (flags & COMPUTES) {
-    int ncompute = modify->ncompute;
-    Compute **compute = modify->compute;
+    int i = 0;
     char **names = group->names;
     fputs("\nCompute information:\n",out);
-    for (int i=0; i < ncompute; ++i) {
-      fmt::print(out,"Compute[{:3d}]:  {:16}  style = {:16}  group = {}\n",
-                 i, std::string(compute[i]->id)+',',
-                 std::string(compute[i]->style)+',',
-                 names[compute[i]->igroup]);
-    }
+    for (const auto &compute : modify->get_compute_list())
+      fmt::print(out,"Compute[{:3d}]:  {:16}  style = {:16}  group = {}\n", i++,
+                 std::string(compute->id)+',',std::string(compute->style)+',',
+                 names[compute->igroup]);
   }
 
   if (flags & DUMPS) {
@@ -555,10 +585,8 @@ void Info::command(int narg, char **arg)
     fputs("\nDump information:\n",out);
     for (int i=0; i < ndump; ++i) {
       fmt::print(out,"Dump[{:3d}]:     {:16}  file = {:16}  style = {:16}  group = {:16}  ",
-                 i, std::string(dump[i]->id)+',',
-                 std::string(dump[i]->filename)+',',
-                 std::string(dump[i]->style)+',',
-                 std::string(names[dump[i]->igroup])+',');
+                 i, std::string(dump[i]->id)+',',std::string(dump[i]->filename)+',',
+                 std::string(dump[i]->style)+',',std::string(names[dump[i]->igroup])+',');
       if (nevery[i]) {
         fmt::print(out,"every = {}\n", nevery[i]);
       } else {
@@ -568,16 +596,12 @@ void Info::command(int narg, char **arg)
   }
 
   if (flags & FIXES) {
-    int nfix = modify->nfix;
-    Fix **fix = modify->fix;
+    int i = 0;
     char **names = group->names;
     fputs("\nFix information:\n",out);
-    for (int i=0; i < nfix; ++i) {
-      fmt::print(out, "Fix[{:3d}]:      {:16}  style = {:16}  group = {}\n",
-                 i,std::string(fix[i]->id)+',',
-                 std::string(fix[i]->style)+',',
-                 names[fix[i]->igroup]);
-    }
+    for (const auto &fix : modify->get_fix_list())
+      fmt::print(out, "Fix[{:3d}]:      {:16}  style = {:16}  group = {}\n",i++,
+                 std::string(fix->id)+',',std::string(fix->style)+',',names[fix->igroup]);
   }
 
   if (flags & VARIABLES) {
@@ -589,39 +613,22 @@ void Info::command(int narg, char **arg)
     for (int i=0; i < nvar; ++i) {
       int ndata = 1;
       fmt::print(out,"Variable[{:3d}]: {:16}  style = {:16}  def =",
-                 i,std::string(names[i])+',',
-                 std::string(varstyles[style[i]])+',');
-      if (style[i] == INTERNAL) {
+                 i,std::string(names[i])+',',std::string(varstyles[style[i]])+',');
+      if (style[i] == Variable::INTERNAL) {
         fmt::print(out,"{:.8}\n",input->variable->dvalue[i]);
         continue;
       }
-      if ((style[i] != LOOP) && (style[i] != ULOOP))
+      if ((style[i] != Variable::LOOP) && (style[i] != Variable::ULOOP))
         ndata = input->variable->num[i];
       for (int j=0; j < ndata; ++j)
-        fmt::print(out," {}",data[i][j]);
+        if (data[i][j]) fmt::print(out," {}",data[i][j]);
       fputs("\n",out);
     }
   }
 
   if (flags & TIME) {
-    double wallclock = MPI_Wtime() - lmp->initclock;
-    double cpuclock = 0.0;
-
-#if defined(_WIN32)
-    // from MSD docs.
-    FILETIME ct,et,kt,ut;
-    union { FILETIME ft; uint64_t ui; } cpu;
-    if (GetProcessTimes(GetCurrentProcess(),&ct,&et,&kt,&ut)) {
-      cpu.ft = ut;
-      cpuclock = cpu.ui * 0.0000001;
-    }
-#else /* POSIX */
-    struct rusage ru;
-    if (getrusage(RUSAGE_SELF, &ru) == 0) {
-      cpuclock  = (double) ru.ru_utime.tv_sec;
-      cpuclock += (double) ru.ru_utime.tv_usec * 0.000001;
-    }
-#endif /* ! _WIN32 */
+    double wallclock = platform::walltime() - lmp->initclock;
+    double cpuclock = platform::cputime();
 
     int cpuh,cpum,cpus,wallh,wallm,walls;
     cpus = fmod(cpuclock,60.0);
@@ -654,20 +661,20 @@ void Info::available_styles(FILE * out, int flags)
 
   fputs("\nStyles information:\n",out);
 
-  if(flags & ATOM_STYLES)      atom_styles(out);
-  if(flags & INTEGRATE_STYLES) integrate_styles(out);
-  if(flags & MINIMIZE_STYLES)  minimize_styles(out);
-  if(flags & PAIR_STYLES)      pair_styles(out);
-  if(flags & BOND_STYLES)      bond_styles(out);
-  if(flags & ANGLE_STYLES)     angle_styles(out);
-  if(flags & DIHEDRAL_STYLES)  dihedral_styles(out);
-  if(flags & IMPROPER_STYLES)  improper_styles(out);
-  if(flags & KSPACE_STYLES)    kspace_styles(out);
-  if(flags & FIX_STYLES)       fix_styles(out);
-  if(flags & COMPUTE_STYLES)   compute_styles(out);
-  if(flags & REGION_STYLES)    region_styles(out);
-  if(flags & DUMP_STYLES)      dump_styles(out);
-  if(flags & COMMAND_STYLES)   command_styles(out);
+  if (flags & ATOM_STYLES)      atom_styles(out);
+  if (flags & INTEGRATE_STYLES) integrate_styles(out);
+  if (flags & MINIMIZE_STYLES)  minimize_styles(out);
+  if (flags & PAIR_STYLES)      pair_styles(out);
+  if (flags & BOND_STYLES)      bond_styles(out);
+  if (flags & ANGLE_STYLES)     angle_styles(out);
+  if (flags & DIHEDRAL_STYLES)  dihedral_styles(out);
+  if (flags & IMPROPER_STYLES)  improper_styles(out);
+  if (flags & KSPACE_STYLES)    kspace_styles(out);
+  if (flags & FIX_STYLES)       fix_styles(out);
+  if (flags & COMPUTE_STYLES)   compute_styles(out);
+  if (flags & REGION_STYLES)    region_styles(out);
+  if (flags & DUMP_STYLES)      dump_styles(out);
+  if (flags & COMMAND_STYLES)   command_styles(out);
 }
 
 void Info::atom_styles(FILE *out)
@@ -781,20 +788,20 @@ bool Info::is_active(const char *category, const char *name)
 
   if (strcmp(category,"package") == 0) {
     if (strcmp(name,"gpu") == 0) {
-      return (modify->find_fix("package_gpu") >= 0) ? true : false;
+      return (modify->get_fix_by_id("package_gpu")) ? true : false;
     } else if (strcmp(name,"intel") == 0) {
-      return (modify->find_fix("package_intel") >= 0) ? true : false;
+      return (modify->get_fix_by_id("package_intel")) ? true : false;
     } else if (strcmp(name,"kokkos") == 0) {
       return (lmp->kokkos && lmp->kokkos->kokkos_exists) ? true : false;
     } else if (strcmp(name,"omp") == 0) {
-      return (modify->find_fix("package_omp") >= 0) ? true : false;
-    } else error->all(FLERR,"Unknown name for info package category");
+      return (modify->get_fix_by_id("package_omp")) ? true : false;
+    } else error->all(FLERR,"Unknown name for info package category: {}", name);
 
   } else if (strcmp(category,"newton") == 0) {
     if (strcmp(name,"pair") == 0) return (force->newton_pair != 0);
     else if (strcmp(name,"bond") == 0) return (force->newton_bond != 0);
     else if (strcmp(name,"any") == 0) return (force->newton != 0);
-    else error->all(FLERR,"Unknown name for info newton category");
+    else error->all(FLERR,"Unknown name for info newton category: {}", name);
 
   } else if (strcmp(category,"pair") == 0) {
     if (force->pair == nullptr) return false;
@@ -803,7 +810,7 @@ bool Info::is_active(const char *category, const char *name)
     else if (strcmp(name,"manybody") == 0) return (force->pair->manybody_flag != 0);
     else if (strcmp(name,"tail") == 0) return (force->pair->tail_flag != 0);
     else if (strcmp(name,"shift") == 0) return (force->pair->offset_flag != 0);
-    else error->all(FLERR,"Unknown name for info pair category");
+    else error->all(FLERR,"Unknown name for info pair category: {}", name);
 
   } else if (strcmp(category,"comm_style") == 0) {
     style = commstyles[comm->style];
@@ -825,7 +832,7 @@ bool Info::is_active(const char *category, const char *name)
     style = force->improper_style;
   } else if (strcmp(category,"kspace_style") == 0) {
     style = force->kspace_style;
-  } else error->all(FLERR,"Unknown category for info is_active()");
+  } else error->all(FLERR,"Unknown category for info is_active(): {}", category);
 
   int match = 0;
   if (strcmp(style,name) == 0) match = 1;
@@ -864,10 +871,12 @@ bool Info::is_available(const char *category, const char *name)
       return has_jpeg_support();
     } else if (strcmp(name,"ffmpeg") == 0) {
       return has_ffmpeg_support();
+    } else if (strcmp(name,"fft_single") == 0) {
+      return has_fft_single_support();
     } else if (strcmp(name,"exceptions") == 0) {
       return has_exceptions();
     }
-  } else error->all(FLERR,"Unknown category for info is_available()");
+  } else error->all(FLERR,"Unknown category for info is_available(): {}", category);
 
   return false;
 }
@@ -898,10 +907,8 @@ bool Info::is_defined(const char *category, const char *name)
         return true;
     }
   } else if (strcmp(category,"fix") == 0) {
-    int nfix = modify->nfix;
-    Fix **fix = modify->fix;
-    for (int i=0; i < nfix; ++i) {
-      if (strcmp(fix[i]->id,name) == 0)
+    for (const auto &fix : modify->get_fix_list()) {
+      if (strcmp(fix->id,name) == 0)
         return true;
     }
   } else if (strcmp(category,"group") == 0) {
@@ -926,40 +933,40 @@ bool Info::is_defined(const char *category, const char *name)
       if (strcmp(names[i],name) == 0)
         return true;
     }
-  } else error->all(FLERR,"Unknown category for info is_defined()");
+  } else error->all(FLERR,"Unknown category for info is_defined(): {}", category);
 
   return false;
 }
 
 bool Info::has_style(const std::string &category, const std::string &name)
 {
-  if ( category == "atom" ) {
+  if (category == "atom") {
     return find_style(lmp, atom->avec_map, name, false);
-  } else if( category == "integrate" ) {
+  } else if (category == "integrate") {
     return find_style(lmp, update->integrate_map, name, true);
-  } else if( category == "minimize" ) {
+  } else if (category == "minimize") {
     return find_style(lmp, update->minimize_map, name, true);
-  } else if( category == "pair" ) {
+  } else if (category == "pair") {
     return find_style(lmp, force->pair_map, name, true);
-  } else if( category == "bond" ) {
+  } else if (category == "bond") {
     return find_style(lmp, force->bond_map, name, true);
-  } else if( category == "angle" ) {
+  } else if (category == "angle") {
     return find_style(lmp, force->angle_map, name, true);
-  } else if( category == "dihedral" ) {
+  } else if (category == "dihedral") {
     return find_style(lmp, force->dihedral_map, name, true);
-  } else if( category == "improper" ) {
+  } else if (category == "improper") {
     return find_style(lmp, force->improper_map, name, true);
-  } else if( category == "kspace" ) {
+  } else if (category == "kspace") {
     return find_style(lmp, force->kspace_map, name, true);
-  } else if( category == "fix" ) {
+  } else if (category == "fix") {
     return find_style(lmp, modify->fix_map, name, true);
-  } else if( category == "compute" ) {
+  } else if (category == "compute") {
     return find_style(lmp, modify->compute_map, name, true);
-  } else if( category == "region" ) {
+  } else if (category == "region") {
     return find_style(lmp, domain->region_map, name, false);
-  } else if( category == "dump" ) {
+  } else if (category == "dump") {
     return find_style(lmp, output->dump_map, name, false);
-  } else if( category == "command" ) {
+  } else if (category == "command") {
     return find_style(lmp, input->command_map, name, false);
   }
   return false;
@@ -967,36 +974,36 @@ bool Info::has_style(const std::string &category, const std::string &name)
 
 std::vector<std::string> Info::get_available_styles(const std::string &category)
 {
-  if ( category == "atom" ) {
+  if (category == "atom") {
     return get_style_names(atom->avec_map);
-  } else if( category == "integrate" ) {
+  } else if (category == "integrate") {
     return get_style_names(update->integrate_map);
-  } else if( category == "minimize" ) {
+  } else if (category == "minimize") {
     return get_style_names(update->minimize_map);
-  } else if( category == "pair" ) {
+  } else if (category == "pair") {
     return get_style_names(force->pair_map);
-  } else if( category == "bond" ) {
+  } else if (category == "bond") {
     return get_style_names(force->bond_map);
-  } else if( category == "angle" ) {
+  } else if (category == "angle") {
     return get_style_names(force->angle_map);
-  } else if( category == "dihedral" ) {
+  } else if (category == "dihedral") {
     return get_style_names(force->dihedral_map);
-  } else if( category == "improper" ) {
+  } else if (category == "improper") {
     return get_style_names(force->improper_map);
-  } else if( category == "kspace" ) {
+  } else if (category == "kspace") {
     return get_style_names(force->kspace_map);
-  } else if( category == "fix" ) {
+  } else if (category == "fix") {
     return get_style_names(modify->fix_map);
-  } else if( category == "compute" ) {
+  } else if (category == "compute") {
     return get_style_names(modify->compute_map);
-  } else if( category == "region" ) {
+  } else if (category == "region") {
     return get_style_names(domain->region_map);
-  } else if( category == "dump" ) {
+  } else if (category == "dump") {
     return get_style_names(output->dump_map);
-  } else if( category == "command" ) {
+  } else if (category == "command") {
     return get_style_names(input->command_map);
   }
-  return std::vector<std::string>();
+  return {};
 }
 
 template<typename ValueType>
@@ -1005,7 +1012,7 @@ static std::vector<std::string> get_style_names(std::map<std::string, ValueType>
   std::vector<std::string> names;
 
   names.reserve(styles->size());
-  for(auto const& kv : *styles) {
+  for (auto const &kv : *styles) {
     // skip "secret" styles
     if (isupper(kv.first[0])) continue;
     names.push_back(kv.first);
@@ -1049,7 +1056,7 @@ static void print_columns(FILE *fp, std::map<std::string, ValueType> *styles)
 
   // std::map keys are already sorted
   int pos = 80;
-  for(typename std::map<std::string, ValueType>::iterator it = styles->begin(); it != styles->end(); ++it) {
+  for (typename std::map<std::string, ValueType>::iterator it = styles->begin(); it != styles->end(); ++it) {
     const std::string &style_name = it->first;
 
     // skip "secret" styles
@@ -1112,6 +1119,14 @@ bool Info::has_ffmpeg_support() {
 #endif
 }
 
+bool Info::has_fft_single_support() {
+#ifdef FFT_SINGLE
+  return true;
+#else
+  return false;
+#endif
+}
+
 bool Info::has_exceptions() {
 #ifdef LAMMPS_EXCEPTIONS
   return true;
@@ -1120,167 +1135,172 @@ bool Info::has_exceptions() {
 #endif
 }
 
-bool Info::has_package(const char * package_name) {
-  for(int i = 0; LAMMPS::installed_packages[i] != nullptr; ++i) {
-    if(strcmp(package_name, LAMMPS::installed_packages[i]) == 0) {
+bool Info::has_package(const std::string &package_name) {
+  for (int i = 0; LAMMPS::installed_packages[i] != nullptr; ++i) {
+    if (package_name == LAMMPS::installed_packages[i]) {
       return true;
     }
   }
   return false;
 }
 
-/* ---------------------------------------------------------------------- */
-#define _INFOBUF_SIZE 256
+#if defined(LMP_GPU)
+extern bool lmp_gpu_config(const std::string &, const std::string &);
+extern bool lmp_has_compatible_gpu_device();
+extern std::string lmp_gpu_device_info();
 
-std::string Info::get_os_info()
+// we will only report compatible GPUs, i.e. when a GPU device is
+// available *and* supports the required floating point precision
+bool Info::has_gpu_device()
 {
-  std::string buf;
+  return lmp_has_compatible_gpu_device();
+}
 
-#if defined(_WIN32)
-  DWORD fullversion,majorv,minorv,buildv=0;
+std::string Info::get_gpu_device_info()
+{
+  return lmp_gpu_device_info();
+}
+#else
+bool Info::has_gpu_device()
+{
+  return false;
+}
+std::string Info::get_gpu_device_info()
+{
+  return "";
+}
+#endif
 
-  fullversion = GetVersion();
-  majorv = (DWORD) (LOBYTE(LOWORD(fullversion)));
-  minorv = (DWORD) (HIBYTE(LOWORD(fullversion)));
-  if (fullversion < 0x80000000)
-    buildv = (DWORD) (HIWORD(fullversion));
+#if defined(LMP_KOKKOS)
+#include "Kokkos_Macros.hpp"
+#endif
 
-  buf = fmt::format("Windows {}.{} ({}) on ",majorv,minorv,buildv);
-
-  SYSTEM_INFO si;
-  GetSystemInfo(&si);
-
-  switch (si.wProcessorArchitecture) {
-  case PROCESSOR_ARCHITECTURE_AMD64:
-    buf += "x86_64";
-    break;
-  case PROCESSOR_ARCHITECTURE_ARM:
-    buf += "arm";
-    break;
-  case PROCESSOR_ARCHITECTURE_IA64:
-    buf += "ia64";
-    break;
-  case PROCESSOR_ARCHITECTURE_INTEL:
-    buf += "i386";
-    break;
-  default:
-    buf += "(unknown)";
+bool Info::has_accelerator_feature(const std::string &package,
+                                   const std::string &category,
+                                   const std::string &setting)
+{
+#if defined(LMP_KOKKOS)
+  if (package == "KOKKOS") {
+    if (category == "precision") {
+      if (setting == "double") return true;
+      else return false;
+    }
+    if (category == "api") {
+#if defined(KOKKOS_ENABLE_OPENMP)
+      if (setting == "openmp") return true;
+#endif
+#if defined(KOKKOS_ENABLE_SERIAL)
+      if (setting == "serial") return true;
+#endif
+#if defined(KOKKOS_ENABLE_THREADS)
+      if (setting == "pthreads") return true;
+#endif
+#if defined(KOKKOS_ENABLE_CUDA)
+      if (setting == "cuda") return true;
+#endif
+#if defined(KOKKOS_ENABLE_HIP)
+      if (setting == "hip") return true;
+#endif
+#if defined(KOKKOS_ENABLE_SYCL)
+      if (setting == "sycl") return true;
+#endif
+      return false;
+    }
   }
-#else
-  struct utsname ut;
-  uname(&ut);
-  buf = fmt::format("{} {} on {}", ut.sysname, ut.release, ut.machine);
 #endif
-  return buf;
-}
-
-std::string Info::get_compiler_info()
-{
-  std::string buf;
-#if __clang__
-  buf = fmt::format("Clang C++ {}", __VERSION__);
-#elif __INTEL_COMPILER
-  double version = static_cast<double>(__INTEL_COMPILER)*0.01;
-  buf = fmt::format("Intel C++ {:.2f}.{} / {}", version,
-                    __INTEL_COMPILER_UPDATE, __VERSION__);
-#elif __GNUC__
-  buf = fmt::format("GNU C++ {}",   __VERSION__);
-#else
-  buf = "(Unknown)";
-#endif
-  return buf;
-}
-
-std::string Info::get_openmp_info()
-{
-
-#if !defined(_OPENMP)
-  return "OpenMP not enabled";
-#else
-
-// Supported OpenMP version corresponds to the release date of the
-// specifications as posted at https://www.openmp.org/specifications/
-
-#if _OPENMP > 201811
-  return "OpenMP newer than version 5.0";
-#elif _OPENMP == 201811
-  return "OpenMP 5.0";
-#elif _OPENMP == 201611
-  return "OpenMP 5.0 preview 1";
-#elif _OPENMP == 201511
-  return "OpenMP 4.5";
-#elif _OPENMP == 201307
-  return "OpenMP 4.0";
-#elif _OPENMP == 201107
-  return "OpenMP 3.1";
-#elif _OPENMP == 200805
-  return "OpenMP 3.0";
-#elif _OPENMP == 200505
-  return "OpenMP 2.5";
-#elif _OPENMP == 200203
-  return "OpenMP 2.0";
-#else
-  return "unknown OpenMP version";
-#endif
-
-#endif
-}
-
-std::string Info::get_mpi_vendor() {
-  #if defined(MPI_STUBS)
-  return "MPI STUBS";
-  #elif defined(OPEN_MPI)
-  return "Open MPI";
-  #elif defined(MPICH_NAME)
-  return "MPICH";
-  #elif defined(I_MPI_VERSION)
-  return "Intel MPI";
-  #elif defined(PLATFORM_MPI)
-  return "Platform MPI";
-  #elif defined(HP_MPI)
-  return "HP MPI";
-  #elif defined(MSMPI_VER)
-  return "Microsoft MPI";
-  #else
-  return "Unknown MPI implementation";
-  #endif
-}
-
-std::string Info::get_mpi_info(int &major, int &minor)
-{
-  int len;
-#if (defined(MPI_VERSION) && (MPI_VERSION > 2)) || defined(MPI_STUBS)
-  static char version[MPI_MAX_LIBRARY_VERSION_STRING];
-  MPI_Get_library_version(version,&len);
-#else
-  static char version[32];
-  strcpy(version,get_mpi_vendor().c_str());
-  len = strlen(version);
-#endif
-
-  MPI_Get_version(&major,&minor);
-  if (len > 80) {
-    char *ptr = strchr(version+80,'\n');
-    if (ptr) *ptr = '\0';
+#if defined(LMP_GPU)
+  if (package == "GPU") {
+    return lmp_gpu_config(category,setting);
   }
-  return std::string(version);
+#endif
+#if defined(LMP_OPENMP)
+  if (package == "OPENMP") {
+    if (category == "precision") {
+      if (setting == "double") return true;
+      else return false;
+    }
+    if (category == "api") {
+#if defined(_OPENMP)
+      if (setting == "openmp") return true;
+#else
+      if (setting == "serial") return true;
+#endif
+      return false;
+    }
+  }
+#endif
+#if defined(LMP_INTEL)
+  if (package == "INTEL") {
+    if (category == "precision") {
+      if (setting == "double") return true;
+      else if (setting == "mixed") return true;
+      else if (setting == "single")return true;
+      else return false;
+    }
+    if (category == "api") {
+#if defined(LMP_INTEL_OFFLOAD)
+      if (setting == "phi") return true;
+#elif defined(_OPENMP)
+      if (setting == "openmp") return true;
+#else
+      if (setting == "serial") return true;
+#endif
+      return false;
+    }
+  }
+#endif
+  return false;
 }
 
-std::string Info::get_cxx_info()
+std::string Info::get_accelerator_info(const std::string &package)
 {
-#if __cplusplus > 201703L
-  return "newer than C++17";
-#elif __cplusplus == 201703L
-  return "C++17";
-#elif __cplusplus == 201402L
-  return "C++14";
-#elif __cplusplus == 201103L
-  return "C++11";
-#elif __cplusplus == 199711L
-  return "C++98";
-#else
-  return "unknown";
-#endif
+  std::string mesg("");
+  if ((package.empty() || (package == "GPU")) && has_package("GPU")) {
+    mesg += "GPU package API:";
+    if (has_accelerator_feature("GPU","api","cuda"))   mesg += " CUDA";
+    if (has_accelerator_feature("GPU","api","hip"))    mesg += " HIP";
+    if (has_accelerator_feature("GPU","api","opencl")) mesg += " OpenCL";
+    mesg +=  "\nGPU package precision:";
+    if (has_accelerator_feature("GPU","precision","single")) mesg += " single";
+    if (has_accelerator_feature("GPU","precision","mixed"))  mesg += " mixed";
+    if (has_accelerator_feature("GPU","precision","double")) mesg += " double";
+    mesg += "\n";
+  }
+  if ((package.empty() || (package == "KOKKOS")) && has_package("KOKKOS")) {
+    mesg += "KOKKOS package API:";
+    if (has_accelerator_feature("KOKKOS","api","cuda"))     mesg += " CUDA";
+    if (has_accelerator_feature("KOKKOS","api","hip"))      mesg += " HIP";
+    if (has_accelerator_feature("KOKKOS","api","sycl"))     mesg += " SYCL";
+    if (has_accelerator_feature("KOKKOS","api","openmp"))   mesg += " OpenMP";
+    if (has_accelerator_feature("KOKKOS","api","serial"))   mesg += " Serial";
+    if (has_accelerator_feature("KOKKOS","api","pthreads")) mesg += " Pthreads";
+    mesg +=  "\nKOKKOS package precision:";
+    if (has_accelerator_feature("KOKKOS","precision","single")) mesg += " single";
+    if (has_accelerator_feature("KOKKOS","precision","mixed"))  mesg += " mixed";
+    if (has_accelerator_feature("KOKKOS","precision","double")) mesg += " double";
+    mesg += "\n";
+  }
+  if ((package.empty() || (package == "OPENMP")) && has_package("OPENMP")) {
+    mesg += "OPENMP package API:";
+    if (has_accelerator_feature("OPENMP","api","openmp"))   mesg += " OpenMP";
+    if (has_accelerator_feature("OPENMP","api","serial"))   mesg += " Serial";
+    mesg +=  "\nOPENMP package precision:";
+    if (has_accelerator_feature("OPENMP","precision","single")) mesg += " single";
+    if (has_accelerator_feature("OPENMP","precision","mixed"))  mesg += " mixed";
+    if (has_accelerator_feature("OPENMP","precision","double")) mesg += " double";
+    mesg += "\n";
+  }
+  if ((package.empty() || (package == "INTEL")) && has_package("INTEL")) {
+    mesg += "INTEL package API:";
+    if (has_accelerator_feature("INTEL","api","phi"))      mesg += " Phi";
+    if (has_accelerator_feature("INTEL","api","openmp"))   mesg += " OpenMP";
+    mesg +=  "\nINTEL package precision:";
+    if (has_accelerator_feature("INTEL","precision","single")) mesg += " single";
+    if (has_accelerator_feature("INTEL","precision","mixed"))  mesg += " mixed";
+    if (has_accelerator_feature("INTEL","precision","double")) mesg += " double";
+    mesg += "\n";
+  }
+  return mesg;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1308,8 +1328,13 @@ void Info::get_memory_info(double *meminfo)
     meminfo[2] = (double)pmc.PeakWorkingSetSize/1048576.0;
 #else
 #if defined(__linux__)
+#if defined(__GLIBC__) && __GLIBC_PREREQ(2, 33)
+    struct mallinfo2 mi;
+    mi = mallinfo2();
+#else
     struct mallinfo mi;
     mi = mallinfo();
+#endif
     meminfo[1] = (double)mi.uordblks/1048576.0+(double)mi.hblkhd/1048576.0;
 #endif
     struct rusage ru;

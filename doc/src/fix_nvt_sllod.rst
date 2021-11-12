@@ -1,11 +1,12 @@
 .. index:: fix nvt/sllod
 .. index:: fix nvt/sllod/intel
 .. index:: fix nvt/sllod/omp
+.. index:: fix nvt/sllod/kk
 
 fix nvt/sllod command
 =====================
 
-Accelerator Variants: *nvt/sllod/intel*, *nvt/sllod/omp*
+Accelerator Variants: *nvt/sllod/intel*, *nvt/sllod/omp*, *nvt/sllod/kk*
 
 Syntax
 """"""
@@ -36,15 +37,16 @@ trajectory consistent with the canonical ensemble.
 
 This thermostat is used for a simulation box that is changing size
 and/or shape, for example in a non-equilibrium MD (NEMD) simulation.
-The size/shape change is induced by use of the :doc:`fix deform <fix_deform>` command, so each point in the simulation box
-can be thought of as having a "streaming" velocity.  This
-position-dependent streaming velocity is subtracted from each atom's
-actual velocity to yield a thermal velocity which is used for
-temperature computation and thermostatting.  For example, if the box
-is being sheared in x, relative to y, then points at the bottom of the
-box (low y) have a small x velocity, while points at the top of the
-box (hi y) have a large x velocity.  These velocities do not
-contribute to the thermal "temperature" of the atom.
+The size/shape change is induced by use of the :doc:`fix deform
+<fix_deform>` command, so each point in the simulation box can be
+thought of as having a "streaming" velocity.  This position-dependent
+streaming velocity is subtracted from each atom's actual velocity to
+yield a thermal velocity which is used for temperature computation and
+thermostatting.  For example, if the box is being sheared in x,
+relative to y, then points at the bottom of the box (low y) have a
+small x velocity, while points at the top of the box (hi y) have a
+large x velocity.  These velocities do not contribute to the thermal
+"temperature" of the atom.
 
 .. note::
 
@@ -59,13 +61,15 @@ contribute to the thermal "temperature" of the atom.
    consistent.
 
 The SLLOD equations of motion, originally proposed by Hoover and Ladd
-(see :ref:`(Evans and Morriss) <Evans3>`), were proven to be equivalent to
-Newton's equations of motion for shear flow by :ref:`(Evans and Morriss) <Evans3>`. They were later shown to generate the desired
-velocity gradient and the correct production of work by stresses for
-all forms of homogeneous flow by :ref:`(Daivis and Todd) <Daivis>`.  As
-implemented in LAMMPS, they are coupled to a Nose/Hoover chain
-thermostat in a velocity Verlet formulation, closely following the
-implementation used for the :doc:`fix nvt <fix_nh>` command.
+(see :ref:`(Evans and Morriss) <Evans3>`), were proven to be
+equivalent to Newton's equations of motion for shear flow by
+:ref:`(Evans and Morriss) <Evans3>`. They were later shown to generate
+the desired velocity gradient and the correct production of work by
+stresses for all forms of homogeneous flow by :ref:`(Daivis and Todd)
+<Daivis>`.  As implemented in LAMMPS, they are coupled to a
+Nose/Hoover chain thermostat in a velocity Verlet formulation, closely
+following the implementation used for the :doc:`fix nvt <fix_nh>`
+command.
 
 .. note::
 
@@ -93,27 +97,28 @@ underscore + "temp", and the group for the new compute is the same as
 the fix group.
 
 Note that this is NOT the compute used by thermodynamic output (see
-the :doc:`thermo_style <thermo_style>` command) with ID = *thermo_temp*.
-This means you can change the attributes of this fix's temperature
-(e.g. its degrees-of-freedom) via the
-:doc:`compute_modify <compute_modify>` command or print this temperature
-during thermodynamic output via the :doc:`thermo_style custom <thermo_style>` command using the appropriate compute-ID.
-It also means that changing attributes of *thermo_temp* will have no
-effect on this fix.
+the :doc:`thermo_style <thermo_style>` command) with ID =
+*thermo_temp*.  This means you can change the attributes of this fix's
+temperature (e.g. its degrees-of-freedom) via the :doc:`compute_modify
+<compute_modify>` command or print this temperature during
+thermodynamic output via the :doc:`thermo_style custom <thermo_style>`
+command using the appropriate compute-ID.  It also means that changing
+attributes of *thermo_temp* will have no effect on this fix.
 
 Like other fixes that perform thermostatting, this fix can be used
-with :doc:`compute commands <compute>` that calculate a temperature
-after removing a "bias" from the atom velocities.  E.g. removing the
-center-of-mass velocity from a group of atoms or only calculating
-temperature on the x-component of velocity or only calculating
-temperature for atoms in a geometric region.  This is not done by
-default, but only if the :doc:`fix_modify <fix_modify>` command is used
-to assign a temperature compute to this fix that includes such a bias
-term.  See the doc pages for individual :doc:`compute commands <compute>` to determine which ones include a bias.  In
-this case, the thermostat works in the following manner: the current
-temperature is calculated taking the bias into account, bias is
-removed from each atom, thermostatting is performed on the remaining
-thermal degrees of freedom, and the bias is added back in.
+with :doc:`compute commands <compute>` that remove a "bias" from the
+atom velocities.  E.g. to apply the thermostat only to atoms within a
+spatial :doc:`region <region>`, or to remove the center-of-mass
+velocity from a group of atoms, or to remove the x-component of
+velocity from the calculation.
+
+This is not done by default, but only if the :doc:`fix_modify
+<fix_modify>` command is used to assign a temperature compute to this
+fix that includes such a bias term.  See the doc pages for individual
+:doc:`compute temp commands <compute>` to determine which ones include
+a bias.  In this case, the thermostat works in the following manner:
+bias is removed from each atom, thermostatting is performed on the
+remaining thermal degrees of freedom, and the bias is added back in.
 
 ----------
 
@@ -122,19 +127,21 @@ thermal degrees of freedom, and the bias is added back in.
 Restart, fix_modify, output, run start/stop, minimize info
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-This fix writes the state of the Nose/Hoover thermostat to :doc:`binary restart files <restart>`.  See the :doc:`read_restart <read_restart>`
-command for info on how to re-specify a fix in an input script that
-reads a restart file, so that the operation of the fix continues in an
-uninterrupted fashion.
+This fix writes the state of the Nose/Hoover thermostat to
+:doc:`binary restart files <restart>`.  See the :doc:`read_restart
+<read_restart>` command for info on how to re-specify a fix in an
+input script that reads a restart file, so that the operation of the
+fix continues in an uninterrupted fashion.
 
 The :doc:`fix_modify <fix_modify>` *temp* option is supported by this
 fix.  You can use it to assign a :doc:`compute <compute>` you have
 defined to this fix which will be used in its thermostatting
 procedure.
 
-The :doc:`fix_modify <fix_modify>` *energy* option is supported by this
-fix to add the energy change induced by Nose/Hoover thermostatting to
-the system's potential energy as part of :doc:`thermodynamic output <thermo_style>`.
+The cumulative energy change in the system imposed by this fix is
+included in the :doc:`thermodynamic output <thermo_style>` keywords
+*ecouple* and *econserve*.  See the :doc:`thermo_style <thermo_style>`
+doc page for details.
 
 This fix computes the same global scalar and global vector of
 quantities as does the :doc:`fix nvt <fix_nh>` command.

@@ -1,6 +1,7 @@
+// clang-format off
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://lammps.sandia.gov/, Sandia National Laboratories
+   https://www.lammps.org/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -98,7 +99,7 @@ void AtomVecHybrid::process_args(int narg, char **arg)
   // call process_args() with set of args that are not atom style names
   // use known_style() to determine which args these are
 
-  int i,jarg,dummy;
+  int i,k,jarg,dummy;
 
   int iarg = 0;
   nstyles = 0;
@@ -109,8 +110,7 @@ void AtomVecHybrid::process_args(int narg, char **arg)
       if (strcmp(arg[iarg],keywords[i]) == 0)
         error->all(FLERR,"Atom style hybrid cannot use same atom style twice");
     styles[nstyles] = atom->new_avec(arg[iarg],1,dummy);
-    keywords[nstyles] = new char[strlen(arg[iarg])+1];
-    strcpy(keywords[nstyles],arg[iarg]);
+    keywords[nstyles] = utils::strdup(arg[iarg]);
     jarg = iarg + 1;
     while (jarg < narg && !known_style(arg[jarg])) jarg++;
     styles[nstyles]->process_args(jarg-iarg-1,&arg[iarg+1]);
@@ -124,7 +124,7 @@ void AtomVecHybrid::process_args(int narg, char **arg)
   molecular = Atom::ATOMIC;
   maxexchange = 0;
 
-  for (int k = 0; k < nstyles; k++) {
+  for (k = 0; k < nstyles; k++) {
     if ((styles[k]->molecular == Atom::MOLECULAR && molecular == Atom::TEMPLATE) ||
         (styles[k]->molecular == Atom::TEMPLATE && molecular == Atom::MOLECULAR))
       error->all(FLERR,
@@ -148,26 +148,26 @@ void AtomVecHybrid::process_args(int narg, char **arg)
   int mass_pertype = 0;
   int mass_peratom = 0;
 
-  for (int k = 0; k < nstyles; k++) {
+  for (k = 0; k < nstyles; k++) {
     if (styles[k]->mass_type == 0) mass_peratom = 1;
     if (styles[k]->mass_type == 1) mass_pertype = 1;
   }
 
   if (mass_pertype && mass_peratom && comm->me == 0)
-    error->warning(FLERR,
-                   "Atom_style hybrid defines both pertype and peratom masses "
-                   "- both must be set, only peratom masses will be used");
+    error->warning(FLERR, "Atom style hybrid defines both, per-type "
+                   "and per-atom masses; both must be set, but only "
+                   "per-atom masses will be used");
 
   // free allstyles created by build_styles()
 
-  for (int i = 0; i < nallstyles; i++) delete [] allstyles[i];
+  for (i = 0; i < nallstyles; i++) delete [] allstyles[i];
   delete [] allstyles;
 
   // set field strings from all substyles
 
   fieldstrings = new FieldStrings[nstyles];
 
-  for (int k = 0; k < nstyles; k++) {
+  for (k = 0; k < nstyles; k++) {
     fieldstrings[k].fstr = new char*[NFIELDSTRINGS];
     fieldstrings[k].fstr[0] = styles[k]->fields_grow;
     fieldstrings[k].fstr[1] = styles[k]->fields_copy;
@@ -187,20 +187,20 @@ void AtomVecHybrid::process_args(int narg, char **arg)
   // save concat_grow to check for duplicates of special-case fields
 
   char *concat_grow;;
-  char *null = nullptr;
+  char *dummyptr = nullptr;
 
   fields_grow = merge_fields(0,fields_grow,1,concat_grow);
-  fields_copy = merge_fields(1,fields_copy,0,null);
-  fields_comm = merge_fields(2,fields_comm,0,null);
-  fields_comm_vel = merge_fields(3,fields_comm_vel,0,null);
-  fields_reverse = merge_fields(4,fields_reverse,0,null);
-  fields_border = merge_fields(5,fields_border,0,null);
-  fields_border_vel = merge_fields(6,fields_border_vel,0,null);
-  fields_exchange = merge_fields(7,fields_exchange,0,null);
-  fields_restart = merge_fields(8,fields_restart,0,null);
-  fields_create = merge_fields(9,fields_create,0,null);
-  fields_data_atom = merge_fields(10,fields_data_atom,0,null);
-  fields_data_vel = merge_fields(11,fields_data_vel,0,null);
+  fields_copy = merge_fields(1,fields_copy,0,dummyptr);
+  fields_comm = merge_fields(2,fields_comm,0,dummyptr);
+  fields_comm_vel = merge_fields(3,fields_comm_vel,0,dummyptr);
+  fields_reverse = merge_fields(4,fields_reverse,0,dummyptr);
+  fields_border = merge_fields(5,fields_border,0,dummyptr);
+  fields_border_vel = merge_fields(6,fields_border_vel,0,dummyptr);
+  fields_exchange = merge_fields(7,fields_exchange,0,dummyptr);
+  fields_restart = merge_fields(8,fields_restart,0,dummyptr);
+  fields_create = merge_fields(9,fields_create,0,dummyptr);
+  fields_data_atom = merge_fields(10,fields_data_atom,0,dummyptr);
+  fields_data_vel = merge_fields(11,fields_data_vel,0,dummyptr);
 
   fields_allocated = 1;
 
@@ -216,8 +216,8 @@ void AtomVecHybrid::process_args(int narg, char **arg)
     char *dup = (char *) dupfield[idup];
     ptr = strstr(concat_grow,dup);
     if ((ptr && strstr(ptr+1,dup)) && (comm->me == 0))
-      error->warning(FLERR,fmt::format("Peratom {} is in multiple sub-styles "
-                                       "- must be used consistently",dup));
+      error->warning(FLERR,fmt::format("Per-atom {} is used in multiple sub-"
+                                       "styles; must be used consistently",dup));
   }
 
   delete [] concat_grow;
@@ -227,7 +227,7 @@ void AtomVecHybrid::process_args(int narg, char **arg)
   // sum two sizes over contributions from each substyle with bonus data.
 
   nstyles_bonus = 0;
-  for (int k = 0; k < nstyles; k++)
+  for (k = 0; k < nstyles; k++)
     if (styles[k]->bonus_flag) nstyles_bonus++;
 
   if (nstyles_bonus) {
@@ -236,7 +236,7 @@ void AtomVecHybrid::process_args(int narg, char **arg)
     nstyles_bonus = 0;
     size_forward_bonus = 0;
     size_border_bonus = 0;
-    for (int k = 0; k < nstyles; k++) {
+    for (k = 0; k < nstyles; k++) {
       if (styles[k]->bonus_flag) {
         styles_bonus[nstyles_bonus++] = styles[k];
         size_forward_bonus += styles[k]->size_forward_bonus;
@@ -439,6 +439,17 @@ void AtomVecHybrid::data_atom_post(int ilocal)
 }
 
 /* ----------------------------------------------------------------------
+   modify what AtomVec::data_bonds() just unpacked
+   or initialize other bond quantities
+------------------------------------------------------------------------- */
+void AtomVecHybrid::data_bonds_post(int m, int num_bond, tagint atom1,
+                                        tagint atom2, tagint id_offset)
+{
+  for (int k = 0; k < nstyles; k++)
+    styles[k]->data_bonds_post(m, num_bond, atom1, atom2, id_offset);
+}
+
+/* ----------------------------------------------------------------------
    modify values for AtomVec::pack_data() to pack
 ------------------------------------------------------------------------- */
 
@@ -534,56 +545,38 @@ void AtomVecHybrid::pack_property_atom(int multiindex, double *buf,
 char *AtomVecHybrid::merge_fields(int inum, char *root,
                                   int concat_flag, char *&concat_str)
 {
-  // create concatenated string of length size from root + all substyles
+  // create vector with all words combined
 
-  int size = strlen(root) + 1;
-  for (int k = 0; k < nstyles; k++)
-    size += strlen(fieldstrings[k].fstr[inum]) + 1;
-
-  char *concat = new char[size];
-  strcpy(concat,root);
-
+  std::string concat;
+  if (root) concat += root;
   for (int k = 0; k < nstyles; k++) {
-    if (strlen(concat)) strcat(concat," ");
-    strcat(concat,fieldstrings[k].fstr[inum]);
+    if (concat.size() > 0) concat += " ";
+    concat += fieldstrings[k].fstr[inum];
+  }
+  if (concat_flag) concat_str = utils::strdup(concat);
+
+  // remove duplicate words without changing the order
+
+  auto words = Tokenizer(concat, " ").as_vector();
+  std::vector<std::string> dedup;
+  for (auto &w : words) {
+    bool found = false;
+    for (auto &d : dedup) {
+       if (w == d) found = true;
+    }
+    if (!found) dedup.push_back(w);
   }
 
-  // identify unique words in concatenated string
-
-  std::vector<std::string> words = Tokenizer(concat, " ").as_vector();
-  int nwords = words.size();
-
-  int *unique = new int[nwords];
-
-  for (int i = 0; i < nwords; i++) {
-    unique[i] = 1;
-    for (int j = 0; j < i; j++)
-      if (words[i] == words[j]) unique[i] = 0;
+  // create final concatenated, deduped string
+  concat.clear();
+  for (auto &d : dedup) {
+    concat += d;
+    concat += " ";
   }
 
-  // construct a new deduped string
-
-  char *dedup = new char[size];
-  dedup[0] = '\0';
-
-  for (int i = 0; i < nwords; i++) {
-    if (!unique[i]) continue;
-    strcat(dedup,words[i].c_str());
-    if (i < nwords-1) strcat(dedup," ");
-  }
-
-  // clean up or return concat
-
-  if (concat_flag) concat_str = concat;
-  else delete [] concat;
-
-  // clean up
-
-  delete [] unique;
-
-  // return final concatenated, deduped string
-
-  return dedup;
+  // remove trailing blank
+  if (concat.size() > 0) concat.pop_back();
+  return utils::strdup(concat);
 }
 
 /* ----------------------------------------------------------------------
@@ -601,13 +594,10 @@ void AtomVecHybrid::build_styles()
 
   allstyles = new char*[nallstyles];
 
-  int n;
   nallstyles = 0;
 #define ATOM_CLASS
-#define AtomStyle(key,Class)                \
-  n = strlen(#key) + 1;                     \
-  allstyles[nallstyles] = new char[n];      \
-  strcpy(allstyles[nallstyles],#key);       \
+#define AtomStyle(key,Class)                   \
+  allstyles[nallstyles] = utils::strdup(#key); \
   nallstyles++;
 #include "style_atom.h"  // IWYU pragma: keep
 #undef AtomStyle

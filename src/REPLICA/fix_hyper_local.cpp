@@ -1,6 +1,7 @@
+// clang-format off
  /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://lammps.sandia.gov/, Sandia National Laboratories
+   https://www.lammps.org/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -30,7 +31,6 @@
 #include "math_extra.h"
 #include "memory.h"
 #include "error.h"
-
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -63,6 +63,7 @@ FixHyperLocal::FixHyperLocal(LAMMPS *lmp, int narg, char **arg) :
 
   hyperflag = 2;
   scalar_flag = 1;
+  energy_global_flag = 1;
   vector_flag = 1;
   size_vector = 26;
   //size_vector = 28;   // can add 2 for debugging
@@ -237,7 +238,6 @@ int FixHyperLocal::setmask()
   mask |= PRE_NEIGHBOR;
   mask |= PRE_REVERSE;
   mask |= MIN_PRE_NEIGHBOR;
-  mask |= THERMO_ENERGY;
   return mask;
 }
 
@@ -447,7 +447,7 @@ void FixHyperLocal::pre_reverse(int /* eflag */, int /* vflag */)
   int *ilist,*jlist,*numneigh,**firstneigh;
 
   //double time1,time2,time3,time4,time5,time6,time7,time8;
-  //time1 = MPI_Wtime();
+  //time1 = platform::walltime();
 
   nostrainyet = 0;
 
@@ -520,7 +520,7 @@ void FixHyperLocal::pre_reverse(int /* eflag */, int /* vflag */)
     maxhalfstrain[iold] = halfstrain;
   }
 
-  //time2 = MPI_Wtime();
+  //time2 = platform::walltime();
 
   // reverse comm acquires maxstrain of all current owned atoms
   //   needed b/c only saw half the bonds of each atom
@@ -531,7 +531,7 @@ void FixHyperLocal::pre_reverse(int /* eflag */, int /* vflag */)
   comm->reverse_comm_fix(this);
   comm->forward_comm_fix(this);
 
-  //time3 = MPI_Wtime();
+  //time3 = platform::walltime();
 
   // -------------------------------------------------------------
   // stage 2:
@@ -636,7 +636,7 @@ void FixHyperLocal::pre_reverse(int /* eflag */, int /* vflag */)
     maxstrain_domain[i] = emax;
   }
 
-  //time4 = MPI_Wtime();
+  //time4 = platform::walltime();
 
   // reverse comm to acquire maxstrain_domain from ghost atoms
   //   needed b/c neigh list may refer to old owned atoms that are now ghost
@@ -646,7 +646,7 @@ void FixHyperLocal::pre_reverse(int /* eflag */, int /* vflag */)
   comm->reverse_comm_fix(this);
   comm->forward_comm_fix(this);
 
-  //time5 = MPI_Wtime();
+  //time5 = platform::walltime();
 
   // -------------------------------------------------------------
   // stage 3:
@@ -672,7 +672,7 @@ void FixHyperLocal::pre_reverse(int /* eflag */, int /* vflag */)
     bias[nbias++] = maxhalf[iold];
   }
 
-  //time6 = MPI_Wtime();
+  //time6 = platform::walltime();
 
   // -------------------------------------------------------------
   // stage 4:
@@ -724,7 +724,7 @@ void FixHyperLocal::pre_reverse(int /* eflag */, int /* vflag */)
     // myboost += exp(beta * biascoeff[m]*vbias);
   }
 
-  //time7 = MPI_Wtime();
+  //time7 = platform::walltime();
 
   // -------------------------------------------------------------
   // stage 5:
@@ -887,7 +887,7 @@ void FixHyperLocal::build_bond_list(int natom)
   int *ilist,*jlist,*numneigh,**firstneigh;
 
   double time1,time2;
-  time1 = MPI_Wtime();
+  time1 = platform::walltime();
 
   if (natom) {
     nevent++;
@@ -980,7 +980,7 @@ void FixHyperLocal::build_bond_list(int natom)
                                          "hyper/local:clist");
   }
 
-  while (1) {
+  while (true) {
     if (firstflag) break;
     for (i = 0; i < nall; i++) numcoeff[i] = 0;
     for (i = 0; i < nall; i++) clist[i] = nullptr;
@@ -1185,7 +1185,7 @@ void FixHyperLocal::build_bond_list(int natom)
   // DEBUG
   //if (me == 0) printf("TOTAL BOND COUNT = %ld\n",allbonds);
 
-  time2 = MPI_Wtime();
+  time2 = platform::walltime();
 
   if (firstflag) nnewbond = 0;
   else {
@@ -1731,17 +1731,17 @@ double FixHyperLocal::query(int i)
 
 double FixHyperLocal::memory_usage()
 {
-  double bytes = maxbond * sizeof(OneBond);       // blist
+  double bytes = (double)maxbond * sizeof(OneBond);       // blist
   bytes = maxbond * sizeof(double);               // per-bond bias coeffs
-  bytes += 3*maxlocal * sizeof(int);              // numbond,maxhalf,eligible
-  bytes += maxlocal * sizeof(double);             // maxhalfstrain
-  bytes += maxall * sizeof(int);                  // old2now
-  bytes += maxall * sizeof(tagint);               // tagold
-  bytes += 3*maxall * sizeof(double);             // xold
-  bytes += 2*maxall * sizeof(double);             // maxstrain,maxstrain_domain
-  if (checkbias) bytes += maxall * sizeof(tagint);  // biasflag
-  bytes += maxcoeff * sizeof(int);                // numcoeff
-  bytes += maxcoeff * sizeof(HyperOneCoeff *);         // clist
-  bytes += maxlocal*maxbondperatom * sizeof(HyperOneCoeff);  // cpage estimate
+  bytes += (double)3*maxlocal * sizeof(int);              // numbond,maxhalf,eligible
+  bytes += (double)maxlocal * sizeof(double);             // maxhalfstrain
+  bytes += (double)maxall * sizeof(int);                  // old2now
+  bytes += (double)maxall * sizeof(tagint);               // tagold
+  bytes += (double)3*maxall * sizeof(double);             // xold
+  bytes += (double)2*maxall * sizeof(double);             // maxstrain,maxstrain_domain
+  if (checkbias) bytes += (double)maxall * sizeof(tagint);  // biasflag
+  bytes += (double)maxcoeff * sizeof(int);                // numcoeff
+  bytes += (double)maxcoeff * sizeof(HyperOneCoeff *);         // clist
+  bytes += (double)maxlocal*maxbondperatom * sizeof(HyperOneCoeff);  // cpage estimate
   return bytes;
 }

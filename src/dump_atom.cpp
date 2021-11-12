@@ -1,6 +1,7 @@
+// clang-format off
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://lammps.sandia.gov/, Sandia National Laboratories
+   https://www.lammps.org/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -12,12 +13,14 @@
 ------------------------------------------------------------------------- */
 
 #include "dump_atom.h"
-#include <cstring>
-#include "domain.h"
+
 #include "atom.h"
-#include "memory.h"
+#include "domain.h"
 #include "error.h"
+#include "memory.h"
 #include "update.h"
+
+#include <cstring>
 
 using namespace LAMMPS_NS;
 
@@ -47,20 +50,12 @@ void DumpAtom::init_style()
   // format = copy of default or user-specified line format
   // default depends on image flags
 
-  delete [] format;
+  delete[] format;
   if (format_line_user) {
-    int n = strlen(format_line_user) + 2;
-    format = new char[n];
-    strcpy(format,format_line_user);
-    strcat(format,"\n");
+    format = utils::strdup(std::string(format_line_user) + "\n");
   } else {
-    char *str;
-    if (image_flag == 0) str = (char *) TAGINT_FORMAT " %d %g %g %g";
-    else str = (char *) TAGINT_FORMAT " %d %g %g %g %d %d %d";
-    int n = strlen(str) + 2;
-    format = new char[n];
-    strcpy(format,str);
-    strcat(format,"\n");
+    if (image_flag == 0) format = utils::strdup(TAGINT_FORMAT " %d %g %g %g\n");
+    else format = utils::strdup(TAGINT_FORMAT " %d %g %g %g %d %d %d\n");
   }
 
   // setup boundary string
@@ -121,15 +116,11 @@ int DumpAtom::modify_param(int narg, char **arg)
 {
   if (strcmp(arg[0],"scale") == 0) {
     if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
-    if (strcmp(arg[1],"yes") == 0) scale_flag = 1;
-    else if (strcmp(arg[1],"no") == 0) scale_flag = 0;
-    else error->all(FLERR,"Illegal dump_modify command");
+    scale_flag = utils::logical(FLERR,arg[1],false,lmp);
     return 2;
   } else if (strcmp(arg[0],"image") == 0) {
     if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
-    if (strcmp(arg[1],"yes") == 0) image_flag = 1;
-    else if (strcmp(arg[1],"no") == 0) image_flag = 0;
-    else error->all(FLERR,"Illegal dump_modify command");
+    image_flag = utils::logical(FLERR,arg[1],false,lmp);
     return 2;
   }
   return 0;
@@ -569,7 +560,8 @@ void DumpAtom::write_binary(int n, double *mybuf)
 
 void DumpAtom::write_string(int n, double *mybuf)
 {
-  fwrite(mybuf,sizeof(char),n,fp);
+  if (mybuf)
+    fwrite(mybuf,sizeof(char),n,fp);
 }
 
 /* ---------------------------------------------------------------------- */

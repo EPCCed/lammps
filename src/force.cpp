@@ -1,6 +1,7 @@
+// clang-format off
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://lammps.sandia.gov/, Sandia National Laboratories
+   https://www.lammps.org/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -12,6 +13,7 @@
 ------------------------------------------------------------------------- */
 
 #include "force.h"
+
 #include "style_angle.h"       // IWYU pragma: keep
 #include "style_bond.h"        // IWYU pragma: keep
 #include "style_dihedral.h"    // IWYU pragma: keep
@@ -19,24 +21,20 @@
 #include "style_kspace.h"      // IWYU pragma: keep
 #include "style_pair.h"        // IWYU pragma: keep
 
-#include "angle.h"
-#include "atom.h"
-#include "bond.h"
+#include "angle_hybrid.h"
 #include "bond_hybrid.h"
-#include "comm.h"
-#include "dihedral.h"
-#include "error.h"
-#include "improper.h"
-#include "kspace.h"
-#include "pair.h"
+#include "dihedral_hybrid.h"
+#include "improper_hybrid.h"
 #include "pair_hybrid.h"
-#include "pair_hybrid_overlay.h"
+#include "kspace.h"
+
+#include "atom.h"
+#include "comm.h"
+#include "error.h"
 
 #include <cstring>
 
 using namespace LAMMPS_NS;
-
-#define MAXLINE 1024
 
 /* ---------------------------------------------------------------------- */
 
@@ -61,20 +59,12 @@ Force::Force(LAMMPS *lmp) : Pointers(lmp)
   improper = nullptr;
   kspace = nullptr;
 
-  char *str = (char *) "none";
-  int n = strlen(str) + 1;
-  pair_style = new char[n];
-  strcpy(pair_style,str);
-  bond_style = new char[n];
-  strcpy(bond_style,str);
-  angle_style = new char[n];
-  strcpy(angle_style,str);
-  dihedral_style = new char[n];
-  strcpy(dihedral_style,str);
-  improper_style = new char[n];
-  strcpy(improper_style,str);
-  kspace_style = new char[n];
-  strcpy(kspace_style,str);
+  pair_style = utils::strdup("none");
+  bond_style = utils::strdup("none");
+  angle_style = utils::strdup("none");
+  dihedral_style = utils::strdup("none");
+  improper_style = utils::strdup("none");
+  kspace_style = utils::strdup("none");
 
   pair_restart = nullptr;
   create_factories();
@@ -89,7 +79,7 @@ void _noopt Force::create_factories()
 #define PAIR_CLASS
 #define PairStyle(key,Class) \
   (*pair_map)[#key] = &pair_creator<Class>;
-#include "style_pair.h"
+#include "style_pair.h"  // IWYU pragma: keep
 #undef PairStyle
 #undef PAIR_CLASS
 
@@ -98,7 +88,7 @@ void _noopt Force::create_factories()
 #define BOND_CLASS
 #define BondStyle(key,Class) \
   (*bond_map)[#key] = &bond_creator<Class>;
-#include "style_bond.h"
+#include "style_bond.h"  // IWYU pragma: keep
 #undef BondStyle
 #undef BOND_CLASS
 
@@ -107,7 +97,7 @@ void _noopt Force::create_factories()
 #define ANGLE_CLASS
 #define AngleStyle(key,Class) \
   (*angle_map)[#key] = &angle_creator<Class>;
-#include "style_angle.h"
+#include "style_angle.h"  // IWYU pragma: keep
 #undef AngleStyle
 #undef ANGLE_CLASS
 
@@ -116,7 +106,7 @@ void _noopt Force::create_factories()
 #define DIHEDRAL_CLASS
 #define DihedralStyle(key,Class) \
   (*dihedral_map)[#key] = &dihedral_creator<Class>;
-#include "style_dihedral.h"
+#include "style_dihedral.h"  // IWYU pragma: keep
 #undef DihedralStyle
 #undef DIHEDRAL_CLASS
 
@@ -125,7 +115,7 @@ void _noopt Force::create_factories()
 #define IMPROPER_CLASS
 #define ImproperStyle(key,Class) \
   (*improper_map)[#key] = &improper_creator<Class>;
-#include "style_improper.h"
+#include "style_improper.h"  // IWYU pragma: keep
 #undef ImproperStyle
 #undef IMPROPER_CLASS
 
@@ -134,7 +124,7 @@ void _noopt Force::create_factories()
 #define KSPACE_CLASS
 #define KSpaceStyle(key,Class) \
   (*kspace_map)[#key] = &kspace_creator<Class>;
-#include "style_kspace.h"
+#include "style_kspace.h"  // IWYU pragma: keep
 #undef KSpaceStyle
 #undef KSPACE_CLASS
 }
@@ -183,8 +173,8 @@ void Force::init()
   // check if pair style must be specified after restart
   if (pair_restart) {
     if (!pair)
-      error->all(FLERR,fmt::format("Must re-specify non-restarted pair style "
-                                   "({}) after read_restart", pair_restart));
+      error->all(FLERR,"Must re-specify non-restarted pair style "
+                                   "({}) after read_restart", pair_restart);
   }
 
   if (kspace) kspace->init();         // kspace must come before pair
@@ -245,13 +235,22 @@ void Force::create_pair(const std::string &style, int trysuffix)
 /* ----------------------------------------------------------------------
    generate a pair class
    if trysuffix = 1, try first with suffix1/2 appended
-   return sflag = 0 for no suffix added, 1 or 2 for suffix1/2 added
+   return sflag = 0 for no suffix added, 1 or 2 or 3 for suffix1/2/p added
+   special case: if suffixp exists only try suffixp, not suffix
 ------------------------------------------------------------------------- */
 
 Pair *Force::new_pair(const std::string &style, int trysuffix, int &sflag)
 {
   if (trysuffix && lmp->suffix_enable) {
-    if (lmp->suffix) {
+    if (lmp->suffixp) {
+      sflag = 3;
+      std::string estyle = style + "/" + lmp->suffixp;
+      if (pair_map->find(estyle) != pair_map->end()) {
+        PairCreator &pair_creator = (*pair_map)[estyle];
+        return pair_creator(lmp);
+      }
+    }
+    if (lmp->suffix && !lmp->suffixp) {
       sflag = 1;
       std::string estyle = style + "/" + lmp->suffix;
       if (pair_map->find(estyle) != pair_map->end()) {
@@ -449,7 +448,7 @@ Angle *Force::new_angle(const std::string &style, int trysuffix, int &sflag)
 
     if (lmp->suffix2) {
       sflag = 2;
-      std::string estyle = style + "/" + lmp->suffix;
+      std::string estyle = style + "/" + lmp->suffix2;
       if (angle_map->find(estyle) != angle_map->end()) {
         AngleCreator &angle_creator = (*angle_map)[estyle];
         return angle_creator(lmp);
@@ -679,7 +678,7 @@ KSpace *Force::new_kspace(const std::string &style, int trysuffix, int &sflag)
     }
 
     if (lmp->suffix2) {
-      sflag = 1;
+      sflag = 2;
       std::string estyle = style + "/" + lmp->suffix2;
       if (kspace_map->find(estyle) != kspace_map->end()) {
         KSpaceCreator &kspace_creator = (*kspace_map)[estyle];
@@ -727,7 +726,7 @@ KSpace *Force::kspace_match(const std::string &word, int exact)
 /* ----------------------------------------------------------------------
    store style name in str allocated here
    if sflag = 0, no suffix
-   if sflag = 1/2, append suffix or suffix2 to style
+   if sflag = 1/2/3, append suffix or suffix2 or suffixp to style
 ------------------------------------------------------------------------- */
 
 void Force::store_style(char *&str, const std::string &style, int sflag)
@@ -736,9 +735,8 @@ void Force::store_style(char *&str, const std::string &style, int sflag)
 
   if (sflag == 1) estyle += std::string("/") + lmp->suffix;
   else if (sflag == 2) estyle += std::string("/") + lmp->suffix2;
-
-  str = new char[estyle.size()+1];
-  strcpy(str,estyle.c_str());
+  else if (sflag == 3) estyle += std::string("/") + lmp->suffixp;
+  str = utils::strdup(estyle);
 }
 
 /* ----------------------------------------------------------------------
@@ -813,15 +811,11 @@ void Force::set_special(int narg, char **arg)
       iarg += 4;
     } else if (strcmp(arg[iarg],"angle") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal special_bonds command");
-      if (strcmp(arg[iarg+1],"no") == 0) special_angle = 0;
-      else if (strcmp(arg[iarg+1],"yes") == 0) special_angle = 1;
-      else error->all(FLERR,"Illegal special_bonds command");
+      special_angle = utils::logical(FLERR,arg[iarg+1],false,lmp);
       iarg += 2;
     } else if (strcmp(arg[iarg],"dihedral") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal special_bonds command");
-      if (strcmp(arg[iarg+1],"no") == 0) special_dihedral = 0;
-      else if (strcmp(arg[iarg+1],"yes") == 0) special_dihedral = 1;
-      else error->all(FLERR,"Illegal special_bonds command");
+      special_dihedral = utils::logical(FLERR,arg[iarg+1],false,lmp);
       iarg += 2;
     } else error->all(FLERR,"Illegal special_bonds command");
   }
@@ -839,11 +833,11 @@ void Force::set_special(int narg, char **arg)
 double Force::memory_usage()
 {
   double bytes = 0;
-  if (pair) bytes += static_cast<bigint> (pair->memory_usage());
-  if (bond) bytes += static_cast<bigint> (bond->memory_usage());
-  if (angle) bytes += static_cast<bigint> (angle->memory_usage());
-  if (dihedral) bytes += static_cast<bigint> (dihedral->memory_usage());
-  if (improper) bytes += static_cast<bigint> (improper->memory_usage());
-  if (kspace) bytes += static_cast<bigint> (kspace->memory_usage());
+  if (pair) bytes += pair->memory_usage();
+  if (bond) bytes += bond->memory_usage();
+  if (angle) bytes += angle->memory_usage();
+  if (dihedral) bytes += dihedral->memory_usage();
+  if (improper) bytes += improper->memory_usage();
+  if (kspace) bytes += kspace->memory_usage();
   return bytes;
 }

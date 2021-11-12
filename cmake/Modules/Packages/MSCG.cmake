@@ -7,10 +7,22 @@ else()
 endif()
 option(DOWNLOAD_MSCG "Download MSCG library instead of using an already installed one)" ${DOWNLOAD_MSCG_DEFAULT})
 if(DOWNLOAD_MSCG)
+  set(MSCG_URL "https://github.com/uchicago-voth/MSCG-release/archive/1.7.3.1.tar.gz" CACHE STRING "URL for MSCG tarball")
+  set(MSCG_MD5 "8c45e269ee13f60b303edd7823866a91" CACHE STRING "MD5 checksum of MSCG tarball")
+  mark_as_advanced(MSCG_URL)
+  mark_as_advanced(MSCG_MD5)
+
+  # CMake cannot pass BLAS or LAPACK library variable to external project if they are a list
+  list(LENGTH BLAS_LIBRARIES} NUM_BLAS)
+  list(LENGTH LAPACK_LIBRARIES NUM_LAPACK)
+  if((NUM_BLAS GREATER 1) OR (NUM_LAPACK GREATER 1))
+    message(FATAL_ERROR "Cannot compile downloaded MSCG library due to a technical limitation")
+  endif()
+
   include(ExternalProject)
   ExternalProject_Add(mscg_build
-    URL https://github.com/uchicago-voth/MSCG-release/archive/1.7.3.1.tar.gz
-    URL_MD5 8c45e269ee13f60b303edd7823866a91
+    URL     ${MSCG_URL}
+    URL_MD5 ${MSCG_MD5}
     SOURCE_SUBDIR src/CMake
     CMAKE_ARGS ${CMAKE_REQUEST_PIC} ${EXTRA_MSCG_OPTS}
                -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}

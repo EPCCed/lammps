@@ -1,6 +1,7 @@
+// clang-format off
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://lammps.sandia.gov/, Sandia National Laboratories
+   https://www.lammps.org/, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
@@ -17,7 +18,6 @@
 
 #include "fix_peri_neigh.h"
 
-#include <cmath>
 #include "pair_peri_lps.h"
 #include "pair_peri_ves.h"
 #include "pair_peri_eps.h"
@@ -32,6 +32,9 @@
 #include "lattice.h"
 #include "memory.h"
 #include "error.h"
+
+#include <cmath>
+#include <cstring>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -67,6 +70,7 @@ FixPeriNeigh::FixPeriNeigh(LAMMPS *lmp,int narg, char **arg) :
   wvolume = nullptr;
 
   grow_arrays(atom->nmax);
+  memset(wvolume,0,atom->nmax*sizeof(double));
   atom->add_callback(Atom::GROW);
   atom->add_callback(Atom::RESTART);
 
@@ -399,18 +403,18 @@ double FixPeriNeigh::memory_usage()
 {
   int nmax = atom->nmax;
   int bytes = nmax * sizeof(int);
-  bytes += nmax*maxpartner * sizeof(tagint);
-  bytes += nmax*maxpartner * sizeof(double);
+  bytes += (double)nmax*maxpartner * sizeof(tagint);
+  bytes += (double)nmax*maxpartner * sizeof(double);
   if (isVES) {
-    bytes += nmax*maxpartner * sizeof(double);
-    bytes += nmax*maxpartner * sizeof(double);
+    bytes += (double)nmax*maxpartner * sizeof(double);
+    bytes += (double)nmax*maxpartner * sizeof(double);
   }
   if (isEPS) {
-    bytes += nmax*maxpartner * sizeof(double);
-    bytes += nmax * sizeof(double);
+    bytes += (double)nmax*maxpartner * sizeof(double);
+    bytes += (double)nmax * sizeof(double);
   }
-  bytes += nmax * sizeof(double);
-  bytes += nmax * sizeof(double);
+  bytes += (double)nmax * sizeof(double);
+  bytes += (double)nmax * sizeof(double);
   return bytes;
 }
 
