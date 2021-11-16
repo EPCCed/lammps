@@ -650,7 +650,6 @@ void PairSH::calc_norm_force_torque(int kk_count, int ishtype, int jshtype, doub
 //                                                             jshtype,jrot);
         rad_sample = find_intersection_by_newton(ix_sf, xi, xj, theta_proj, phi_proj, rad_body, radtol, jshtype,
          jrot);
-        //std::cout<<"Done"<<std::endl;
 
         dv = weights[kk] * (std::pow(rad_body, 3) - std::pow(rad_sample, 3));
         vol_overlap += dv;
@@ -1338,11 +1337,11 @@ double PairSH::find_intersection_by_newton(const double ix_sf[3], const double x
     // possible
     r = MathExtra::len3(vec);
 
-    if (update->ntimestep>=67) {
-      std::cout << "dx " << vec[0] << " " << vec[1] << " " << vec[2] << std::endl;
-      std::cout << "x " << theta_n << " " << phi_n << " " << t_n << " " << std::endl;
-      std::cout<< "f " << temp[0] << " " << temp[1] << " " << temp[2] << std::endl<<std::endl;
-    }
+//    if (update->ntimestep>=67) {
+//      std::cout << "dx " << vec[0] << " " << vec[1] << " " << vec[2] << std::endl;
+//      std::cout << "x " << theta_n << " " << phi_n << " " << t_n << " " << std::endl;
+//      std::cout<< "f " << temp[0] << " " << temp[1] << " " << temp[2] << std::endl<<std::endl;
+//    }
 
   }
 
