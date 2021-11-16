@@ -23,6 +23,7 @@ namespace MathSpherharm {
   Calculate the Associated Legendre polynomials (generic)
 ------------------------------------------------------------------------- */
 
+  // See Numerical Recipies 3rd Edition Section 6.7 Spherical Harmonics
   double plegendre(const int l, const int m, const double x) {
 
     int i,ll;
@@ -91,6 +92,7 @@ namespace MathSpherharm {
     return pmn;
   }
 
+  // See Numerical Recipies 3rd Edition Section 6.7 Spherical Harmonics
   double plgndr(const int l, const int m, const double x)
   {
     if (m < 0 || m > l || std::abs(x) > 1.0)
@@ -104,6 +106,7 @@ namespace MathSpherharm {
 /* ----------------------------------------------------------------------
   Following methods are used for calculating the nodes and weights of
   Gaussian Quadrature
+  // See https://people.math.sc.edu/Burkardt/cpp_src/fastgl/fastgl.html
 ------------------------------------------------------------------------- */
 // This function computes the kth zero of the BesselJ(0,x)
   double besseljzero(int k)
@@ -220,18 +223,6 @@ namespace MathSpherharm {
   }
 
 /* ---------------------------------------------------------------------- */
-
-/* ----------------------------------------------------------------------
- * factorial n, wrapper for precomputed table
-------------------------------------------------------------------------- */
-
-  double factorial(int n)
-  {
-    if (n < 0 || n > nmaxfactorial)
-      return -1.0;
-
-    return nfac_table[n];
-  }
 
   /* ----------------------------------------------------------------------
    * Return 0 for 2 or 1 intersection. Return 1 for no intersections. Points
@@ -427,6 +418,9 @@ namespace MathSpherharm {
   // Calculate the interseciton between a line and an ellipsoid. It's assumed that the line generates from the centre
   // of another ellipsoid (see the selection between t1 and t2). Algorithm from:
   // http://www.illusioncatalyst.com/notes_files/mathematics/line_nu_sphere_intersection.php
+
+  // DOES NOT SEEM TO WORK, RECOMMEND USING SIMPLER GENERIC ALGORITHM FOR KNOWN ROTATION
+
   int line_ellipsoid_intersection(const double elipsoid_centre[3], const double elipse_x_axis[3],
                                   const double elipse_y_axis[3],const double elipse_z_axis[3],
                                   const double line_centre[3], const double line_normal[3],

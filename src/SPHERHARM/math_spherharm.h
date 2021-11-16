@@ -30,6 +30,7 @@ namespace MathSpherharm {
   inline void matvec4(const double M[4][4], const double v[4], double ans[4]);
 
   // Normalised Legendre polynomials
+  // See Numerical Recipies 3rd Edition Section 6.7 Spherical Harmonics
   double plegendre( int l,  int m,  double x);
   double plegendre_nn( int l,  double x,  double Pnm_nn);
   double plegendre_recycle( int l,  int m,  double x,  double pnm_m1,  double pnm_m2);
@@ -38,6 +39,7 @@ namespace MathSpherharm {
 
   // Gaussian quadrature methods
   // A struct for containing a Node-Weight pair
+  // See https://people.math.sc.edu/Burkardt/cpp_src/fastgl/fastgl.html
   struct QuadPair {
     double theta, weight;
 
@@ -58,10 +60,6 @@ namespace MathSpherharm {
   double besselj1squared(int);
   QuadPair GLPairS(size_t, size_t);
   QuadPair GLPairTabulated(size_t, size_t);
-
-
-  // For calculating factorials, borrowed from compute_orientorder_atom.cpp
-  double factorial(int);
 
   // Finding the intersections with a ray defined by origin and normal with a sphere, plane and cylinder
   int line_sphere_intersection(const double rad, const double circcentre[3], const double linenorm[3],

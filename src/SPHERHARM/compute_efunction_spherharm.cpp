@@ -10,6 +10,13 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------------
+   Contributing authors: James Young (UoE)
+                         Kevin Hanley (UoE)
+
+   Please cite the related publication:
+   TBC
+------------------------------------------------------------------------- */
 
 #include "compute_efunction_spherharm.h"
 

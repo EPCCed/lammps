@@ -55,6 +55,7 @@ class AtomVecSpherharmUnitTests : public AtomVecSpherharm {
   void surfarea_int_tests(int num_pole_quad, double iang);
   void sphere_line_intersec_tests();
   void print_normals();
+  double get_shape_radius_compensated_boost(int sht, double theta, double phi);
 };
 
 }

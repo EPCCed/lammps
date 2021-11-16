@@ -39,6 +39,8 @@
 using namespace LAMMPS_NS;
 using namespace MathConst;
 using namespace MathSpherharm;
+
+#define EPSILON 1e-10
 /* ---------------------------------------------------------------------- */
 
 AtomVecSpherharmUnitTests::AtomVecSpherharmUnitTests(LAMMPS *lmp) : AtomVecSpherharm(lmp)
@@ -557,9 +559,9 @@ void AtomVecSpherharmUnitTests::validate_rotation() {
   std::cout << std::endl;
 
   get_coefficients(0, rotcoeffs);
-//  doRotate(0, rotcoeffs, rotcoeffs, alpha, -beta, gamma);
-  doRotate(0, rotcoeffs, rotcoeffs, alpha, beta, 0);
-  doRotate(0, rotcoeffs, rotcoeffs, 0, 0, gamma);
+//  doRotate(rotcoeffs, rotcoeffs, alpha, -beta, gamma);
+  doRotate(rotcoeffs, rotcoeffs, alpha, beta, 0);
+  doRotate(rotcoeffs, rotcoeffs, 0, 0, gamma);
   num_quad2 = num_quadrature*num_quadrature;
 
   std::ofstream outfile;
@@ -1366,19 +1368,76 @@ void AtomVecSpherharmUnitTests::print_normals() {
   double rad, norm[3];
   int num_angs = 20;
   double ang_res = MY_PI / double(num_angs);
-  double theta = MY_PI/100.0;
+  double theta = MY_PI / 100.0;
   double phi;
 
-  while (theta<0.99*MY_PI){
-    phi = MY_PI/100.0;
-    while (phi<1.99*MY_PI){
+  while (theta < 0.99 * MY_PI) {
+    phi = MY_PI / 100.0;
+    while (phi < 1.99 * MY_PI) {
       rad = get_shape_radius_and_normal(0, theta, phi, norm);
       MathExtra::norm3(norm);
-      std::cout << theta << " "<< phi << " " << rad << " " << norm[0] << " " << norm[1] << " " << norm[2] << " " <<
-      std::endl;
+      std::cout << theta << " " << phi << " " << rad << " " << norm[0] << " " << norm[1] << " " << norm[2] << " " <<
+                std::endl;
       phi += ang_res;
     }
     theta += ang_res;
   }
+}
 
+double AtomVecSpherharmUnitTests::get_shape_radius_compensated_boost(int sht, double theta, double phi) {
+
+  int n, loc;
+  double Y_n_m, fnm;
+  std::complex<double> Y_n_m_comp;
+  fnm = std::sqrt(1.0 / MY_4PI);
+  double rad_val = shcoeffs_byshape[sht][0] * fnm;
+  if (sin(theta) == 0.0) theta += EPSILON; // otherwise dividing by sin(theta) for gradients will not work
+  if (sin(phi) == 0.0) phi += EPSILON; // To be consistent...
+
+  double ksum, c, y, t;
+  c = 0.0;
+  ksum = rad_val;
+
+  for (n=1; n<=maxshexpan; n++){
+
+    // n=1
+    if (n == 1) {
+      // n=1, m=0
+      Y_n_m = boost::math::spherical_harmonic_r(1, 0, theta, phi);
+      rad_val = shcoeffs_byshape[sht][4] * Y_n_m;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+      // n=1, m=1
+      Y_n_m_comp = boost::math::spherical_harmonic(1, 1, theta, phi);
+      rad_val = (shcoeffs_byshape[sht][2] * Y_n_m_comp.real() - shcoeffs_byshape[sht][3] * Y_n_m_comp.imag()) * 2.0;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+
+
+      // 1 <= n > n-1
+    } else {
+      Y_n_m = boost::math::spherical_harmonic_r(n, 0, theta, phi);
+      loc = (n + 1) * (n + 2) - 2;
+      rad_val = shcoeffs_byshape[sht][loc] * Y_n_m;
+      y = rad_val - c;
+      t = ksum + y;
+      c = (t - ksum) -y;
+      ksum = t;
+      loc -= 2;
+      for (int m = 1; m <= n; m++) {
+        Y_n_m_comp = boost::math::spherical_harmonic(n, m, theta, phi);
+        rad_val = (shcoeffs_byshape[sht][loc] * Y_n_m_comp.real() - shcoeffs_byshape[sht][loc + 1] * Y_n_m_comp.imag()) * 2.0;
+        y = rad_val - c;
+        t = ksum + y;
+        c = (t - ksum) -y;
+        ksum = t;
+        loc -= 2;
+      }
+    }
+  }
+  return ksum;
 }

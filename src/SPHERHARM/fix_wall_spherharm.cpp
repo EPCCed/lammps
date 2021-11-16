@@ -15,6 +15,13 @@
    Contributing authors: Leo Silbert (SNL), Gary Grest (SNL),
                          Dan Bolintineanu (SNL)
 ------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------------
+   Contributing authors: James Young (UoE)
+                         Kevin Hanley (UoE)
+
+   Please cite the related publication:
+   TBC
+------------------------------------------------------------------------- */
 
 #include "fix_wall_spherharm.h"
 #include <cmath>

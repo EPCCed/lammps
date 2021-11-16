@@ -10,12 +10,14 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------------
+   Contributing authors: James Young (UoE)
+                         Kevin Hanley (UoE)
 
-/* ----------------------------------------------------------------------
-   Contributing author: Mike Brown (SNL)
+   Please cite the related publication:
+   TBC
 ------------------------------------------------------------------------- */
 
-#include <iostream>
 #include "fix_nve_sh.h"
 #include "math_extra.h"
 #include "atom.h"
@@ -74,8 +76,7 @@ void FixNVESh::initial_integrate(int /*vflag*/)
   int nlocal = atom->nlocal;
   if (igroup == atom->firstgroup) nlocal = atom->nfirst;
   int *shtype = atom->shtype;
-//  int *type = atom->type;
-  int itype, ishtype;
+  int ishtype;
 
   // set timestep here since dt may have changed or come via rRESPA
 
@@ -83,8 +84,6 @@ void FixNVESh::initial_integrate(int /*vflag*/)
 
   for (int i = 0; i < nlocal; i++)
     if (mask[i] & groupbit) {
-//      itype = type[i];
-//      dtfm = dtf / mass[itype];
 
       dtfm = dtf / mass[i];
       v[i][0] += dtfm * f[i][0];
@@ -125,13 +124,9 @@ void FixNVESh::final_integrate()
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
   if (igroup == atom->firstgroup) nlocal = atom->nfirst;
-//  int *type = atom->type;
-  int itype;
 
   for (int i = 0; i < nlocal; i++)
     if (mask[i] & groupbit) {
-//      itype = type[i];
-//      dtfm = dtf / mass[itype];
 
       dtfm = dtf / mass[i];
       v[i][0] += dtfm * f[i][0];
