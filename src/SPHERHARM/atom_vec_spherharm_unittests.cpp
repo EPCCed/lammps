@@ -11,11 +11,11 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
-#include <random_park.h>
-#include <math_extra.h>
-#include <iostream>
-#include <fstream>
-#include <iomanip>
+#include "random_park.h"
+#include "math_extra.h"
+#include "iostream"
+#include "fstream"
+#include "iomanip"
 #include "atom_vec_spherharm_unittests.h"
 #include "atom.h"
 #include "modify.h"
@@ -27,13 +27,13 @@
 #include "math_spherharm.h"
 
 
-#include <boost/math/quadrature/gauss.hpp>
-#include <boost/math/policies/policy.hpp>
-#include <boost/multiprecision/cpp_bin_float.hpp>
-#include <boost/multiprecision/float128.hpp>
-#include <boost/math/special_functions/spherical_harmonic.hpp>
-#include <boost/concept_check.hpp>
-#include <complex>
+#include "boost/math/quadrature/gauss.hpp"
+#include "boost/math/policies/policy.hpp"
+#include "boost/multiprecision/cpp_bin_float.hpp"
+#include "boost/multiprecision/float128.hpp"
+#include "boost/math/special_functions/spherical_harmonic.hpp"
+#include "boost/concept_check.hpp"
+#include "complex"
 
 
 using namespace LAMMPS_NS;

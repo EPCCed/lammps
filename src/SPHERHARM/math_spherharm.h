@@ -14,9 +14,9 @@
 #ifndef LMP_MATH_SPHERHARM_H
 #define LMP_MATH_SPHERHARM_H
 
-#include <cmath>
-#include <math_extra.h>
-#include <iostream>
+#include "cmath"
+#include "math_extra.h"
+#include "iostream"
 
 namespace MathSpherharm {
 

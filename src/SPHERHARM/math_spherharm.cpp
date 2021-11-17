@@ -377,7 +377,15 @@ namespace MathSpherharm {
   }
 
 
-  // Get the quaternion between the north pole and a given vector
+/* ----------------------------------------------------------------------
+   Calculates the quaternion required to rotate points generated
+   on the (north) pole of an atom back to a given vector (between two atom centres normally).
+   https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
+
+    TODO - Need to comapre this against generating the quaterion from the
+    spherical coordinates (theta,phi) of the contact line from the COG of
+    each particle in space frame
+ ------------------------------------------------------------------------- */
   void get_contact_quat(double (&xvecdist)[3], double (&quat)[4]) {
     double vert_unit_vec[3], cross_vec[3], c;
     // North pole unit vector, points generated are with reference to this point

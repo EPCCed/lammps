@@ -24,11 +24,11 @@
 ------------------------------------------------------------------------- */
 
 #include "fix_wall_spherharm.h"
-#include <cmath>
-#include <cstring>
-#include <math_extra.h>
-#include <iomanip>
-#include <fstream>
+#include "cmath"
+#include "cstring"
+#include "math_extra.h"
+#include "iomanip"
+#include "fstream"
 #include "atom.h"
 #include "domain.h"
 #include "update.h"
@@ -41,7 +41,7 @@
 #include "math_spherharm.h"
 #include "atom_vec_spherharm.h"
 
-#include <limits>
+#include "limits"
 typedef std::numeric_limits< double > dbl;
 
 using namespace LAMMPS_NS;

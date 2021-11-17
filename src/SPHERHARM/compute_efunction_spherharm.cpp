@@ -18,6 +18,7 @@
    TBC
 ------------------------------------------------------------------------- */
 
+#include <iostream>
 #include "compute_efunction_spherharm.h"
 
 #include "atom.h"
@@ -77,7 +78,7 @@ double ComputeEFunctionSpherharm::compute_scalar()
   int *type = atom->type;
   int nlocal = atom->nlocal;
   double dt = update->dt;
-  int itype, ishtype;
+  int ishtype;
   double fv, mw, temp, dt2, dtf, dtfm;
   double vhalf[3], whalf[3], angmomhalf[3], qfoo[4];
 
@@ -88,8 +89,7 @@ double ComputeEFunctionSpherharm::compute_scalar()
   double efuture = 0.0;
   for (int i = 0; i < nlocal; i++) {
     if (mask[i] & groupbit) {
-      itype = type[i];
-      dtfm = dtf / mass[itype];
+      dtfm = dtf / mass[i];
       ishtype = shtype[i];
 
       // "front half"

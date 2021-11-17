@@ -19,10 +19,10 @@
 ------------------------------------------------------------------------- */
 
 #include "atom_vec_spherharm.h"
-#include <potential_file_reader.h>
-#include <fstream>
-#include <iomanip>
-#include <complex>
+#include "potential_file_reader.h"
+#include "fstream"
+#include "iomanip"
+#include "complex"
 #include "atom.h"
 #include "modify.h"
 #include "fix.h"
@@ -77,7 +77,7 @@ AtomVecSpherharm::AtomVecSpherharm(LAMMPS *lmp) : AtomVec(lmp)
   fields_comm_vel = (char *) "omega angmom quat";
   fields_reverse = (char *) "torque";
   fields_border = (char *) "shtype rmass";
-  fields_border_vel = (char *) "omega angmom shtype rmass";
+  fields_border_vel = (char *) "omega angmom shtype rmass quat";
   fields_exchange = (char *) "omega shtype angmom rmass";
   fields_restart = (char *) "omega shtype angmom rmass";
   fields_create = (char *) "omega shtype angmom quat rmass";
@@ -1545,6 +1545,10 @@ void AtomVecSpherharm::dump_ply(int ii, int shape, int plycount, double irot[3][
     ix_sf[2] += off[2];
     outfile << std::setprecision(16) << ix_sf[0] << " " << ix_sf[1] << " " << ix_sf[2] << "\n";
   }
+//  std::cout<<ix_bf[0]<<" "<<ix_bf[1]<<" "<<ix_bf[2]<< std::endl;
+//  std::cout<<ix_sf[0]<<" "<<ix_sf[1]<<" "<<ix_sf[2]<< std::endl;
+//  std::cout<<off[0]<<" "<<off[1]<<" "<<off[2]<< std::endl;
+//  std::cout<<rad_body<<std::endl;
   outfile.close();
 }
 

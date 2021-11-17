@@ -38,6 +38,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <iostream>
 
 using namespace LAMMPS_NS;
 using namespace MathConst;
@@ -1086,6 +1087,9 @@ void Set::set(int keyword)
       MathExtra::qconjugate(quatinit[ishtype],quat_bar);
       MathExtra::quatquat(quat_foo, quat_bar, quat);
       MathExtra::qnormalize(quat);
+
+      std::cout << quat[0] << " " << quat[1] << " " << quat[2] << " " << quat[3] << " " << std::endl;
+
     }
 
     count++;
@@ -1383,6 +1387,8 @@ void Set::setrandom(int keyword)
           MathExtra::quatquat(quat_foo, quat_bar, quat);
           MathExtra::qnormalize(quat);
           count++;
+          std::cout << quat[0] << " " << quat[1] << " " << quat[2] << " " << quat[3] << " " << std::endl;
+
         }
 
     } else error->one(FLERR,"Spherharm must be three-dimensional");
