@@ -16,7 +16,7 @@
 #include "iostream"
 #include "fstream"
 #include "iomanip"
-#include "atom_vec_spherharm_unittests.h"
+#include "atom_vec_spherharmtest.h"
 #include "atom.h"
 #include "modify.h"
 #include "fix.h"
@@ -43,12 +43,12 @@ using namespace MathSpherharm;
 #define EPSILON 1e-10
 /* ---------------------------------------------------------------------- */
 
-AtomVecSpherharmUnitTests::AtomVecSpherharmUnitTests(LAMMPS *lmp) : AtomVecSpherharm(lmp)
+AtomVecSpherharmtest::AtomVecSpherharmtest(LAMMPS *lmp) : AtomVecSpherharm(lmp)
 {
   ellipsoidshape = nullptr;
 }
 
-AtomVecSpherharmUnitTests::~AtomVecSpherharmUnitTests()
+AtomVecSpherharmtest::~AtomVecSpherharmtest()
 {
   memory->sfree(ellipsoidshape);
 }
@@ -57,7 +57,7 @@ AtomVecSpherharmUnitTests::~AtomVecSpherharmUnitTests()
    process sub-style args
 ------------------------------------------------------------------------- */
 
-void AtomVecSpherharmUnitTests::process_args(int narg, char **arg) {
+void AtomVecSpherharmtest::process_args(int narg, char **arg) {
 
   AtomVecSpherharm::process_args(narg, arg);
 
@@ -69,7 +69,7 @@ void AtomVecSpherharmUnitTests::process_args(int narg, char **arg) {
 
   MPI_Bcast(&(pinertia_byshape[0][0]), nshtypes * 3, MPI_DOUBLE, 0, world);
 
-  memory->create(ellipsoidshape, nshtypes, 3, "AtomVecSpherharmUnitTests:ellipsoidshape");
+  memory->create(ellipsoidshape, nshtypes, 3, "AtomVecSpherharmtest:ellipsoidshape");
 
 //  check_sphere_normals();
 //  check_ellipsoid_normals();
@@ -117,7 +117,7 @@ void AtomVecSpherharmUnitTests::process_args(int narg, char **arg) {
 //  cgaltest(narg, arg);
 }
 
-void AtomVecSpherharmUnitTests::get_shape(int i, double &shapex, double &shapey, double &shapez)
+void AtomVecSpherharmtest::get_shape(int i, double &shapex, double &shapey, double &shapez)
 {
   ellipsoidshape[0][0] = 0.5;
   ellipsoidshape[0][1] = 0.5;
@@ -128,7 +128,7 @@ void AtomVecSpherharmUnitTests::get_shape(int i, double &shapex, double &shapey,
   shapez = ellipsoidshape[shtype[i]][2];
 }
 
-void AtomVecSpherharmUnitTests::check_rotations(int sht, int i) {
+void AtomVecSpherharmtest::check_rotations(int sht, int i) {
 
   int seed = 4;
   double x[3];
@@ -222,7 +222,7 @@ void AtomVecSpherharmUnitTests::check_rotations(int sht, int i) {
 }
 
 
-void AtomVecSpherharmUnitTests::check_sphere_normals() {
+void AtomVecSpherharmtest::check_sphere_normals() {
 
   double theta,phi;
   double rad,rad_val,rad_dphi,rad_dtheta;
@@ -254,7 +254,7 @@ void AtomVecSpherharmUnitTests::check_sphere_normals() {
 }
 
 
-void AtomVecSpherharmUnitTests::check_ellipsoid_normals() {
+void AtomVecSpherharmtest::check_ellipsoid_normals() {
 
   double theta,phi;
   double rad,rad_val,rad_dphi,rad_dtheta;
@@ -322,7 +322,7 @@ void AtomVecSpherharmUnitTests::check_ellipsoid_normals() {
   outfile.close();
 }
 
-void AtomVecSpherharmUnitTests::get_cog() {
+void AtomVecSpherharmtest::get_cog() {
 
   double vol=0.0;
   double cog[3];
@@ -370,7 +370,7 @@ void AtomVecSpherharmUnitTests::get_cog() {
 
 }
 
-void AtomVecSpherharmUnitTests::dump_ply() {
+void AtomVecSpherharmtest::dump_ply() {
 
   double theta, phi, rad_body;
   double ix_sf[3];
@@ -403,7 +403,7 @@ void AtomVecSpherharmUnitTests::dump_ply() {
   outfile.close();
 }
 
-void AtomVecSpherharmUnitTests::dump_shapenormals() {
+void AtomVecSpherharmtest::dump_shapenormals() {
 
   std::cout<<"DUMPING NORMALS"<<std::endl;
 
@@ -438,7 +438,7 @@ void AtomVecSpherharmUnitTests::dump_shapenormals() {
 }
 
 
-void AtomVecSpherharmUnitTests::compare_areas() {
+void AtomVecSpherharmtest::compare_areas() {
 
   std::cout<<"Comparing Areas"<<std::endl;
 
@@ -489,7 +489,7 @@ void AtomVecSpherharmUnitTests::compare_areas() {
   std::cout <<"Projected surface area, from vector area   -> " << test_sa << std::endl;
 }
 
-void AtomVecSpherharmUnitTests::validate_rotation() {
+void AtomVecSpherharmtest::validate_rotation() {
 
   double *rotcoeffs;
   double quat[4];
@@ -775,7 +775,7 @@ void AtomVecSpherharmUnitTests::validate_rotation() {
 
 }
 
-void AtomVecSpherharmUnitTests::spher_sector_volumetest(int num_pole_quad, double iang){
+void AtomVecSpherharmtest::spher_sector_volumetest(int num_pole_quad, double iang){
 
   int kk, ll, n;
   int ishtype=0;
@@ -873,7 +873,7 @@ void AtomVecSpherharmUnitTests::spher_sector_volumetest(int num_pole_quad, doubl
 }
 
 
-void AtomVecSpherharmUnitTests::surfarea_int_tests(int num_pole_quad, double iang){
+void AtomVecSpherharmtest::surfarea_int_tests(int num_pole_quad, double iang){
 
   int kk, ll, n;
   double cosang, fac;
@@ -961,7 +961,7 @@ void AtomVecSpherharmUnitTests::surfarea_int_tests(int num_pole_quad, double ian
 
 }
 
-void AtomVecSpherharmUnitTests::volumetest_boost_test(){
+void AtomVecSpherharmtest::volumetest_boost_test(){
   using namespace boost::math::quadrature;
   using boost::multiprecision::cpp_bin_float_quad;
 
@@ -1089,7 +1089,7 @@ void AtomVecSpherharmUnitTests::volumetest_boost_test(){
 }
 
 
-void AtomVecSpherharmUnitTests::surfacearea_boost_test(){
+void AtomVecSpherharmtest::surfacearea_boost_test(){
   using namespace boost::math::quadrature;
   using boost::multiprecision::cpp_bin_float_quad;
 
@@ -1191,7 +1191,7 @@ void AtomVecSpherharmUnitTests::surfacearea_boost_test(){
 
 }
 
-void AtomVecSpherharmUnitTests::spher_cap_volumetest(int num_pole_quad, double iang){
+void AtomVecSpherharmtest::spher_cap_volumetest(int num_pole_quad, double iang){
 
   int kk, ll, n;
   int ishtype=0;
@@ -1256,7 +1256,7 @@ void AtomVecSpherharmUnitTests::spher_cap_volumetest(int num_pole_quad, double i
   std::cout << iang << " " << num_pole_quad << " " << vol_overlap << " " << vol_ana << std::endl;
 }
 
-double AtomVecSpherharmUnitTests::back_calc_coeff(int l, int m, int num_pole_quad){
+double AtomVecSpherharmtest::back_calc_coeff(int l, int m, int num_pole_quad){
 
   int kk, ll, n;
   double fac, theta_pole, phi_pole;
@@ -1304,7 +1304,7 @@ double AtomVecSpherharmUnitTests::back_calc_coeff(int l, int m, int num_pole_qua
   return anm_r;
 }
 
-void AtomVecSpherharmUnitTests::boost_test() {
+void AtomVecSpherharmtest::boost_test() {
 
   using namespace boost::math::quadrature;
   using boost::multiprecision::cpp_bin_float_quad;
@@ -1315,7 +1315,7 @@ void AtomVecSpherharmUnitTests::boost_test() {
   std::cout << Q2 << std::endl;
 }
 
-void AtomVecSpherharmUnitTests::sphere_line_intersec_tests() {
+void AtomVecSpherharmtest::sphere_line_intersec_tests() {
 
   int num_ints;
   double rad, sol1, sol2;
@@ -1363,7 +1363,7 @@ void AtomVecSpherharmUnitTests::sphere_line_intersec_tests() {
   std::cout << vec[1] << " " << vec[2] << std::endl;
 }
 
-void AtomVecSpherharmUnitTests::print_normals() {
+void AtomVecSpherharmtest::print_normals() {
 
   double rad, norm[3];
   int num_angs = 20;
@@ -1384,7 +1384,7 @@ void AtomVecSpherharmUnitTests::print_normals() {
   }
 }
 
-double AtomVecSpherharmUnitTests::get_shape_radius_compensated_boost(int sht, double theta, double phi) {
+double AtomVecSpherharmtest::get_shape_radius_compensated_boost(int sht, double theta, double phi) {
 
   int n, loc;
   double Y_n_m, fnm;

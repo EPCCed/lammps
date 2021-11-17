@@ -13,24 +13,24 @@
 
 #ifdef ATOM_CLASS
 
-AtomStyle(spherharmunittests,AtomVecSpherharmUnitTests)
+AtomStyle(spherharmtest,AtomVecSpherharmtest)
 
 #else
 
-#ifndef LMP_ATOM_VEC_SPHERHARMUNITTESTS_H
-#define LMP_ATOM_VEC_SPHERHARMUNITTESTS_H
+#ifndef LMP_ATOM_VEC_SPHERHARMTEST_H
+#define LMP_ATOM_VEC_SPHERHARMTEST_H
 
 #include "atom_vec_spherharm.h"
 
 namespace LAMMPS_NS {
 
-class AtomVecSpherharmUnitTests : public AtomVecSpherharm {
+class AtomVecSpherharmtest : public AtomVecSpherharm {
  public:
 
   // Mandatory LAMMPS methods
-  AtomVecSpherharmUnitTests(class LAMMPS *);
+  AtomVecSpherharmtest(class LAMMPS *);
   void process_args(int, char **);
-  ~AtomVecSpherharmUnitTests();
+  ~AtomVecSpherharmtest();
 
   // Public methods required to access per-shape arrays
   void get_shape(int, double &, double &, double &);            // FOR ELLIPSOID TEST ONLY

@@ -18,7 +18,6 @@
    TBC
 ------------------------------------------------------------------------- */
 
-#include <iostream>
 #include "compute_efunction_spherharm.h"
 
 #include "atom.h"
