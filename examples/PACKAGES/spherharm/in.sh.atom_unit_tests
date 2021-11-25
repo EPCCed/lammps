@@ -1,8 +1,6 @@
 # Test
 
 variable	name string spherical_harmonics_testing
-#atom_style	spherharmtest 20 120 /home/james/lammps/examples/PACKAGES/spherharm/sphere.dat
-#atom_style	spherharmtest 20 120 /home/james/lammps/examples/PACKAGES/spherharm/ellipsoid.dat
-atom_style	spherharmtest 20 120 /home/james/lammps/examples/PACKAGES/spherharm/A-anm-00001.dat
+atom_style	spherharmtest 20 120 A-anm-00001.dat
 units		lj
 newton off
