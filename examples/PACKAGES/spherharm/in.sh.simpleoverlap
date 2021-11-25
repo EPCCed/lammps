@@ -1,7 +1,7 @@
 # Test
 
 variable	name string spherical_harmonics_testing
-atom_style	spherharm 120 /home/james/lammps/examples/USER/spherharm/A-anm-00001.dat
+atom_style	spherharm 20 120 A-anm-00001.dat
 units		si
 newton off
 # newton on
@@ -24,14 +24,13 @@ change_box	all boundary f f f
 create_atoms 	1 single 35.5 50.0 50.0
 create_atoms 	2 single 52.5 50.0 50.0
 
-mass *      1.0
-
 set 		atom 1 vx 1.0 vy 0.0 vz 0.0
 set 		atom 2 vx -1.0 vy 0.0 vz 0.0
 
 set		atom 1 sh/shape 1
 set		atom 2 sh/shape 1
 set		group all sh/quat/random 4
+set             group all mass 1.0
 
 fix		time_fix all nve/sh
 
