@@ -1,7 +1,7 @@
 # Test
 
 variable	name string spherical_harmonics_testing
-atom_style	spherharm 120 /home/james/lammps/examples/USER/spherharm/sphere.dat
+atom_style	spherharm 20 120 sphere.dat
 units		si
 newton off
 # newton on
@@ -23,14 +23,13 @@ change_box	all boundary f f f
 
 create_atoms 	1 single 50.0 50.0 50.0
 
-mass *      1.0
 set 		atom 1 vx 1.0 vy 0.0 vz 0.0
 set		atom 1 sh/shape 1
 set		group all sh/quat/random 4
+set             group all mass 1.0
 
 fix		time_fix all nve/sh
 fix     xwall all wall/spherharm 2.0e-11 2.0 NULL xplane NULL 115.0
-#fix     xwall all wall/spherharm 2.0e-11 2.0 NULL xplane NULL 66.6556
 
 neigh_modify	delay 0 every 1 check yes
 comm_modify	vel yes
@@ -46,4 +45,3 @@ thermo_style custom step c_PEcalc c_TransKE c_RotKE v_ETotal
 timestep	1.0e-1
 
 run	200000
-#run	1
