@@ -1,0 +1,45 @@
+# Tetrahedron: centroid (0, 0, 0), one face in z = -1/3 plane, vertices on unit sphere.
+
+5 atoms
+6 bonds
+12 angles
+
+2  atom types
+1  bond types
+1  angle types
+
+-5.0 5.0 xlo xhi
+-5.0 5.0 ylo yhi
+-5.0 5.0 zlo zhi
+
+Atoms # atom-ID, atom-type, x, y, z, molecule-ID, diameter, density
+
+1 1    0.9428090   0.0        -0.3333333  1  1.0  0.1
+2 1   -0.4714045   0.8164966  -0.3333333  1  1.0  0.1
+3 1   -0.4714045  -0.8164966  -0.3333333  1  1.0  0.1
+4 1    0.0         0.0         1.0        1  1.0  0.1
+5 2    1.5         0.0         0.0        2  2.0  0.1
+
+Bonds
+
+1   1      1      2
+2   1      1      3
+3   1      1      4
+4   1      2      3
+5   1      2      4
+6   1      3      4
+
+Angles
+
+1   1      2      3      4
+2   1      4      2      3
+3   1      3      4      2
+4   1      2      1      3
+5   1      3      2      1
+6   1      1      3      2
+7   1      4      1      2
+8   1      2      4      1
+9   1      1      2      4
+10  1      3      1      4
+11  1      4      3      1
+12  1      1      4      3

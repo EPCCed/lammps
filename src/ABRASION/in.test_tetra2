@@ -1,0 +1,39 @@
+units           cgs
+boundary        p p p
+atom_style      hybrid molecular sphere
+newton          off
+newton          off
+dimension       3
+region          box block  -5.0 5.0 -5.0 5.0 -5.0 5.0
+
+bond_style      zero
+angle_style     zero
+read_data       tetrahedron2.mol
+bond_coeff      *
+angle_coeff     * 75.0
+group           target type 1
+group           particle type 2
+velocity        all set 0.0 0.0 0.0
+velocity        particle set -0.35 0.0 0.0
+
+write_data      tetra.out
+
+neighbor	0.15 bin
+neigh_modify    delay 0 every 1 exclude type 1 1
+neigh_modify	delay 0 every 1 check yes
+comm_modify	mode single cutoff 2.2 vel yes
+pair_style	gran/hertz/history 5.e11 9.e11 0.0000001 0.0000001 0.5 0
+pair_coeff	* *
+
+#fix		clumps all rigid molecule
+#fix		clump target rigid molecule
+fix		abrade all abrasion
+fix		integration all nve
+
+thermo 100
+
+#dump            1 all image 1 image.*.jpg type type &
+
+timestep	5.0e-7
+
+run		1
