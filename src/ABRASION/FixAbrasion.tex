@@ -1,0 +1,89 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{color}
+\usepackage{hyperref}
+\usepackage[pdftex]{graphicx}
+\usepackage{newfloat}
+\usepackage{bm}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts, amsthm}
+\usepackage[nodayofweek]{datetime}
+\usepackage[style=authoryear,maxcitenames=2,maxbibnames=5,backend=biber]{biblatex}
+\usepackage{enumitem}
+\setlist{nosep} % or \setlist{noitemsep} to leave space around whole list
+
+\addbibresource{refs.bib}
+\hyphenpenalty=500
+
+%opening
+\title{The Abrasion Fix}
+\author{David Scott}
+\date{\today}
+
+\begin{document}
+	
+\maketitle
+	
+\section*{Introduction}
+This document describes a LAMMPS fix that has been developed to replace much of James Young's \verb|particle_meshs| fix and  Enzo's accompanying script. The new fix is called \verb|abrasion| and it may be found in\\
+ \url{https://github.com/EPCCed/lammps/tree/feature-abrasion/src/ABRASION}\\
+ along with a very simple test script (\verb|in.test_tetra3|) and input file\\
+ (\verb|tetrahedron3.mol|).
+
+One aim of the work undertaken was to remove the dependency on CGAL (\url{https://www.cgal.org}). The second aim was to move the calculation of the displacement velocity from the LAMMPS script into the fix.
+
+\section*{Description}
+The fix computes the displacement velocity of each atom in a group of atoms (the target) caused by an incident particle (an atom). For each atom it also computes an area and a normal vector. The order in which the data are held is:
+\begin{itemize}
+\item[] x component of normal
+\item[] y component of normal
+\item[] z component of normal
+\item[] area
+\item[] x component of velocity
+\item[] y component of velocity
+\item[] z component of velocity
+\end{itemize}
+In a script that uses the fix these data are available  as \verb|f_{ID}[1]| etc. where {\verb|{ID}| is replaced by the  name given to the fix.
+
+In addition to the \verb|ID| and \verb|group-ID| arguments common to all fixes, two further arguments are required: \verb|pf| and \verb|mu|.
+
+\section*{Implementation}
+
+The bulk of the computation is carried out in the \verb|post_force| method.
+
+Firstly, an area and a normal is computed for each atom (see the method \verb|areas_and_normals|). The area is computed in the same way as in James's fix by summing contributions from the area of each facet incident on the atom. The normal vector  is obtained by calculating the weighted average of the normals of the facets contributing to the area, with the weight being proportional to the facet's contribution.
+
+The current implementation of  \verb|areas_and_normals| assumes that the input file (which describes the molecules) contains exactly one angle from each (triangular) facet. This is different from the previous implementation which expected three angles per facet. The previous implementation can be viewed by looking at the history of the fix in the repository.
+
+Once the areas and normals have been determined, each atom in turn is examined to see if it is subject to any force. If not, nothing more needs to be done.
+
+If there is a force then the relative motion of the incident atom and the atom in the target is considered (see the method \verb|gap_is_shrinking|). If the gap between the two (when projected onto the normal vector of the atom in the target) is widening then nothing more needs to be done.
+
+If the gap is closing then the displacement velocity is calculated (see the method \verb|displacement_of_atom|). This involves the use of lists of neighbours.
+
+\section*{Script}
+
+The test script needs to be extended in order to mimic the effect of the original script. It is sufficient, however, to demonstrate the working of the fix.
+
+Note the following lines in the script:
+\begin{verbatim}
+	atom_style      hybrid molecular sphere
+	bond_style      zero
+	angle_style     zero
+\end{verbatim}
+The atoms are declared to be of the style \verb|hybrid molecular sphere| so that they have all of the properties that are needed. This leads to the atom section of the input file needing to specify
+\begin{verbatim}
+	atom-ID, atom-type, x, y, z, molecule-ID, diameter, density
+\end{verbatim}
+
+The styles of the bonds and angles are \verb|zero| because they are used to convey geometric information only.
+
+\section*{Observations}
+
+The calculation of the displacement velocity assumes that each atom in the target is interacting with only one incident particle at a time. If there are interactions with more than one particle then at most one of these interactions will produce a displacement.
+
+This could be a problem if  a multiple particles are introduced. Also, it could be a problem if two groups of atoms (rigid bodies, say) are allowed to interact.  This restriction could be relaxed but a scheme for combining the effects of multiple interactions would be required.
+
+\end{document}
