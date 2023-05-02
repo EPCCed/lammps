@@ -26,25 +26,31 @@ namespace LAMMPS_NS {
 
     class FixAbrasion : public Fix {
     public:
-        FixAbrasion(class LAMMPS *, int, char **);
-        ~FixAbrasion();
-        int setmask();
-        void pre_force(int);
-        void post_force(int);
-        double memory_usage();
-        void grow_arrays(int);
-        void copy_arrays(int, int, int);
-        void set_arrays(int);
-        int pack_exchange(int, double *);
-        int unpack_exchange(int, double *);
-        int pack_restart(int, double *);
-        void unpack_restart(int, int);
-        int maxsize_restart();
-        int size_restart(int);
+      FixAbrasion(class LAMMPS *, int, char **);
+      ~FixAbrasion();
+      int setmask() override;
+      void init() override;
+      void init_list(int, class NeighList *) override;
+      void post_force(int) override;
+      double memory_usage() override;
+      void grow_arrays(int) override;
+      void copy_arrays(int, int, int) override;
+      void set_arrays(int) override;
+      int pack_exchange(int, double *) override;
+      int unpack_exchange(int, double *) override;
+      int pack_restart(int, double *) override;
+      void unpack_restart(int, int) override;
+      int maxsize_restart() override;
+      int size_restart(int) override;
 
-        double **vertexdata; //~ Public to allow access from pairstyles
+      double **vertexdata; //~ Public to allow access from pairstyles
     private:
-        void areas_and_normals();
+      double pf;                          // hardness
+      double mu;                          // a constant used to calculate the shear hardness
+      class NeighList *list;
+      void areas_and_normals();
+      bool gap_is_shrinking(int, int, double[3], double[3], double*);
+      void displacement_of_atom(int, double, double, double[3], double[3]);
     };
 
 }    // namespace LAMMPS_NS
