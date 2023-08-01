@@ -2,7 +2,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -31,8 +31,7 @@ namespace LAMMPS_NS {
 class NPairHalfBinNewtonTriIntel : public NPairIntel {
  public:
   NPairHalfBinNewtonTriIntel(class LAMMPS *);
-  ~NPairHalfBinNewtonTriIntel() {}
-  void build(class NeighList *);
+  void build(class NeighList *) override;
 
  private:
   template <class flt_t, class acc_t> void hbnti(NeighList *, IntelBuffers<flt_t, acc_t> *);
@@ -42,7 +41,3 @@ class NPairHalfBinNewtonTriIntel : public NPairIntel {
 
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-*/

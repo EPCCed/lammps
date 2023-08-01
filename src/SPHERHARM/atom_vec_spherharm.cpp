@@ -71,18 +71,18 @@ AtomVecSpherharm::AtomVecSpherharm(LAMMPS *lmp) : AtomVec(lmp)
   // order of fields in a string does not matter
   // except: fields_data_atom & fields_data_vel must match data file
 
-  fields_grow = (char *) "omega torque shtype angmom quat rmass ";
-  fields_copy = (char *) "omega shtype angmom quat rmass";
-  fields_comm = (char *) "quat";
-  fields_comm_vel = (char *) "omega angmom quat";
-  fields_reverse = (char *) "torque";
-  fields_border = (char *) "shtype rmass";
-  fields_border_vel = (char *) "omega angmom shtype rmass quat";
-  fields_exchange = (char *) "omega shtype angmom rmass";
-  fields_restart = (char *) "omega shtype angmom rmass";
-  fields_create = (char *) "omega shtype angmom quat rmass";
-  fields_data_atom = (char *) "id type shtype rmass quat x";
-  fields_data_vel = (char *) "id v omega angmom";
+  fields_grow = {"omega", "torque", "shtype", "angmom", "quat", "rmass"};
+  fields_copy = {"omega", "shtype", "angmom", "quat", "rmass"};
+  fields_comm = {"quat"};
+  fields_comm_vel = {"omega", "angmom", "quat"};
+  fields_reverse = {"torque"};
+  fields_border = {"shtype", "rmass"};
+  fields_border_vel =  {"omega", "angmom", "shtype", "rmass", "quat"};
+  fields_exchange =  {"omega", "shtype", "angmom", "rmass"};
+  fields_restart =  {"omega", "shtype", "angmom", "rmass"};
+  fields_create = {"omega", "shtype", "angmom", "quat", "rmass"};
+  fields_data_atom = {"id", "type", "shtype", "rmass", "quat", "x"};
+  fields_data_vel = {"id", "v", "omega", "angmom"};
 }
 
 AtomVecSpherharm::~AtomVecSpherharm()

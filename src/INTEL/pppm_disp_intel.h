@@ -2,7 +2,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -33,9 +33,9 @@ namespace LAMMPS_NS {
 class PPPMDispIntel : public PPPMDisp {
  public:
   PPPMDispIntel(class LAMMPS *);
-  virtual ~PPPMDispIntel();
-  virtual void init();
-  virtual void compute(int, int);
+  ~PPPMDispIntel() override;
+  void init() override;
+  void compute(int, int) override;
 
 #ifdef _LMP_INTEL_OFFLOAD
   int use_base();

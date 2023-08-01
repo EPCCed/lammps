@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -25,8 +25,6 @@
 #include "memory.h"
 #include "modify.h"
 #include "update.h"
-
-#include <cstring>
 
 using namespace LAMMPS_NS;
 
@@ -62,7 +60,7 @@ void ComputeDamageAtom::init()
   auto fixes = modify->get_fix_by_style("PERI_NEIGH");
   if (fixes.size() == 0)
     error->all(FLERR,"Compute damage/atom requires a peridynamic potential");
-  else fix_peri_neigh = (FixPeriNeigh *)fixes.front();
+  else fix_peri_neigh = dynamic_cast<FixPeriNeigh *>(fixes.front());
 }
 
 /* ---------------------------------------------------------------------- */

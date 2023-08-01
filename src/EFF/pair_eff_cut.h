@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,22 +27,22 @@ namespace LAMMPS_NS {
 class PairEffCut : public Pair {
  public:
   PairEffCut(class LAMMPS *);
-  virtual ~PairEffCut();
-  virtual void compute(int, int);
-  virtual void settings(int, char **);
-  void coeff(int, char **);
-  void init_style();
+  ~PairEffCut() override;
+  void compute(int, int) override;
+  void settings(int, char **) override;
+  void coeff(int, char **) override;
+  void init_style() override;
   void min_pointers(double **, double **);
-  double init_one(int, int);
-  void write_restart(FILE *);
-  void read_restart(FILE *);
-  virtual void write_restart_settings(FILE *);
-  virtual void read_restart_settings(FILE *);
+  double init_one(int, int) override;
+  void write_restart(FILE *) override;
+  void read_restart(FILE *) override;
+  void write_restart_settings(FILE *) override;
+  void read_restart_settings(FILE *) override;
 
-  void min_xf_pointers(int, double **, double **);
-  void min_xf_get(int);
-  void min_x_set(int);
-  double memory_usage();
+  void min_xf_pointers(int, double **, double **) override;
+  void min_xf_get(int) override;
+  void min_x_set(int) override;
+  double memory_usage() override;
 
  private:
   int limit_eradius_flag, pressure_with_evirials_flag;

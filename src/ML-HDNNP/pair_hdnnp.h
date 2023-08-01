@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/ Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -39,12 +39,12 @@ class PairHDNNP : public Pair {
 
  public:
   PairHDNNP(class LAMMPS *);
-  virtual ~PairHDNNP();
-  virtual void compute(int, int);
-  virtual void settings(int, char **);
-  virtual void coeff(int, char **);
-  virtual void init_style();
-  virtual double init_one(int, int);
+  ~PairHDNNP() override;
+  void compute(int, int) override;
+  void settings(int, char **) override;
+  void coeff(int, char **) override;
+  void init_style() override;
+  double init_one(int, int) override;
 
  protected:
   virtual void allocate();

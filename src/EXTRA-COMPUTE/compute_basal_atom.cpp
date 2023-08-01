@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -17,20 +17,20 @@
                         Copyright (C) 2013
 ------------------------------------------------------------------------- */
 
-#include <cmath>
-#include <cstring>
 #include "compute_basal_atom.h"
+
 #include "atom.h"
-#include "update.h"
-#include "modify.h"
-#include "neighbor.h"
-#include "neigh_list.h"
-#include "neigh_request.h"
-#include "force.h"
-#include "pair.h"
 #include "comm.h"
-#include "memory.h"
 #include "error.h"
+#include "force.h"
+#include "memory.h"
+#include "modify.h"
+#include "neigh_list.h"
+#include "neighbor.h"
+#include "pair.h"
+#include "update.h"
+
+#include <cmath>
 
 using namespace LAMMPS_NS;
 
@@ -70,17 +70,9 @@ void ComputeBasalAtom::init()
 {
   // need an occasional full neighbor list
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->pair = 0;
-  neighbor->requests[irequest]->compute = 1;
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
-  neighbor->requests[irequest]->occasional = 1;
+  neighbor->add_request(this, NeighConst::REQ_FULL | NeighConst::REQ_OCCASIONAL);
 
-  int count1 = 0;
-  for (int i = 0; i < modify->ncompute; i++)
-    if (strcmp(modify->compute[i]->style,"basal/atom") == 0) count1++;
-  if (count1 > 1 && comm->me == 0)
+  if ((modify->get_compute_by_style("basal/atom").size() > 1) && (comm->me == 0))
     error->warning(FLERR,"More than one compute basal/atom");
 }
 
@@ -207,9 +199,9 @@ void ComputeBasalAtom::compute_peratom()
       chi[0] = chi[1] = chi[2] = chi[3] = chi[4] = chi[5] = chi[6] = chi[7] = 0;
       double x_ij, y_ij, z_ij, x_ik, y_ik, z_ik, xmean5, ymean5, zmean5,
              xmean6, ymean6, zmean6, xmean7, ymean7, zmean7;
-      double *x3 = new double[n0];
-      double *y3 = new double[n0];
-      double *z3 = new double[n0];
+      auto x3 = new double[n0];
+      auto y3 = new double[n0];
+      auto z3 = new double[n0];
       for (j = 0; j < n0; j++) {
         x_ij = x[i][0]-x[nearest_n0[j]][0];
         y_ij = x[i][1]-x[nearest_n0[j]][1];
@@ -439,8 +431,8 @@ void ComputeBasalAtom::compute_peratom()
    2nd routine sorts auxiliary array at same time
 ------------------------------------------------------------------------- */
 
-#define SWAP(a,b)   tmp = a; a = b; b = tmp;
-#define ISWAP(a,b) itmp = a; a = b; b = itmp;
+#define SWAP(a,b)   tmp = a; (a) = b; (b) = tmp;
+#define ISWAP(a,b) itmp = a; (a) = b; (b) = itmp;
 
 void ComputeBasalAtom::select(int k, int n, double *arr)
   {
@@ -450,7 +442,7 @@ void ComputeBasalAtom::select(int k, int n, double *arr)
   arr--;
   l = 1;
   ir = n;
-  for (;;) {
+  while (true) {
     if (ir <= l+1) {
       if (ir == l+1 && arr[ir] < arr[l]) {
         SWAP(arr[l],arr[ir])
@@ -471,7 +463,7 @@ void ComputeBasalAtom::select(int k, int n, double *arr)
       i = l+1;
       j = ir;
       a = arr[l+1];
-      for (;;) {
+      while (true) {
         do i++; while (arr[i] < a);
         do j--; while (arr[j] > a);
         if (j < i) break;
@@ -496,7 +488,7 @@ void ComputeBasalAtom::select2(int k, int n, double *arr, int *iarr)
   iarr--;
   l = 1;
   ir = n;
-  for (;;) {
+  while (true) {
     if (ir <= l+1) {
       if (ir == l+1 && arr[ir] < arr[l]) {
         SWAP(arr[l],arr[ir])
@@ -523,7 +515,7 @@ void ComputeBasalAtom::select2(int k, int n, double *arr, int *iarr)
       j = ir;
       a = arr[l+1];
       ia = iarr[l+1];
-      for (;;) {
+      while (true) {
         do i++; while (arr[i] < a);
         do j--; while (arr[j] > a);
         if (j < i) break;

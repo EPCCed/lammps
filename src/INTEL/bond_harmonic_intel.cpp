@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -41,12 +41,6 @@ typedef struct { int a,b,t;  } int3_t;
 BondHarmonicIntel::BondHarmonicIntel(LAMMPS *lmp) : BondHarmonic(lmp)
 {
   suffix_flag |= Suffix::INTEL;
-}
-
-/* ---------------------------------------------------------------------- */
-
-BondHarmonicIntel::~BondHarmonicIntel()
-{
 }
 
 /* ---------------------------------------------------------------------- */
@@ -165,16 +159,16 @@ void BondHarmonicIntel::eval(const int vflag,
     #else
     for (int n = nfrom; n < nto; n += npl) {
     #endif
-      const int i1 = bondlist[n].a;
-      const int i2 = bondlist[n].b;
-      const int type = bondlist[n].t;
+      const int i1 = IP_PRE_dword_index(bondlist[n].a);
+      const int i2 = IP_PRE_dword_index(bondlist[n].b);
+      const int type = IP_PRE_dword_index(bondlist[n].t);
 
       const flt_t delx = x[i1].x - x[i2].x;
       const flt_t dely = x[i1].y - x[i2].y;
       const flt_t delz = x[i1].z - x[i2].z;
 
       const flt_t rsq = delx*delx + dely*dely + delz*delz;
-      const flt_t r = sqrt(rsq);
+      const flt_t r = std::sqrt(rsq);
       const flt_t dr = r - fc.fc[type].r0;
       const flt_t rk = fc.fc[type].k * dr;
 
@@ -247,11 +241,8 @@ void BondHarmonicIntel::init_style()
 {
   BondHarmonic::init_style();
 
-  int ifix = modify->find_fix("package_intel");
-  if (ifix < 0)
-    error->all(FLERR,
-               "The 'package intel' command is required for /intel styles");
-  fix = static_cast<FixIntel *>(modify->fix[ifix]);
+  fix = static_cast<FixIntel *>(modify->get_fix_by_id("package_intel"));
+  if (!fix) error->all(FLERR, "The 'package intel' command is required for /intel styles");
 
   #ifdef _LMP_INTEL_OFFLOAD
   _use_base = 0;
@@ -291,13 +282,12 @@ void BondHarmonicIntel::pack_force_const(ForceConst<flt_t> &fc,
 template <class flt_t>
 void BondHarmonicIntel::ForceConst<flt_t>::set_ntypes(const int nbondtypes,
                                                       Memory *memory) {
+  if (memory != nullptr) _memory = memory;
   if (nbondtypes != _nbondtypes) {
-    if (_nbondtypes > 0)
-      _memory->destroy(fc);
+    _memory->destroy(fc);
 
     if (nbondtypes > 0)
       _memory->create(fc,nbondtypes,"bondharmonicintel.fc");
   }
   _nbondtypes = nbondtypes;
-  _memory = memory;
 }

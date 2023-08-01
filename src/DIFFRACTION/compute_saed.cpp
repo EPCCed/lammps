@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -37,10 +37,10 @@ using namespace LAMMPS_NS;
 using namespace MathConst;
 
 static const char cite_compute_saed_c[] =
-  "compute_saed command: doi:10.1088/0965-0393/21/5/055020\n\n"
+  "compute saed command: doi:10.1088/0965-0393/21/5/055020\n\n"
   "@Article{Coleman13,\n"
-  " author = {S. P. Coleman, D. E. Spearot, L. Capolungo},\n"
-  " title = {Virtual diffraction analysis of Ni [010] symmetric tilt grain boundaries},\n"
+  " author = {S. P. Coleman and D. E. Spearot and L. Capolungo},\n"
+  " title = {Virtual Diffraction Analysis of {Ni} [010] Symmetric Tilt Grain Boundaries},\n"
   " journal = {Modelling and Simulation in Materials Science and Engineering},\n"
   " year =    2013,\n"
   " volume =  21,\n"
@@ -348,7 +348,7 @@ void ComputeSAED::compute_vector()
     utils::logmesg(lmp,"-----\nComputing SAED intensities");
 
   double t0 = platform::walltime();
-  double *Fvec = new double[2*nRows]; // Strct factor (real & imaginary)
+  auto Fvec = new double[2*nRows]; // Strct factor (real & imaginary)
   // -- Note, vector entries correspond to different RELP
 
   ntypes = atom->ntypes;
@@ -364,7 +364,7 @@ void ComputeSAED::compute_vector()
     }
   }
 
-  double *xlocal = new double [3*nlocalgroup];
+  auto xlocal = new double [3*nlocalgroup];
   int *typelocal = new int [nlocalgroup];
 
   nlocalgroup = 0;
@@ -413,7 +413,7 @@ void ComputeSAED::compute_vector()
 #pragma omp parallel LMP_DEFAULT_NONE LMP_SHARED(offset,ASFSAED,typelocal,xlocal,Fvec,m,frac)
 #endif
   {
-    double *f = new double[ntypes];    // atomic structure factor by type
+    auto f = new double[ntypes];    // atomic structure factor by type
     int typei = 0;
     double Fatom1 = 0.0;               // structure factor per atom
     double Fatom2 = 0.0;               // structure factor per atom (imaginary)
@@ -481,7 +481,7 @@ void ComputeSAED::compute_vector()
     delete [] f;
   }
 
-  double *scratch = new double[2*nRows];
+  auto scratch = new double[2*nRows];
 
   // Sum intensity for each ang-hkl combination across processors
   MPI_Allreduce(Fvec,scratch,2*nRows,MPI_DOUBLE,MPI_SUM,world);

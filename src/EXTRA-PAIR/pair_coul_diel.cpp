@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -17,15 +17,15 @@
 
 #include "pair_coul_diel.h"
 
-#include <cmath>
 #include "atom.h"
 #include "comm.h"
-#include "force.h"
-#include "neighbor.h"
-#include "neigh_list.h"
-#include "memory.h"
 #include "error.h"
+#include "force.h"
+#include "memory.h"
+#include "neigh_list.h"
+#include "neighbor.h"
 
+#include <cmath>
 
 using namespace LAMMPS_NS;
 
@@ -218,7 +218,7 @@ void PairCoulDiel::init_style()
   if (!atom->q_flag)
     error->all(FLERR,"Pair style coul/diel requires atom attribute q");
 
-  neighbor->request(this,instance_me);
+  neighbor->add_request(this);
 }
 
 /* ----------------------------------------------------------------------

@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -16,23 +16,22 @@
    Contributing author: Andres Jaramillo-Botero
 ------------------------------------------------------------------------- */
 
-
-#include <cmath>
-
-#include <cstring>
 #include "pair_eff_cut.h"
 #include "pair_eff_inline.h"
-#include "atom.h"
-#include "update.h"
-#include "min.h"
-#include "domain.h"
-#include "comm.h"
-#include "force.h"
-#include "neighbor.h"
-#include "neigh_list.h"
-#include "memory.h"
-#include "error.h"
 
+#include "atom.h"
+#include "comm.h"
+#include "domain.h"
+#include "error.h"
+#include "force.h"
+#include "memory.h"
+#include "min.h"
+#include "neigh_list.h"
+#include "neighbor.h"
+#include "update.h"
+
+#include <cmath>
+#include <cstring>
 
 using namespace LAMMPS_NS;
 
@@ -889,9 +888,9 @@ void PairEffCut::init_style()
   if (flagall && !ecp_found)
     error->all(FLERR,"Need to specify ECP type on pair_style command");
 
-  // need a half neigh list and optionally a granular history neigh list
+  // need a half neigh list
 
-  neighbor->request(this,instance_me);
+  neighbor->add_request(this);
 }
 
 /* ----------------------------------------------------------------------
@@ -922,13 +921,13 @@ void PairEffCut::coeff(int narg, char **arg)
   } else {
     int ecp;
     ecp = utils::inumeric(FLERR,arg[0],false,lmp);
-    if (strcmp(arg[1],"s") ==0) {
+    if (strcmp(arg[1],"s") == 0) {
       PAULI_CORE_A[ecp_type[ecp]] = utils::numeric(FLERR,arg[2],false,lmp);
       PAULI_CORE_B[ecp_type[ecp]] = utils::numeric(FLERR,arg[3],false,lmp);
       PAULI_CORE_C[ecp_type[ecp]] = utils::numeric(FLERR,arg[4],false,lmp);
       PAULI_CORE_D[ecp_type[ecp]] = 0.0;
       PAULI_CORE_E[ecp_type[ecp]] = 0.0;
-    } else if (strcmp(arg[1],"p") ==0) {
+    } else if (strcmp(arg[1],"p") == 0) {
       PAULI_CORE_A[ecp_type[ecp]] = utils::numeric(FLERR,arg[2],false,lmp);
       PAULI_CORE_B[ecp_type[ecp]] = utils::numeric(FLERR,arg[3],false,lmp);
       PAULI_CORE_C[ecp_type[ecp]] = utils::numeric(FLERR,arg[4],false,lmp);

@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -16,6 +16,7 @@
 #include "angle.h"
 #include "atom.h"
 #include "bond.h"
+#include "citeme.h"
 #include "comm.h"
 #include "dihedral.h"
 #include "error.h"
@@ -34,6 +35,37 @@ using namespace LAMMPS_NS;
 
 enum { NOBIAS, BIAS };
 
+static const char cite_centroid_angle_improper_dihedral[] =
+    "compute centroid/stress/atom for angles, impropers and dihedrals: "
+    "doi:10.1103/PhysRevE.99.051301\n\n"
+    "@article{Surblys2019,\n"
+    " title = {Application of Atomic Stress to Compute Heat Flux via Molecular\n"
+    "    Dynamics for Systems With Many-Body Interactions},\n"
+    " author = {Surblys, Donatas and Matsubara, Hiroki and Kikugawa, Gota and Ohara, Taku},\n"
+    " journal = {Physical Review~E},\n"
+    " volume = {99},\n"
+    " issue = {5},\n"
+    " pages = {051301},\n"
+    " year = {2019},\n"
+    " doi = {10.1103/PhysRevE.99.051301},\n"
+    " url = {https://link.aps.org/doi/10.1103/PhysRevE.99.051301}\n"
+    "}\n\n";
+
+static const char cite_centroid_shake_rigid[] =
+    "compute centroid/stress/atom for constrained dynamics: doi:10.1063/5.0070930\n\n"
+    "@article{Surblys2021,\n"
+    " author = {Surblys, Donatas and Matsubara, Hiroki and Kikugawa, Gota and Ohara, Taku},\n"
+    " journal = {Journal of Applied Physics},\n"
+    " title = {Methodology and Meaning of Computing Heat Flux via Atomic Stress in Systems with\n"
+    "    Constraint Dynamics},\n"
+    " volume = {130},\n"
+    " number = {21},\n"
+    " pages = {215104},\n"
+    " year = {2021},\n"
+    " doi = {10.1063/5.0070930},\n"
+    " url = {https://doi.org/10.1063/5.0070930},\n"
+    "}\n\n";
+
 /* ---------------------------------------------------------------------- */
 
 ComputeCentroidStressAtom::ComputeCentroidStressAtom(LAMMPS *lmp, int narg, char **arg) :
@@ -48,7 +80,7 @@ ComputeCentroidStressAtom::ComputeCentroidStressAtom(LAMMPS *lmp, int narg, char
   comm_reverse = 9;
 
   // store temperature ID used by stress computation
-  // insure it is valid for temperature computation
+  // ensure it is valid for temperature computation
 
   if (strcmp(arg[3], "NULL") == 0)
     id_temp = nullptr;
@@ -105,6 +137,12 @@ ComputeCentroidStressAtom::ComputeCentroidStressAtom(LAMMPS *lmp, int narg, char
   }
 
   nmax = 0;
+
+  if (lmp->citeme) {
+    if (angleflag || dihedralflag || improperflag)
+      lmp->citeme->add(cite_centroid_angle_improper_dihedral);
+    if (fixflag) lmp->citeme->add(cite_centroid_shake_rigid);
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -125,7 +163,7 @@ void ComputeCentroidStressAtom::init()
   if (id_temp) {
     temperature = modify->get_compute_by_id(id_temp);
     if (!temperature)
-      error->all(FLERR, "Could not find compute centroid/stress/atom temperature ID {}",id_temp);
+      error->all(FLERR, "Could not find compute centroid/stress/atom temperature ID {}", id_temp);
     if (temperature->tempbias)
       biasflag = BIAS;
     else
@@ -157,10 +195,9 @@ void ComputeCentroidStressAtom::init()
       error->all(FLERR, "KSpace style does not support compute centroid/stress/atom");
 
   if (fixflag) {
-    for (int ifix = 0; ifix < modify->nfix; ifix++)
-      if (modify->fix[ifix]->virial_peratom_flag &&
-          modify->fix[ifix]->centroidstressflag == CENTROID_NOTAVAIL)
-        error->all(FLERR, "Fix style does not support compute centroid/stress/atom");
+    for (auto &ifix : modify->get_fix_list())
+      if (ifix->virial_peratom_flag && (ifix->centroidstressflag == CENTROID_NOTAVAIL))
+        error->all(FLERR, "Fix {} does not support compute centroid/stress/atom", ifix->style);
   }
 }
 
@@ -268,26 +305,31 @@ void ComputeCentroidStressAtom::compute_peratom()
   // possible during setup phase if fix has not initialized its vatom yet
   // e.g. fix ave/spatial defined before fix shake,
   //   and fix ave/spatial uses a per-atom stress from this compute as input
-  // fix styles are CENTROID_SAME or CENTROID_NOTAVAIL
+  // fix styles are CENTROID_SAME, CENTROID_AVAIL or CENTROID_NOTAVAIL
 
   if (fixflag) {
-    Fix **fix = modify->fix;
-    int nfix = modify->nfix;
-    for (int ifix = 0; ifix < nfix; ifix++)
-      if (fix[ifix]->virial_peratom_flag && fix[ifix]->thermo_virial) {
-        double **vatom = fix[ifix]->vatom;
-        if (vatom)
-          for (i = 0; i < nlocal; i++) {
-            for (j = 0; j < 6; j++) stress[i][j] += vatom[i][j];
-            for (j = 6; j < 9; j++) stress[i][j] += vatom[i][j - 3];
-          }
+    for (auto &ifix : modify->get_fix_list())
+      if (ifix->virial_peratom_flag && ifix->thermo_virial) {
+        if (ifix->centroidstressflag == CENTROID_AVAIL) {
+          double **cvatom = ifix->cvatom;
+          if (cvatom)
+            for (i = 0; i < nlocal; i++)
+              for (j = 0; j < 9; j++) stress[i][j] += cvatom[i][j];
+        } else {
+          double **vatom = ifix->vatom;
+          if (vatom)
+            for (i = 0; i < nlocal; i++) {
+              for (j = 0; j < 6; j++) stress[i][j] += vatom[i][j];
+              for (j = 6; j < 9; j++) stress[i][j] += vatom[i][j - 3];
+            }
+        }
       }
   }
 
   // communicate ghost virials between neighbor procs
 
   if (force->newton || (force->kspace && force->kspace->tip4pflag && force->kspace->compute_flag))
-    comm->reverse_comm_compute(this);
+    comm->reverse_comm(this);
 
   // zero virial of atoms not in group
   // only do this after comm since ghost contributions must be included
@@ -353,7 +395,7 @@ void ComputeCentroidStressAtom::compute_peratom()
     } else {
 
       // invoke temperature if it hasn't been already
-      // this insures bias factor is pre-computed
+      // this ensures bias factor is pre-computed
 
       if (keflag && temperature->invoked_scalar != update->ntimestep) temperature->compute_scalar();
 

@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -32,7 +32,6 @@
 #include "math_const.h"
 #include "memory.h"
 #include "modify.h"
-#include "neigh_request.h"
 #include "neighbor.h"
 #include "pair.h"
 #include "update.h"
@@ -90,15 +89,13 @@ void PairSpin::init_style()
 
   // need a full neighbor list
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
+  neighbor->add_request(this, NeighConst::REQ_FULL);
 
   // get the lattice_flag from nve/spin
 
   auto fixes = modify->get_fix_by_style("^nve/spin");
   if (fixes.size() == 1)
-    lattice_flag = ((FixNVESpin *) fixes.front())->lattice_flag;
+    lattice_flag = (dynamic_cast<FixNVESpin *>(fixes.front()))->lattice_flag;
   else if (fixes.size() > 1)
     error->warning(FLERR,"Using multiple instances of fix nve/spin or neb/spin");
 

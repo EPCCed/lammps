@@ -2,7 +2,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -43,9 +43,9 @@ namespace LAMMPS_NS {
 class NPairSkipIntel : public NPair {
  public:
   NPairSkipIntel(class LAMMPS *);
-  ~NPairSkipIntel();
-  virtual void copy_neighbor_info();
-  void build(class NeighList *);
+  ~NPairSkipIntel() override;
+  void copy_neighbor_info() override;
+  void build(class NeighList *) override;
 
  protected:
   FixIntel *_fix;
@@ -59,11 +59,3 @@ class NPairSkipIntel : public NPair {
 
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-E: The 'package intel' command is required for /intel styles
-
-Self explanatory.
-
-*/

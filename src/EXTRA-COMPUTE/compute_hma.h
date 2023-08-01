@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,15 +27,15 @@ namespace LAMMPS_NS {
 class ComputeHMA : public Compute {
  public:
   ComputeHMA(class LAMMPS *, int, char **);
-  ~ComputeHMA();
-  void setup();
-  void init();
-  void init_list(int, class NeighList *);
-  void compute_vector();
-  void set_arrays(int);
-  int pack_forward_comm(int, int *, double *, int, int *);
-  void unpack_forward_comm(int, int, double *);
-  double memory_usage();
+  ~ComputeHMA() override;
+  void setup() override;
+  void init() override;
+  void init_list(int, class NeighList *) override;
+  void compute_vector() override;
+  void set_arrays(int) override;
+  int pack_forward_comm(int, int *, double *, int, int *) override;
+  void unpack_forward_comm(int, int, double *) override;
+  double memory_usage() override;
 
  private:
   int nmax;
@@ -43,7 +43,7 @@ class ComputeHMA : public Compute {
   char *id_fix;
   char *id_temp;
   double finaltemp;
-  class FixStore *fix;
+  class FixStoreAtom *fix;
   double boltz, nktv2p, inv_volume;
   double deltaPcap;
   double virial_compute(int);

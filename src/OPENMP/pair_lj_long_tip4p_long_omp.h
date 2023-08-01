@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -33,13 +33,13 @@ class PairLJLongTIP4PLongOMP : public PairLJLongTIP4PLong, public ThrOMP {
 
  public:
   PairLJLongTIP4PLongOMP(class LAMMPS *);
-  virtual ~PairLJLongTIP4PLongOMP();
+  ~PairLJLongTIP4PLongOMP() override;
 
-  virtual void compute(int, int);
-  virtual void compute_inner();
-  virtual void compute_middle();
-  virtual void compute_outer(int, int);
-  virtual double memory_usage();
+  void compute(int, int) override;
+  void compute_inner() override;
+  void compute_middle() override;
+  void compute_outer(int, int) override;
+  double memory_usage() override;
 
  private:
   dbl3_t *newsite_thr;

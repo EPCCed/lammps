@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -22,20 +22,14 @@
 #include "citeme.h"
 #include "comm.h"
 #include "error.h"
-#include "fix_efield.h"
 #include "force.h"
-#include "group.h"
 #include "memory.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
-#include "neighbor.h"
 #include "pair.h"
 #include "pair_reaxff.h"
 #include "reaxff_api.h"
-#include "respa.h"
 #include "text_file_reader.h"
 #include "update.h"
-#include "utils.h"
 
 #include <cmath>
 #include <cstring>
@@ -44,13 +38,14 @@ using namespace LAMMPS_NS;
 using namespace FixConst;
 
 static const char cite_fix_acks2_reax[] =
-  "fix acks2/reaxff command:\n\n"
+  "fix acks2/reaxff command: doi:10.1137/18M1224684\n\n"
   "@Article{O'Hearn2020,\n"
-  " author = {K. A. O'Hearn, A. Alperen, and H. M. Aktulga},\n"
+  " author = {K. A. {O'Hearn} and A. Alperen and H. M. Aktulga},\n"
   " title = {Fast Solvers for Charge Distribution Models on Shared Memory Platforms},\n"
-  " journal = {SIAM J. Sci. Comput.},\n"
+  " journal = {SIAM J.\\ Sci.\\ Comput.},\n"
   " year =    2020,\n"
   " volume =  42,\n"
+  " number =  1,\n"
   " pages =   {1--22}\n"
   "}\n\n";
 
@@ -100,8 +95,8 @@ FixACKS2ReaxFF::~FixACKS2ReaxFF()
   memory->destroy(s_hist_X);
   memory->destroy(s_hist_last);
 
-  deallocate_storage();
-  deallocate_matrix();
+  FixACKS2ReaxFF::deallocate_storage();
+  FixACKS2ReaxFF::deallocate_matrix();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -140,7 +135,7 @@ void FixACKS2ReaxFF::pertype_parameters(char *arg)
     eta = (double *) pair->extract("eta",tmp);
     gamma = (double *) pair->extract("gamma",tmp);
     bcut_acks2 = (double *) pair->extract("bcut_acks2",tmp);
-    double* bond_softness_ptr = (double *) pair->extract("bond_softness",tmp);
+    auto  bond_softness_ptr = (double *) pair->extract("bond_softness",tmp);
 
     if (chi == nullptr || eta == nullptr || gamma == nullptr ||
         bcut_acks2 == nullptr || bond_softness_ptr == nullptr)
@@ -209,7 +204,8 @@ void FixACKS2ReaxFF::pertype_parameters(char *arg)
 void FixACKS2ReaxFF::allocate_storage()
 {
   nmax = atom->nmax;
-  int size = nmax*2 + 2;
+  NN = atom->nlocal + atom->nghost;
+  const int size = nmax*2 + 2;
 
   // 0 to nn-1: owned atoms related to H matrix
   // nn to NN-1: ghost atoms related to H matrix
@@ -335,17 +331,15 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
 {
   if (update->ntimestep % nevery) return;
 
-  int n = atom->nlocal;
+  NN = atom->nlocal + atom->nghost;
 
   if (reaxff) {
     nn = reaxff->list->inum;
-    NN = reaxff->list->inum + reaxff->list->gnum;
     ilist = reaxff->list->ilist;
     numneigh = reaxff->list->numneigh;
     firstneigh = reaxff->list->firstneigh;
   } else {
     nn = list->inum;
-    NN = list->inum + list->gnum;
     ilist = list->ilist;
     numneigh = list->numneigh;
     firstneigh = list->firstneigh;
@@ -355,7 +349,7 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   // need to be atom->nmax in length
 
   if (atom->nmax > nmax) reallocate_storage();
-  if (n > n_cap*DANGER_ZONE || m_fill > m_cap*DANGER_ZONE)
+  if (atom->nlocal > n_cap*DANGER_ZONE || m_fill > m_cap*DANGER_ZONE)
     reallocate_matrix();
 
   if (efield) get_chi_field();
@@ -377,7 +371,7 @@ void FixACKS2ReaxFF::init_matvec()
   /* fill-in X matrix */
   compute_X();
   pack_flag = 4;
-  comm->reverse_comm_fix(this); //Coll_Vector(X_diag);
+  comm->reverse_comm(this); //Coll_Vector(X_diag);
 
   int ii, i;
 
@@ -411,7 +405,7 @@ void FixACKS2ReaxFF::init_matvec()
   }
 
   pack_flag = 2;
-  comm->forward_comm_fix(this); //Dist_vector(s);
+  comm->forward_comm(this); //Dist_vector(s);
   more_forward_comm(s);
 }
 
@@ -429,7 +423,7 @@ void FixACKS2ReaxFF::compute_X()
   double **x = atom->x;
   int *mask = atom->mask;
 
-  memset(X_diag,0.0,atom->nmax*sizeof(double));
+  memset(X_diag,0,atom->nmax*sizeof(double));
 
   // fill in the X matrix
   m_fill = 0;
@@ -510,7 +504,7 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
 
   sparse_matvec_acks2(&H, &X, x, d);
   pack_flag = 1;
-  comm->reverse_comm_fix(this); //Coll_Vector(d);
+  comm->reverse_comm(this); //Coll_Vector(d);
   more_reverse_comm(d);
 
   vector_sum(r , 1.,  b, -1., d, nn);
@@ -549,11 +543,11 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
     }
 
     pack_flag = 1;
-    comm->forward_comm_fix(this); //Dist_vector(d);
+    comm->forward_comm(this); //Dist_vector(d);
     more_forward_comm(d);
     sparse_matvec_acks2(&H, &X, d, z);
     pack_flag = 2;
-    comm->reverse_comm_fix(this); //Coll_vector(z);
+    comm->reverse_comm(this); //Coll_vector(z);
     more_reverse_comm(z);
 
     tmp = parallel_dot(r_hat, z, nn);
@@ -584,11 +578,11 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
     }
 
     pack_flag = 3;
-    comm->forward_comm_fix(this); //Dist_vector(q_hat);
+    comm->forward_comm(this); //Dist_vector(q_hat);
     more_forward_comm(q_hat);
     sparse_matvec_acks2(&H, &X, q_hat, y);
     pack_flag = 3;
-    comm->reverse_comm_fix(this); //Dist_vector(y);
+    comm->reverse_comm(this); //Dist_vector(y);
     more_reverse_comm(y);
 
     sigma = parallel_dot(y, q, nn);
@@ -632,8 +626,7 @@ void FixACKS2ReaxFF::sparse_matvec_acks2(sparse_matrix *H, sparse_matrix *X, dou
     }
   }
 
-  for (ii = nn; ii < NN; ++ii) {
-    i = ilist[ii];
+  for (i = atom->nlocal; i < NN; ++i) {
     if (atom->mask[i] & groupbit) {
       b[i] = 0;
       b[NN + i] = 0;
@@ -680,37 +673,33 @@ void FixACKS2ReaxFF::sparse_matvec_acks2(sparse_matrix *H, sparse_matrix *X, dou
 
 void FixACKS2ReaxFF::calculate_Q()
 {
-  int i, k;
+  pack_flag = 2;
+  comm->forward_comm(this); //Dist_vector(s);
 
-  for (int ii = 0; ii < nn; ++ii) {
-    i = ilist[ii];
+  for (int i = 0; i < NN; ++i) {
     if (atom->mask[i] & groupbit) {
 
-      /* backup s */
-      for (k = nprev-1; k > 0; --k) {
-        s_hist[i][k] = s_hist[i][k-1];
-        s_hist_X[i][k] = s_hist_X[i][k-1];
+      atom->q[i] = s[i];
+
+      if (i < atom->nlocal) {
+
+        /* backup s */
+        for (int k = nprev-1; k > 0; --k) {
+          s_hist[i][k] = s_hist[i][k-1];
+          s_hist_X[i][k] = s_hist_X[i][k-1];
+        }
+        s_hist[i][0] = s[i];
+        s_hist_X[i][0] = s[NN+i];
       }
-      s_hist[i][0] = s[i];
-      s_hist_X[i][0] = s[NN+i];
     }
   }
   // last two rows
   if (last_rows_flag) {
     for (int i = 0; i < 2; ++i) {
-      for (k = nprev-1; k > 0; --k)
+      for (int k = nprev-1; k > 0; --k)
         s_hist_last[i][k] = s_hist_last[i][k-1];
       s_hist_last[i][0] = s[2*NN+i];
     }
-  }
-
-  pack_flag = 2;
-  comm->forward_comm_fix(this); //Dist_vector(s);
-
-  for (int ii = 0; ii < NN; ++ii) {
-    i = ilist[ii];
-    if (atom->mask[i] & groupbit)
-      atom->q[i] = s[i];
   }
 }
 

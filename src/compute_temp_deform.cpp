@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -63,18 +63,13 @@ ComputeTempDeform::~ComputeTempDeform()
 
 void ComputeTempDeform::init()
 {
-  int i;
-
   // check fix deform remap settings
 
-  for (i = 0; i < modify->nfix; i++)
-    if (utils::strmatch(modify->fix[i]->style, "^deform")) {
-      if (((FixDeform *) modify->fix[i])->remapflag == Domain::X_REMAP && comm->me == 0)
-        error->warning(FLERR,
-                       "Using compute temp/deform with inconsistent fix deform remap option");
-      break;
-    }
-  if (i == modify->nfix && comm->me == 0)
+  auto fixes = modify->get_fix_by_style("^deform");
+  if (fixes.size() > 0) {
+    if ((dynamic_cast<FixDeform *>(fixes[0]))->remapflag == Domain::X_REMAP && comm->me == 0)
+      error->warning(FLERR, "Using compute temp/deform with inconsistent fix deform remap option");
+  } else
     error->warning(FLERR, "Using compute temp/deform with no fix deform defined");
 }
 

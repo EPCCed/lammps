@@ -50,13 +50,15 @@ endif
 
 PACKAGE = \
 	adios \
+	amoeba \
 	asphere \
 	awpmd \
 	bocs \
 	body \
+	bpm \
 	brownian \
 	cg-dna \
-	cg-sdk \
+	cg-spica \
 	class2 \
 	colloid \
 	colvars \
@@ -85,7 +87,7 @@ PACKAGE = \
 	kokkos \
 	kspace \
 	latboltz \
-	latte \
+	lepton \
 	machdyn \
 	manifold \
 	manybody \
@@ -93,11 +95,11 @@ PACKAGE = \
 	mdi \
 	meam \
 	mesont \
-	message \
 	mgpt \
 	misc \
 	ml-hdnnp \
 	ml-pace \
+	ml-pod \
 	ml-quip \
 	ml-rann \
 	ml-snap \
@@ -136,6 +138,7 @@ PACKAGE = \
 	yaff \
 	atc \
 	dielectric \
+	electrode \
 	ml-iap \
 	phonon
 
@@ -145,12 +148,14 @@ PACKAGE = \
 PACKBASIC = kspace manybody molecule rigid
 
 PACKMOST = \
+	amoeba \
 	asphere \
 	bocs \
 	body \
+	bpm \
 	brownian \
 	cg-dna \
-	cg-sdk \
+	cg-spica \
 	class2 \
 	colloid \
 	coreshell \
@@ -174,6 +179,7 @@ PACKMOST = \
 	manybody \
 	mc \
 	meam \
+	mesont \
 	misc \
 	ml-snap \
 	mofff \
@@ -183,7 +189,6 @@ PACKMOST = \
 	orient \
 	peri \
 	plugin \
-	poems \
 	qeq \
 	reaction \
 	reaxff \
@@ -207,8 +212,7 @@ PACKLIB = \
 	gpu \
 	kim \
 	kokkos \
-	latte \
-	message \
+	lepton \
 	mpiio \
 	mscg \
 	poems \
@@ -221,27 +225,28 @@ PACKLIB = \
 	h5md \
 	ml-hdnnp \
 	latboltz \
+	lepton \
 	mdi \
-	mesont \
 	molfile \
 	netcdf \
 	ml-pace \
+	ml-pod \
 	plumed \
 	qmmm \
 	ml-quip \
 	scafacos \
 	machdyn \
-	vtk
+	vtk \
+	electrode
 
 PACKSYS = compress latboltz mpiio python
 
-PACKINT = atc awpmd colvars gpu kokkos mesont message poems
+PACKINT = atc awpmd colvars electrode gpu kokkos lepton ml-pod poems
 
 PACKEXT = \
 	adios \
 	h5md \
 	kim \
-	latte \
 	machdyn \
 	ml-hdnnp \
 	ml-pace \
@@ -280,14 +285,15 @@ help:
 	@echo 'make package                 list available packages and their dependencies'
 	@echo 'make package-status (ps)     status of all packages'
 	@echo 'make package-installed (pi)  list of installed packages'
-	@echo 'make yes-package             install a single pgk in src dir'
+	@echo 'make yes-package             install a single pkg in src dir'
 	@echo 'make no-package              remove a single pkg from src dir'
-	@echo 'make yes-all                 install all pgks in src dir'
+	@echo 'make yes-all                 install all pkgs in src dir'
 	@echo 'make no-all                  remove all pkgs from src dir'
-	@echo 'make yes-basic               install a few commonly used pgks'
+	@echo 'make no-installed (ni)       quick uninstall of installed pkgs'
+	@echo 'make yes-basic               install a few commonly used pkgs'
 	@echo 'make no-basic                remove a few commonly used pkgs'
-	@echo 'make yes-most                install most pgks w/o libs'
-	@echo 'make no-most                 remove most pgks w/o libs'
+	@echo 'make yes-most                install most pkgs w/o libs'
+	@echo 'make no-most                 remove most pkgs w/o libs'
 	@echo 'make yes-lib       install all pkgs with libs (included or ext)'
 	@echo 'make no-lib        remove all pkgs with libs (included or ext)'
 	@echo 'make yes-ext                 install all pkgs with external libs'
@@ -356,10 +362,10 @@ gitversion:
 	  branch='(unknown)' ;				\
 	  describe='(unknown)' ;			\
 	fi ; \
-	echo "const bool LAMMPS_NS::LAMMPS::has_git_info = $${git};"        >> ${TMPNAME}.lmpgitversion ; \
-	echo "const char LAMMPS_NS::LAMMPS::git_commit[] = \"$${commit}\";" >> ${TMPNAME}.lmpgitversion ; \
-	echo "const char LAMMPS_NS::LAMMPS::git_branch[] = \"$${branch}\";" >> ${TMPNAME}.lmpgitversion ; \
-	echo "const char LAMMPS_NS::LAMMPS::git_descriptor[] = \"$${describe}\";" >> ${TMPNAME}.lmpgitversion
+	echo "bool LAMMPS_NS::LAMMPS::has_git_info() { return $${git}; }"        >> ${TMPNAME}.lmpgitversion ; \
+	echo "const char *LAMMPS_NS::LAMMPS::git_commit() { return \"$${commit}\"; }" >> ${TMPNAME}.lmpgitversion ; \
+	echo "const char *LAMMPS_NS::LAMMPS::git_branch() { return \"$${branch}\"; }" >> ${TMPNAME}.lmpgitversion ; \
+	echo "const char *LAMMPS_NS::LAMMPS::git_descriptor() { return \"$${describe}\"; }" >> ${TMPNAME}.lmpgitversion
 	@echo '#endif' >> ${TMPNAME}.lmpgitversion
 	@if [ -f lmpgitversion.h ]; \
           then test "`diff --brief ${TMPNAME}.lmpgitversion lmpgitversion.h`" != "" && \
@@ -439,7 +445,7 @@ clean:
 
 clean-all:
 	rm -rf Obj_*
-	rm style_*.h packages_*.h lmpgitversion.h lmpinstalledpkgs.h
+	rm -f style_*.h packages_*.h lmpgitversion.h lmpinstalledpkgs.h
 
 clean-%:
 	@if [ $@ = "clean-serial" ]; \
@@ -459,8 +465,7 @@ mpi-stubs:
 sinclude ../lib/python/Makefile.lammps
 install-python:
 	@rm -rf ../python/build
-	@$(PYTHON) ../python/install.py -v ../src/version.h \
-		-p ../python/lammps -l ../src/liblammps.so
+	@$(PYTHON) ../python/install.py -p ../python/lammps -l ../src/liblammps.so -w $(PWD) -v $(PWD)/version.h
 
 # Create a tarball of src dir and packages
 
@@ -473,6 +478,8 @@ tar:
           --exclude=*/.svn
 	@cd STUBS; $(MAKE)
 	@echo "Created $(ROOT)_src.tar.gz"
+
+check: check-whitespace check-permissions check-homepage check-errordocs check-version
 
 check-whitespace:
 	$(PYTHON) ../tools/coding_standard/whitespace.py ..
@@ -491,6 +498,15 @@ check-homepage:
 
 fix-homepage:
 	$(PYTHON) ../tools/coding_standard/homepage.py .. -f
+
+check-errordocs:
+	$(PYTHON) ../tools/coding_standard/errordocs.py ..
+
+fix-errordocs:
+	$(PYTHON) ../tools/coding_standard/errordocs.py .. -f
+
+check-version:
+	$(PYTHON) ../tools/coding_standard/versiontags.py ..
 
 format-src:
 	clang-format -i --verbose --style=file *.cpp *.h */*.cpp */*.h
@@ -538,6 +554,9 @@ yes-all:
 
 no-all:
 	@for p in $(PACKAGE); do $(MAKE) no-$$p; done
+
+no-installed ni:
+	@for p in $(PACKAGESORTED); do $(SHELL) Package.sh $$p info && $(MAKE) no-$$p || : ; done
 
 yes-standard yes-std:
 	@echo 'There are no more "standard" or "user" packages in LAMMPS'
@@ -616,6 +635,8 @@ lib-%:
 	else \
 	  echo "Install script for lib $(@:lib-%=%) does not exist"; \
 	fi; touch main.cpp
+
+lib-colvars: lib-lepton
 
 # status = list src files that differ from package files
 # installed = list of installed packages

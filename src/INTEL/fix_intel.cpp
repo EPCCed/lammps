@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -43,7 +43,7 @@ using namespace FixConst;
 
 #ifdef __INTEL_OFFLOAD
 #ifndef _LMP_INTEL_OFFLOAD
-#warning "Not building Intel package with Xeon Phi offload support."
+#warning "Not building INTEL package with Xeon Phi offload support."
 #endif
 #endif
 
@@ -61,6 +61,7 @@ FixIntel::FixIntel(LAMMPS *lmp, int narg, char **arg) :  Fix(lmp, narg, arg)
   _hybrid_nonpair = 0;
   _print_pkg_info = 1;
   _nthreads = comm->nthreads;
+  _torque_flag = 0;
 
   _precision_mode = PREC_MODE_MIXED;
   _offload_balance = -1.0;
@@ -71,11 +72,11 @@ FixIntel::FixIntel(LAMMPS *lmp, int narg, char **arg) :  Fix(lmp, narg, arg)
   _offload_threads = 0;
   _offload_tpc = 4;
 
-  _force_array_s = 0;
-  _force_array_m = 0;
-  _force_array_d = 0;
-  _ev_array_s = 0;
-  _ev_array_d = 0;
+  _force_array_s = nullptr;
+  _force_array_m = nullptr;
+  _force_array_d = nullptr;
+  _ev_array_s = nullptr;
+  _ev_array_d = nullptr;
 
   #ifdef _LMP_INTEL_OFFLOAD
   if (ncops < 0) error->all(FLERR,"Illegal package intel command");
@@ -95,6 +96,7 @@ FixIntel::FixIntel(LAMMPS *lmp, int narg, char **arg) :  Fix(lmp, narg, arg)
   _allow_separate_buffers = 1;
   _offload_ghost = -1;
   _lrt = 0;
+  _p3m_table = 1;
 
   int iarg = 4;
   while (iarg < narg) {
@@ -135,11 +137,14 @@ FixIntel::FixIntel(LAMMPS *lmp, int narg, char **arg) :  Fix(lmp, narg, arg)
       if (iarg+2 > narg) error->all(FLERR,"Illegal package intel command");
       _lrt = utils::logical(FLERR,arg[iarg+1],false,lmp);
       iarg += 2;
-    }
+    } else if (strcmp(arg[iarg], "pppm_table") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal package intel command");
+      _p3m_table = utils::logical(FLERR,arg[iarg+1],false,lmp);
+      iarg += 2;
 
     // undocumented options
 
-    else if (strcmp(arg[iarg],"offload_affinity_balanced") == 0) {
+    } else if (strcmp(arg[iarg],"offload_affinity_balanced") == 0) {
       _offload_affinity_balanced = 1;
       iarg++;
     } else if (strcmp(arg[iarg],"buffers") == 0) {
@@ -275,10 +280,8 @@ int FixIntel::setmask()
   int mask = 0;
   mask |= PRE_REVERSE;
   mask |= MIN_PRE_REVERSE;
-  #ifdef _LMP_INTEL_OFFLOAD
   mask |= POST_FORCE;
   mask |= MIN_POST_FORCE;
-  #endif
   mask |= POST_RUN;
   return mask;
 }
@@ -299,14 +302,29 @@ void FixIntel::init()
   }
   #endif
 
+  _torque_flag = 0;
+  if (force->pair_match("gayberne/intel$", 0)) _torque_flag = 1;
+
   const int nstyles = _pair_intel_count;
-  if (force->pair_match("^hybrid", 0) != nullptr) {
+  if (force->pair_match("^hybrid", 0)) {
     _pair_hybrid_flag = 1;
+
+    // Check if need to handle torque
+    auto hybrid = dynamic_cast<PairHybrid *>(force->pair);
+    if (hybrid) {
+      for (int i = 0; i < hybrid->nstyles; i++)
+        if (utils::strmatch(hybrid->keywords[i],"/intel$") &&
+            utils::strmatch(hybrid->keywords[i],"gayberne"))
+          _torque_flag = 1;
+    }
     if (force->newton_pair != 0 && force->pair->no_virial_fdotr_compute)
-      error->all(FLERR,
-                 "Intel package requires fdotr virial with newton on.");
+      error->all(FLERR,"INTEL package requires fdotr virial with newton on.");
   } else
     _pair_hybrid_flag = 0;
+
+  if (_torque_flag && nstyles > 1)
+    error->all(FLERR,"gayberne/intel style cannot yet be used with other "
+               "intel pair styles.");
 
   if (nstyles > 1 && _pair_hybrid_flag) _pair_hybrid_flag = 2;
   else if (force->newton_pair == 0) _pair_hybrid_flag = 0;
@@ -325,8 +343,7 @@ void FixIntel::init()
     _pair_hybrid_zero = 0;
     if (force->newton_pair == 0) _pair_hybrid_flag = 0;
     if (nstyles > 1)
-      error->all(FLERR,
-        "Currently, cannot offload more than one intel style with hybrid.");
+      error->all(FLERR,"Currently, cannot offload more than one intel style with hybrid.");
   }
   #endif
 
@@ -335,14 +352,17 @@ void FixIntel::init()
   int off_mode = 0;
   if (_offload_balance != 0.0) off_mode = 1;
   if (_precision_mode == PREC_MODE_SINGLE) {
+    _single_buffers->set_torque_flag(_torque_flag);
     _single_buffers->zero_ev();
     _single_buffers->grow_ncache(off_mode, comm->nthreads);
     _single_buffers->free_list_ptrs();
   } else if (_precision_mode == PREC_MODE_MIXED) {
+    _mixed_buffers->set_torque_flag(_torque_flag);
     _mixed_buffers->zero_ev();
     _mixed_buffers->grow_ncache(off_mode, comm->nthreads);
     _mixed_buffers->free_list_ptrs();
   } else {
+    _double_buffers->set_torque_flag(_torque_flag);
     _double_buffers->zero_ev();
     _double_buffers->grow_ncache(off_mode, comm->nthreads);
     _double_buffers->free_list_ptrs();
@@ -356,15 +376,12 @@ void FixIntel::init()
 void FixIntel::setup(int vflag)
 {
   if (neighbor->style != Neighbor::BIN)
-    error->all(FLERR,
-            "Currently, neighbor style BIN must be used with Intel package.");
+    error->all(FLERR,"Currently, neighbor style BIN must be used with INTEL package.");
   if (vflag > 3)
-   error->all(FLERR,
-               "Cannot currently get per-atom virials with Intel package.");
+   error->all(FLERR,"Cannot currently get per-atom virials with INTEL package.");
   #ifdef _LMP_INTEL_OFFLOAD
   if (neighbor->exclude_setting() != 0)
-    error->all(FLERR,
-     "Currently, cannot use neigh_modify exclude with Intel package offload.");
+    error->all(FLERR,"Currently, cannot use neigh_modify exclude with INTEL package offload.");
   post_force(vflag);
   #endif
 }
@@ -380,7 +397,7 @@ void FixIntel::setup_pre_reverse(int eflag, int vflag)
 
 bool FixIntel::pair_hybrid_check()
 {
-  PairHybrid *ph = (PairHybrid *)force->pair;
+  auto ph = dynamic_cast<PairHybrid *>(force->pair);
   bool has_intel = false;
   int nstyles = ph->nstyles;
 
@@ -395,7 +412,7 @@ bool FixIntel::pair_hybrid_check()
 void FixIntel::pair_init_check(const bool cdmessage)
 {
   #ifdef INTEL_VMASK
-  atom->sortfreq = 1;
+  if (atom->sortfreq) atom->sortfreq = 1;
   #endif
 
   _nbor_pack_width = 1;
@@ -413,7 +430,7 @@ void FixIntel::pair_init_check(const bool cdmessage)
     double *time1 = off_watch_pair();
     double *time2 = off_watch_neighbor();
     int *overflow = get_off_overflow_flag();
-    if (_offload_balance !=0.0) {
+    if (_offload_balance != 0.0) {
       #pragma offload_transfer target(mic:_cop)  \
         nocopy(time1,time2:length(1) alloc_if(1) free_if(0)) \
         in(overflow:length(5) alloc_if(1) free_if(0))
@@ -425,14 +442,14 @@ void FixIntel::pair_init_check(const bool cdmessage)
 
   if (_offload_balance != 0.0 && comm->me == 0) {
     #ifndef __INTEL_COMPILER_BUILD_DATE
-    error->warning(FLERR, "Unknown Intel Compiler Version\n");
+    error->warning(FLERR,"Unknown Intel Compiler Version\n");
     #else
     if (__INTEL_COMPILER_BUILD_DATE != 20131008 &&
         __INTEL_COMPILER_BUILD_DATE < 20141023)
-      error->warning(FLERR, "Unsupported Intel Compiler.");
+      error->warning(FLERR,"Unsupported Intel Compiler.");
     #endif
     #if !defined(__INTEL_COMPILER)
-    error->warning(FLERR, "Unsupported Intel Compiler.");
+    error->warning(FLERR,"Unsupported Intel Compiler.");
     #endif
   }
 
@@ -452,7 +469,7 @@ void FixIntel::pair_init_check(const bool cdmessage)
   #endif
 
   int need_tag = 0;
-  if (atom->molecular != Atom::ATOMIC) need_tag = 1;
+  if (atom->molecular != Atom::ATOMIC || three_body_neighbor()) need_tag = 1;
 
   // Clear buffers used for pair style
   char kmode[80];
@@ -474,27 +491,28 @@ void FixIntel::pair_init_check(const bool cdmessage)
   #endif
 
   if (_print_pkg_info && comm->me == 0) {
-    if (screen) {
-      fprintf(screen,
-              "----------------------------------------------------------\n");
-      if (_offload_balance != 0.0) {
-        fprintf(screen,"Using Intel Coprocessor with %d threads per core, ",
-                _offload_tpc);
-        fprintf(screen,"%d threads per task\n",_offload_threads);
-      } else {
-        fprintf(screen,"Using Intel Package without Coprocessor.\n");
-      }
-      fprintf(screen,"Precision: %s\n",kmode);
-      if (cdmessage) {
-        #ifdef LMP_USE_AVXCD
-        fprintf(screen,"AVX512 CD Optimizations: Enabled\n");
-        #else
-        fprintf(screen,"AVX512 CD Optimizations: Disabled\n");
-        #endif
-      }
-      fprintf(screen,
-              "----------------------------------------------------------\n");
+    utils::logmesg(lmp, "----------------------------------------------------------\n");
+    if (_offload_balance != 0.0) {
+      utils::logmesg(lmp,"Using Intel Coprocessor with {} threads per core, "
+                     "{} threads per task\n",_offload_tpc, _offload_threads);
+    } else {
+      utils::logmesg(lmp,"Using INTEL Package without Coprocessor.\n");
     }
+    utils::logmesg(lmp,"Compiler: {}\n",platform::compiler_info());
+    #ifdef LMP_SIMD_COMPILER
+    utils::logmesg(lmp,"SIMD compiler directives: Enabled\n");
+    #else
+    utils::logmesg(lmp,"SIMD compiler directives: Disabled\n");
+    #endif
+    utils::logmesg(lmp,"Precision: {}\n",kmode);
+    if (cdmessage) {
+      #ifdef LMP_USE_AVXCD
+      utils::logmesg(lmp,"AVX512 CD Optimizations: Enabled\n");
+      #else
+      utils::logmesg(lmp,"AVX512 CD Optimizations: Disabled\n");
+      #endif
+    }
+    utils::logmesg(lmp, "----------------------------------------------------------\n");
   }
   _print_pkg_info = 0;
 }
@@ -505,8 +523,7 @@ void FixIntel::bond_init_check()
 {
   if ((_offload_balance != 0.0) && (atom->molecular != Atom::ATOMIC)
       && (force->newton_pair != force->newton_bond))
-    error->all(FLERR,
-      "INTEL package requires same setting for newton bond and non-bond.");
+    error->all(FLERR,"INTEL package requires same setting for newton bond and non-bond.");
 
   int intel_pair = 0;
   if (force->pair_match("/intel$", 0) != nullptr)
@@ -517,8 +534,7 @@ void FixIntel::bond_init_check()
   }
 
   if (intel_pair == 0)
-    error->all(FLERR, "Intel styles for bond/angle/dihedral/improper "
-      "require intel pair style.");
+    error->all(FLERR,"Intel styles for bond/angle/dihedral/improper require intel pair style.");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -534,7 +550,7 @@ void FixIntel::kspace_init_check()
   }
 
   if (intel_pair == 0)
-    error->all(FLERR, "Intel styles for kspace require intel pair style.");
+    error->all(FLERR,"Intel styles for kspace require intel pair style.");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -551,18 +567,8 @@ void FixIntel::check_neighbor_intel()
       _offload_noghost = 0;
     }
     if (neighbor->requests[i]->skip && _offload_balance != 0.0)
-      error->all(FLERR, "Cannot yet use hybrid styles with Intel offload.");
-
-    // avoid flagging a neighbor list as both INTEL and OPENMP
-    if (neighbor->requests[i]->intel)
-      neighbor->requests[i]->omp = 0;
+      error->all(FLERR,"Cannot yet use hybrid styles with Intel offload.");
   }
-  #else
-  // avoid flagging a neighbor list as both INTEL and OPENMP
-  const int nrequest = neighbor->nrequest;
-  for (int i = 0; i < nrequest; ++i)
-    if (neighbor->requests[i]->intel)
-      neighbor->requests[i]->omp = 0;
   #endif
 }
 
@@ -573,30 +579,30 @@ void FixIntel::_sync_main_arrays(const int prereverse)
   if (!prereverse) _zero_master = 1;
   int done_this_step = prereverse;
   if (_pair_hybrid_zero == 0) done_this_step = 1;
-  if (_force_array_m != 0) {
+  if (_force_array_m != nullptr) {
     if (_need_reduce) {
       reduce_results(&_force_array_m[0].x);
       _need_reduce = 0;
     }
     add_results(_force_array_m, _ev_array_d, _results_eatom, _results_vatom,0);
-    if (done_this_step) _force_array_m = 0;
-    else _ev_array_d = 0;
-  } else if (_force_array_d != 0) {
+    if (done_this_step) _force_array_m = nullptr;
+    else _ev_array_d = nullptr;
+  } else if (_force_array_d != nullptr) {
     if (_need_reduce) {
       reduce_results(&_force_array_d[0].x);
       _need_reduce = 0;
     }
     add_results(_force_array_d, _ev_array_d, _results_eatom, _results_vatom,0);
-    if (done_this_step) _force_array_d = 0;
-    else _ev_array_d = 0;
-  } else if (_force_array_s != 0) {
+    if (done_this_step) _force_array_d = nullptr;
+    else _ev_array_d = nullptr;
+  } else if (_force_array_s != nullptr) {
     if (_need_reduce) {
       reduce_results(&_force_array_s[0].x);
       _need_reduce = 0;
     }
     add_results(_force_array_s, _ev_array_s, _results_eatom, _results_vatom,0);
-    if (done_this_step) _force_array_s = 0;
-    else _ev_array_s = 0;
+    if (done_this_step) _force_array_s = nullptr;
+    else _ev_array_s = nullptr;
   }
 
   #ifdef _LMP_INTEL_OFFLOAD
@@ -613,6 +619,19 @@ void FixIntel::pre_reverse(int /*eflag*/, int /*vflag*/)
 
 /* ---------------------------------------------------------------------- */
 
+void FixIntel::post_force(int vflag)
+{
+  // Redundant call to sync Intel data structs with native for methods that
+  // call force compute but do not call prereverse
+  _sync_main_arrays(1);
+
+  #ifdef LMP_INTEL_OFFLOAD
+  if (_sync_mode == 2) sync_coprocessor();
+  #endif
+}
+
+/* ---------------------------------------------------------------------- */
+
 template <class acc_t>
 void FixIntel::reduce_results(acc_t * _noalias const f_scalar)
 {
@@ -621,7 +640,7 @@ void FixIntel::reduce_results(acc_t * _noalias const f_scalar)
     o_range = atom->nlocal + atom->nghost;
   else
     o_range = atom->nlocal;
-  IP_PRE_get_stride(f_stride, o_range, (sizeof(acc_t)*4), lmp->atom->torque);
+  IP_PRE_get_stride(f_stride, o_range, (sizeof(acc_t)*4), _torque_flag);
 
   o_range *= 4;
   const int f_stride4 = f_stride * 4;
@@ -720,7 +739,7 @@ void FixIntel::add_results(const ft * _noalias const f_in,
         add_oresults(f_in, ev_global, eatom, vatom, 0, _offload_nlocal);
         const acc_t * _noalias const enull = 0;
         int offset = _offload_nlocal;
-        if (atom->torque) offset *= 2;
+        if (_torque_flag) offset *= 2;
         add_oresults(f_in + offset, enull, eatom, vatom,
                      _offload_min_ghost, _offload_nghost);
       } else
@@ -731,7 +750,7 @@ void FixIntel::add_results(const ft * _noalias const f_in,
                      _host_min_local, _host_used_local);
         const acc_t * _noalias const enull = 0;
         int offset = _host_used_local;
-        if (atom->torque) offset *= 2;
+        if (_torque_flag) offset *= 2;
         add_oresults(f_in + offset, enull, eatom,
                      vatom, _host_min_ghost, _host_used_ghost);
       } else {
@@ -780,14 +799,13 @@ void FixIntel::add_oresults(const ft * _noalias const f_in,
                             const int eatom, const int /*vatom*/,
                             const int out_offset, const int nall) {
   lmp_ft * _noalias const f = (lmp_ft *) lmp->atom->f[0] + out_offset;
-  if (atom->torque) {
+  if (_torque_flag) {
     if (f_in[1].w)
     {
       if (f_in[1].w == 1)
         error->all(FLERR,"Bad matrix inversion in mldivide3");
       else
-        error->all(FLERR,
-                   "Sphere particles not yet supported for gayberne/intel");
+        error->all(FLERR,"Sphere particles not yet supported for gayberne/intel");
     }
   }
 
@@ -805,7 +823,7 @@ void FixIntel::add_oresults(const ft * _noalias const f_in,
     #endif
     int ifrom, ito;
     IP_PRE_omp_range_align(ifrom, ito, tid, nall, packthreads, sizeof(acc_t));
-    if (atom->torque) {
+    if (_torque_flag) {
       int ii = ifrom * 2;
       lmp_ft * _noalias const tor = (lmp_ft *) lmp->atom->torque[0] +
         out_offset;
@@ -900,13 +918,6 @@ double FixIntel::memory_usage()
 
 /* ---------------------------------------------------------------------- */
 
-void FixIntel::post_force(int vflag)
-{
-  if (_sync_mode == 2) sync_coprocessor();
-}
-
-/* ---------------------------------------------------------------------- */
-
 template <class ft, class acc_t>
 void FixIntel::add_off_results(const ft * _noalias const f_in,
                                const acc_t * _noalias const ev_global) {
@@ -926,7 +937,7 @@ void FixIntel::add_off_results(const ft * _noalias const f_in,
   int nlocal = atom->nlocal;
   if (neighbor->ago == 0) {
     if (_off_overflow_flag[LMP_OVERFLOW])
-      error->one(FLERR, "Neighbor list overflow, boost neigh_modify one");
+      error->one(FLERR,"Neighbor list overflow, boost neigh_modify one");
     _offload_nlocal = _off_overflow_flag[LMP_LOCAL_MAX] + 1;
     _offload_min_ghost = _off_overflow_flag[LMP_GHOST_MIN];
     _offload_nghost = _off_overflow_flag[LMP_GHOST_MAX] + 1 -
@@ -936,9 +947,9 @@ void FixIntel::add_off_results(const ft * _noalias const f_in,
       _offload_nlocal;
   }
 
-  if (atom->torque)
+  if (_torque_flag)
     if (f_in[1].w < 0.0)
-      error->all(FLERR, "Bad matrix inversion in mldivide3");
+      error->all(FLERR,"Bad matrix inversion in mldivide3");
   add_results(f_in, ev_global, _off_results_eatom, _off_results_vatom, 1);
 
   // Load balance?
@@ -1043,8 +1054,7 @@ void FixIntel::output_timing_data() {
           timers[TIME_OFFLOAD_PAIR];
         double tt = MAX(ht,ct);
         if (timers[TIME_OFFLOAD_LATENCY] / tt > 0.07 && _separate_coi == 0)
-          error->warning(FLERR,
-                 "Leaving a core free can improve performance for offload");
+          error->warning(FLERR,"Leaving a core free can improve performance for offload");
       }
       fprintf(_tscreen, "------------------------------------------------\n");
     }
@@ -1109,7 +1119,7 @@ void FixIntel::set_offload_affinity()
   int ppn = get_ppn(node_rank);
 
   if (ppn % _ncops != 0)
-    error->all(FLERR, "MPI tasks per node must be multiple of offload_cards");
+    error->all(FLERR,"MPI tasks per node must be multiple of offload_cards");
   ppn = ppn / _ncops;
   _cop = node_rank / ppn;
   node_rank = node_rank % ppn;
@@ -1214,8 +1224,7 @@ int FixIntel::set_host_affinity(const int nomp)
   int subscription = nthreads * ppn;
   if (subscription > ncores) {
     if (rank == 0)
-      error->warning(FLERR,
-                     "More MPI tasks/OpenMP threads than available cores");
+      error->warning(FLERR,"More MPI tasks/OpenMP threads than available cores");
     return 0;
   }
   if (subscription == ncores)

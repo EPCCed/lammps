@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,22 +27,22 @@ namespace LAMMPS_NS {
 class FixFFL : public Fix {
  public:
   FixFFL(class LAMMPS *, int, char **);
-  virtual ~FixFFL();
-  int setmask();
-  void init();
-  void setup(int);
+  ~FixFFL() override;
+  int setmask() override;
+  void init() override;
+  void setup(int) override;
   void ffl_integrate();
-  void initial_integrate_respa(int vflag, int ilevel, int iloop);
-  void final_integrate_respa(int ilevel, int iloop);
-  void initial_integrate(int vflag);
-  void final_integrate();
-  double compute_scalar();
-  void reset_target(double);
-  virtual void reset_dt();
-  double memory_usage();
-  void grow_arrays(int);
+  void initial_integrate_respa(int vflag, int ilevel, int iloop) override;
+  void final_integrate_respa(int ilevel, int iloop) override;
+  void initial_integrate(int vflag) override;
+  void final_integrate() override;
+  double compute_scalar() override;
+  void reset_target(double) override;
+  void reset_dt() override;
+  double memory_usage() override;
+  void grow_arrays(int) override;
 
-  virtual void *extract(const char *, int &);
+  void *extract(const char *, int &) override;
 
   void init_ffl();
 

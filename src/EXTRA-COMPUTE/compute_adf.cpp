@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -288,7 +288,7 @@ void ComputeADF::init()
     rcutinnerk[0] = 0.0;
     rcutouterj[0] = force->pair->cutforce;
     rcutouterk[0] = force->pair->cutforce;
-    maxouter = force->pair->cutforce;;
+    maxouter = force->pair->cutforce;
   } else {
     for (int m = 0; m < ntriples; m++) {
       maxouter = MAX(rcutouterj[m],maxouter);
@@ -336,16 +336,8 @@ void ComputeADF::init()
   //   (until next reneighbor), so it needs to contain atoms further
   //   than maxouter apart, just like a normal neighbor list does
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
-  neighbor->requests[irequest]->pair = 0;
-  neighbor->requests[irequest]->compute = 1;
-  neighbor->requests[irequest]->occasional = 1;
-  if (mycutneigh > 0.0) {
-    neighbor->requests[irequest]->cut = 1;
-    neighbor->requests[irequest]->cutoff = mycutneigh;
-  }
+  auto req = neighbor->add_request(this, NeighConst::REQ_FULL | NeighConst::REQ_OCCASIONAL);
+  if (mycutneigh > 0.0) req->set_cutoff(mycutneigh);
 }
 
 /* ---------------------------------------------------------------------- */

@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -38,10 +38,10 @@ using namespace LAMMPS_NS;
 using namespace MathConst;
 
 static const char cite_compute_xrd_c[] =
-  "compute_xrd command: doi:10.1088/0965-0393/21/5/055020\n\n"
+  "compute xrd command: doi:10.1088/0965-0393/21/5/055020\n\n"
   "@Article{Coleman13,\n"
-  " author = {S. P. Coleman, D. E. Spearot, L. Capolungo},\n"
-  " title = {Virtual diffraction analysis of Ni [010] symmetric tilt grain boundaries},\n"
+  " author = {S. P. Coleman and D. E. Spearot and L. Capolungo},\n"
+  " title = {Virtual Diffraction Analysis of {Ni} [010] Symmetric Tilt Grain Boundaries},\n"
   " journal = {Modelling and Simulation in Materials Science and Engineering},\n"
   " year =    2013,\n"
   " volume =  21,\n"
@@ -90,8 +90,7 @@ ComputeXRD::ComputeXRD(LAMMPS *lmp, int narg, char **arg) :
         ztype[i] = j;
        }
      }
-    if (ztype[i] == XRDmaxType + 1)
-        error->all(FLERR,"Compute XRD: Invalid ASF atom type");
+    if (ztype[i] == XRDmaxType + 1) error->all(FLERR,"Compute XRD: Invalid ASF atom type {}", arg[iarg]);
     iarg++;
   }
 
@@ -125,7 +124,7 @@ ComputeXRD::ComputeXRD(LAMMPS *lmp, int narg, char **arg) :
       if (iarg+2 > narg) error->all(FLERR,"Illegal Compute XRD Command");
       LP = utils::numeric(FLERR,arg[iarg+1],false,lmp);
 
-      if (!(LP == 1 || LP == 0))
+      if (LP != 1 && LP != 0)
          error->all(FLERR,"Compute XRD: LP must have value of 0 or 1");
       iarg += 2;
 
@@ -301,7 +300,7 @@ void ComputeXRD::compute_array()
 
   double t0 = platform::walltime();
 
-  double *Fvec = new double[2*size_array_rows]; // Strct factor (real & imaginary)
+  auto Fvec = new double[2*size_array_rows]; // Strct factor (real & imaginary)
   // -- Note: array rows correspond to different RELP
 
   ntypes = atom->ntypes;
@@ -317,7 +316,7 @@ void ComputeXRD::compute_array()
     }
   }
 
-  double *xlocal = new double [3*nlocalgroup];
+  auto xlocal = new double [3*nlocalgroup];
   int *typelocal = new int [nlocalgroup];
 
   nlocalgroup = 0;
@@ -350,7 +349,7 @@ void ComputeXRD::compute_array()
 #pragma omp parallel LMP_DEFAULT_NONE LMP_SHARED(typelocal,xlocal,Fvec,m,frac,ASFXRD)
 #endif
   {
-    double *f = new double[ntypes];    // atomic structure factor by type
+    auto f = new double[ntypes];    // atomic structure factor by type
     int n,typei = 0;
 
     double Fatom1 = 0.0;               // structure factor per atom (real)
@@ -486,7 +485,7 @@ void ComputeXRD::compute_array()
     delete [] f;
   } // End of pragma omp parallel region
 
-  double *scratch = new double[2*size_array_rows];
+  auto scratch = new double[2*size_array_rows];
 
   // Sum intensity for each ang-hkl combination across processors
   MPI_Allreduce(Fvec,scratch,2*size_array_rows,MPI_DOUBLE,MPI_SUM,world);

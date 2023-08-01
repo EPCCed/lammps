@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -26,28 +26,31 @@ namespace LAMMPS_NS {
 
 class FixEfield : public Fix {
   friend class FixQEqReaxFF;
+
  public:
   FixEfield(class LAMMPS *, int, char **);
-  ~FixEfield();
-  int setmask();
-  void init();
-  void setup(int);
-  void min_setup(int);
-  void post_force(int);
-  void post_force_respa(int, int, int);
-  void min_post_force(int);
-  double memory_usage();
-  double compute_scalar();
-  double compute_vector(int);
+  ~FixEfield() override;
+  int setmask() override;
+  void init() override;
+  void setup(int) override;
+  void min_setup(int) override;
+  void post_force(int) override;
+  void post_force_respa(int, int, int) override;
+  void min_post_force(int) override;
+  double memory_usage() override;
+  double compute_scalar() override;
+  double compute_vector(int) override;
 
   enum { NONE, CONSTANT, EQUAL, ATOM };
 
  protected:
   double ex, ey, ez;
-  int varflag, iregion;
-  char *xstr, *ystr, *zstr, *estr;
+  int varflag;
+  char *xstr, *ystr, *zstr, *estr, *pstr;
   char *idregion;
-  int xvar, yvar, zvar, evar, xstyle, ystyle, zstyle, estyle;
+  class Region *region;
+  int xvar, yvar, zvar, xstyle, ystyle, zstyle;
+  int evar, pvar, estyle, pstyle;
   int ilevel_respa;
   double qe2f;
   int qflag, muflag;
@@ -57,57 +60,8 @@ class FixEfield : public Fix {
 
   int force_flag;
   double fsum[4], fsum_all[4];
+  void update_efield_variables();
 };
-
 }    // namespace LAMMPS_NS
-
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-E: Illegal ... command
-
-Self-explanatory.  Check the input script syntax and compare to the
-documentation for the command.  You can use -echo screen as a
-command-line option when running LAMMPS to see the offending line.
-
-E: Region ID for fix efield does not exist
-
-Self-explanatory.
-
-E: Fix efield requires atom attribute q or mu
-
-The atom style defined does not have this attribute.
-
-E: Variable name for fix efield does not exist
-
-Self-explanatory.
-
-E: Variable for fix efield is invalid style
-
-The variable must be an equal- or atom-style variable.
-
-E: Region ID for fix aveforce does not exist
-
-Self-explanatory.
-
-E: Fix efield with dipoles cannot use atom-style variables
-
-This option is not supported.
-
-W: The minimizer does not re-orient dipoles when using fix efield
-
-This means that only the atom coordinates will be minimized,
-not the orientation of the dipoles.
-
-E: Cannot use variable energy with constant efield in fix efield
-
-LAMMPS computes the energy itself when the E-field is constant.
-
-E: Must use variable energy with fix efield
-
-You must define an energy when performing a minimization with a
-variable E-field.
-
-*/

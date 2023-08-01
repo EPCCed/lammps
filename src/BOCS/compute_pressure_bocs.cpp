@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -56,7 +56,7 @@ ComputePressureBocs::ComputePressureBocs(LAMMPS *lmp, int narg, char **arg) :
   phi_coeff = nullptr;
 
   // store temperature ID used by pressure computation
-  // insure it is valid for temperature computation
+  // ensure it is valid for temperature computation
 
   if (strcmp(arg[3],"NULL") == 0) id_temp = nullptr;
   else {
@@ -233,23 +233,14 @@ double ComputePressureBocs::get_cg_p_corr(double ** grid, int basis_type,
                                           double vCG)
 {
   int i = find_index(grid[0],vCG);
-  double correction, deltax = vCG - grid[0][i];
+  double deltax = vCG - grid[0][i];
 
   if (basis_type == BASIS_LINEAR_SPLINE)
-  {
-    correction = grid[1][i] + (deltax) *
-          ( grid[1][i+1] - grid[1][i] ) / ( grid[0][i+1] - grid[0][i] );
-  }
+    return grid[1][i] + (deltax) * ( grid[1][i+1] - grid[1][i] ) / ( grid[0][i+1] - grid[0][i] );
   else if (basis_type == BASIS_CUBIC_SPLINE)
-  {
-    correction = grid[1][i] + (grid[2][i] * deltax) +
-            (grid[3][i] * pow(deltax,2)) + (grid[4][i] * pow(deltax,3));
-  }
-  else
-  {
-    error->all(FLERR,"bad spline type passed to get_cg_p_corr()\n");
-  }
-  return correction;
+    return grid[1][i] + (grid[2][i] * deltax) + (grid[3][i] * pow(deltax,2)) + (grid[4][i] * pow(deltax,3));
+  else error->all(FLERR,"bad spline type passed to get_cg_p_corr()\n");
+  return 0.0;
 }
 
 /* ----------------------------------------------------------------------
@@ -261,11 +252,8 @@ void ComputePressureBocs::send_cg_info(int basis_type, int sent_N_basis,
                                        double *sent_phi_coeff, int sent_N_mol,
                                        double sent_vavg)
 {
-  if (basis_type == BASIS_ANALYTIC) { p_basis_type = BASIS_ANALYTIC; }
-  else
-  {
-    error->all(FLERR,"Incorrect basis type passed to ComputePressureBocs\n");
-  }
+  if (basis_type == BASIS_ANALYTIC) p_basis_type = BASIS_ANALYTIC;
+  else error->all(FLERR,"Incorrect basis type passed to ComputePressureBocs\n");
 
   p_match_flag = 1;
 

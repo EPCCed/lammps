@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -28,19 +28,19 @@ namespace LAMMPS_NS {
 class PPPMCGOMP : public PPPMCG, public ThrOMP {
  public:
   PPPMCGOMP(class LAMMPS *);
-  virtual ~PPPMCGOMP();
-  virtual void compute(int, int);
+  ~PPPMCGOMP() override;
+  void compute(int, int) override;
 
  protected:
-  virtual void allocate();
+  void allocate() override;
 
-  virtual void compute_gf_ik();
-  virtual void compute_gf_ad();
+  void compute_gf_ik() override;
+  void compute_gf_ad() override;
 
-  virtual void make_rho();
-  virtual void fieldforce_ik();
-  virtual void fieldforce_ad();
-  virtual void fieldforce_peratom();
+  void make_rho() override;
+  void fieldforce_ik() override;
+  void fieldforce_ad() override;
+  void fieldforce_peratom() override;
 
  private:
   void compute_rho1d_thr(FFT_SCALAR *const *const, const FFT_SCALAR &, const FFT_SCALAR &,

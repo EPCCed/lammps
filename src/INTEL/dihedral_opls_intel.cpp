@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -167,11 +167,11 @@ void DihedralOPLSIntel::eval(const int vflag,
     #else
     for (int n = nfrom; n < nto; n += npl) {
     #endif
-      const int i1 = dihedrallist[n].a;
-      const int i2 = dihedrallist[n].b;
-      const int i3 = dihedrallist[n].c;
-      const int i4 = dihedrallist[n].d;
-      const int type = dihedrallist[n].t;
+      const int i1 = IP_PRE_dword_index(dihedrallist[n].a);
+      const int i2 = IP_PRE_dword_index(dihedrallist[n].b);
+      const int i3 = IP_PRE_dword_index(dihedrallist[n].c);
+      const int i4 = IP_PRE_dword_index(dihedrallist[n].d);
+      const int type = IP_PRE_dword_index(dihedrallist[n].t);
 
       // 1st bond
 
@@ -195,15 +195,15 @@ void DihedralOPLSIntel::eval(const int vflag,
       // 1st and 2nd angle
 
       const flt_t b1mag2 = vb1x*vb1x + vb1y*vb1y + vb1z*vb1z;
-      const flt_t rb1 = (flt_t)1.0 / sqrt(b1mag2);
+      const flt_t rb1 = (flt_t)1.0 / std::sqrt(b1mag2);
       const flt_t sb1 = (flt_t)1.0 / b1mag2;
 
       const flt_t b2mag2 = vb2xm*vb2xm + vb2ym*vb2ym + vb2zm*vb2zm;
-      const flt_t rb2 = (flt_t)1.0 / sqrt(b2mag2);
+      const flt_t rb2 = (flt_t)1.0 / std::sqrt(b2mag2);
       const flt_t sb2 = (flt_t)1.0 / b2mag2;
 
       const flt_t b3mag2 = vb3x*vb3x + vb3y*vb3y + vb3z*vb3z;
-      const flt_t rb3 = (flt_t)1.0 / sqrt(b3mag2);
+      const flt_t rb3 = (flt_t)1.0 / std::sqrt(b3mag2);
       const flt_t sb3 = (flt_t)1.0 / b3mag2;
 
       const flt_t c0 = (vb1x*vb3x + vb1y*vb3y + vb1z*vb3z) * rb1*rb3;
@@ -219,11 +219,11 @@ void DihedralOPLSIntel::eval(const int vflag,
       // cos and sin of 2 angles and final c
 
       flt_t sin2 = MAX((flt_t)1.0 - c1mag*c1mag,(flt_t)0.0);
-      flt_t sc1 = (flt_t)1.0/sqrt(sin2);
+      flt_t sc1 = (flt_t)1.0/std::sqrt(sin2);
       if (sin2 < SMALL2) sc1 = INVSMALL;
 
       sin2 = MAX((flt_t)1.0 - c2mag*c2mag,(flt_t)0.0);
-      flt_t sc2 = (flt_t)1.0/sqrt(sin2);
+      flt_t sc2 = (flt_t)1.0/std::sqrt(sin2);
       if (sin2 < SMALL2) sc2 = INVSMALL;
 
       const flt_t s1 = sc1 * sc1;
@@ -234,7 +234,7 @@ void DihedralOPLSIntel::eval(const int vflag,
       const flt_t cx = vb1z*vb2ym - vb1y*vb2zm;
       const flt_t cy = vb1x*vb2zm - vb1z*vb2xm;
       const flt_t cz = vb1y*vb2xm - vb1x*vb2ym;
-      const flt_t cmag = (flt_t)1.0/sqrt(cx*cx + cy*cy + cz*cz);
+      const flt_t cmag = (flt_t)1.0/std::sqrt(cx*cx + cy*cy + cz*cz);
       const flt_t dx = (cx*vb3x + cy*vb3y + cz*vb3z)*cmag*rb3;
 
       // error check
@@ -252,7 +252,7 @@ void DihedralOPLSIntel::eval(const int vflag,
 
       const flt_t cossq = c * c;
       const flt_t sinsq = (flt_t)1.0 - cossq;
-      flt_t siinv = (flt_t)1.0/sqrt(sinsq);
+      flt_t siinv = (flt_t)1.0/std::sqrt(sinsq);
       if (sinsq < SMALLER2 ) siinv = INVSMALLER;
       if (dx < (flt_t)0.0) siinv = -siinv;
 
@@ -264,14 +264,14 @@ void DihedralOPLSIntel::eval(const int vflag,
       const flt_t sin_4phim = (flt_t)2.0 * cos_2phi * sin_2phim;
 
       flt_t p, pd;
-      p = fc.bp[type].k1*((flt_t)1.0 + c) +
-          fc.bp[type].k2*((flt_t)1.0 - cos_2phi) +
-          fc.bp[type].k3*((flt_t)1.0 + cos_3phi) +
-          fc.bp[type].k4*((flt_t)1.0 - cos_4phi) ;
-      pd = fc.bp[type].k1 -
-           (flt_t)2.0 * fc.bp[type].k2 * sin_2phim +
-           (flt_t)3.0 * fc.bp[type].k3 * sin_3phim -
-           (flt_t)4.0 * fc.bp[type].k4 * sin_4phim;
+      p = fc.fc[type].k1*((flt_t)1.0 + c) +
+          fc.fc[type].k2*((flt_t)1.0 - cos_2phi) +
+          fc.fc[type].k3*((flt_t)1.0 + cos_3phi) +
+          fc.fc[type].k4*((flt_t)1.0 - cos_4phi) ;
+      pd = fc.fc[type].k1 -
+           (flt_t)2.0 * fc.fc[type].k2 * sin_2phim +
+           (flt_t)3.0 * fc.fc[type].k3 * sin_3phim -
+           (flt_t)4.0 * fc.fc[type].k4 * sin_4phim;
 
       flt_t edihed;
       if (EFLAG) edihed = p;
@@ -379,11 +379,8 @@ void DihedralOPLSIntel::init_style()
 {
   DihedralOPLS::init_style();
 
-  int ifix = modify->find_fix("package_intel");
-  if (ifix < 0)
-    error->all(FLERR,
-               "The 'package intel' command is required for /intel styles");
-  fix = static_cast<FixIntel *>(modify->fix[ifix]);
+  fix = static_cast<FixIntel *>(modify->get_fix_by_id("package_intel"));
+  if (!fix) error->all(FLERR, "The 'package intel' command is required for /intel styles");
 
   #ifdef _LMP_INTEL_OFFLOAD
   _use_base = 0;
@@ -409,29 +406,28 @@ template <class flt_t, class acc_t>
 void DihedralOPLSIntel::pack_force_const(ForceConst<flt_t> &fc,
                                          IntelBuffers<flt_t,acc_t> * /*buffers*/)
 {
-  const int bp1 = atom->ndihedraltypes + 1;
-  fc.set_ntypes(bp1,memory);
+  const int dp1 = atom->ndihedraltypes + 1;
+  fc.set_ntypes(dp1,memory);
 
-  for (int i = 1; i < bp1; i++) {
-    fc.bp[i].k1 = k1[i];
-    fc.bp[i].k2 = k2[i];
-    fc.bp[i].k3 = k3[i];
-    fc.bp[i].k4 = k4[i];
+  for (int i = 1; i < dp1; i++) {
+    fc.fc[i].k1 = k1[i];
+    fc.fc[i].k2 = k2[i];
+    fc.fc[i].k3 = k3[i];
+    fc.fc[i].k4 = k4[i];
   }
 }
 
 /* ---------------------------------------------------------------------- */
 
 template <class flt_t>
-void DihedralOPLSIntel::ForceConst<flt_t>::set_ntypes(const int nbondtypes,
+void DihedralOPLSIntel::ForceConst<flt_t>::set_ntypes(const int ndihderaltypes,
                                                           Memory *memory) {
-  if (nbondtypes != _nbondtypes) {
-    if (_nbondtypes > 0)
-      _memory->destroy(bp);
+  if (memory != nullptr) _memory = memory;
+  if (ndihderaltypes != _ndihderaltypes) {
+    _memory->destroy(fc);
 
-    if (nbondtypes > 0)
-      _memory->create(bp,nbondtypes,"dihedralcharmmintel.bp");
+    if (ndihderaltypes > 0)
+      _memory->create(fc,ndihderaltypes,"dihedralcharmmintel.fc");
   }
-  _nbondtypes = nbondtypes;
-  _memory = memory;
+  _ndihderaltypes = ndihderaltypes;
 }

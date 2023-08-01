@@ -12,7 +12,7 @@
 /* ----------------------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -39,13 +39,13 @@ namespace LAMMPS_NS {
 class FixSMDMoveTriSurf : public Fix {
  public:
   FixSMDMoveTriSurf(class LAMMPS *, int, char **);
-  ~FixSMDMoveTriSurf() = default;
-  int setmask();
-  virtual void init();
-  virtual void initial_integrate(int);
-  void reset_dt();
-  int pack_forward_comm(int, int *, double *, int, int *);
-  void unpack_forward_comm(int, int, double *);
+
+  int setmask() override;
+  void init() override;
+  void initial_integrate(int) override;
+  void reset_dt() override;
+  int pack_forward_comm(int, int *, double *, int, int *) override;
+  void unpack_forward_comm(int, int, double *) override;
 
  protected:
   double dtv;

@@ -13,7 +13,7 @@
 /* ----------------------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -29,20 +29,18 @@
 
 #include "pair_smd_triangulated_surface.h"
 
-#include <cmath>
+#include "atom.h"
+#include "comm.h"
+#include "domain.h"
+#include "error.h"
+#include "force.h"
+#include "memory.h"
+#include "neigh_list.h"
+#include "neighbor.h"
 
+#include <cmath>
 #include <cstring>
 #include <Eigen/Eigen>
-#include "atom.h"
-#include "domain.h"
-#include "force.h"
-#include "comm.h"
-#include "neighbor.h"
-#include "neigh_list.h"
-#include "neigh_request.h"
-#include "memory.h"
-#include "error.h"
-
 
 using namespace std;
 using namespace LAMMPS_NS;
@@ -347,7 +345,7 @@ void PairTriSurf::coeff(int narg, char **arg) {
         utils::bounds(FLERR,arg[0], 1,atom->ntypes, ilo, ihi, error);
         utils::bounds(FLERR,arg[1], 1,atom->ntypes, jlo, jhi, error);
 
-        double bulkmodulus_one = atof(arg[2]);
+        double bulkmodulus_one = utils::numeric(FLERR,arg[2],false,lmp);
 
         // set short-range force constant
         double kn_one = 0.0;
@@ -411,14 +409,7 @@ void PairTriSurf::init_style() {
         if (!atom->contact_radius_flag)
                 error->all(FLERR, "Pair style smd/smd/tri_surface requires atom style with contact_radius");
 
-        // old: half list
-        int irequest = neighbor->request(this);
-        neighbor->requests[irequest]->size = 1;
-
-        // need a full neighbor list
-//      int irequest = neighbor->request(this);
-//      neighbor->requests[irequest]->half = 0;
-//      neighbor->requests[irequest]->full = 1;
+        neighbor->add_request(this, NeighConst::REQ_SIZE);
 
         // set maxrad_dynamic and maxrad_frozen for each type
         // include future Fix pour particles as dynamic
@@ -743,8 +734,8 @@ double PairTriSurf::memory_usage() {
  % https://www.geometrictools.com/Documentation/DistancePoint3Triangle3.pdf
  */
 
-void PairTriSurf::PointTriangleDistance(const Vector3d sourcePosition, const Vector3d TRI0, const Vector3d TRI1,
-                const Vector3d TRI2, Vector3d &CP, double &dist) {
+void PairTriSurf::PointTriangleDistance(const Vector3d& sourcePosition, const Vector3d& TRI0, const Vector3d& TRI1,
+                const Vector3d& TRI2, Vector3d &CP, double &dist) {
 
         Vector3d edge0 = TRI1 - TRI0;
         Vector3d edge1 = TRI2 - TRI0;

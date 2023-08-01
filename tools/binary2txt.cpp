@@ -1,7 +1,7 @@
 /* -----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/
-   Steve Plimpton, sjplimp@sandia.gov, Sandia National Laboratories
+   LAMMPS development team: developers@lammps.org, Sandia National Laboratories
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -29,7 +29,6 @@
 //   g++ -g -DLAMMPS_BIGBIG binarytxt.o -o binary2txt
 //   again -DLAMMPS_SMALLBIG is the default
 
-#include <cstdint>
 #define __STDC_FORMAT_MACROS
 #include <cinttypes>
 
@@ -84,7 +83,7 @@ int main(int narg, char **arg)
     }
 
     n = strlen(arg[iarg]) + 1 + 4;
-    char *filetxt = new char[n];
+    auto filetxt = new char[n];
     strcpy(filetxt, arg[iarg]);
     strcat(filetxt, ".txt");
     FILE *fptxt = fopen(filetxt, "w");
@@ -227,7 +226,7 @@ int main(int narg, char **arg)
         // extend buffer to fit chunk size
 
         if (n > maxbuf) {
-          if (buf) delete[] buf;
+          delete[] buf;
           buf = new double[n];
           maxbuf = n;
         }
@@ -261,6 +260,6 @@ int main(int narg, char **arg)
     unit_style = nullptr;
   }
 
-  if (buf) delete[] buf;
+  delete[] buf;
   return 0;
 }

@@ -2,7 +2,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -35,8 +35,8 @@ class PairGayBerneIntel : public PairGayBerne {
  public:
   PairGayBerneIntel(class LAMMPS *);
 
-  virtual void compute(int, int);
-  void init_style();
+  void compute(int, int) override;
+  void init_style() override;
 
  private:
   template <class flt_t> class ForceConst;

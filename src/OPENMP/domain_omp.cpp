@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -47,7 +47,7 @@ void DomainOMP::pbc()
   // verify owned atoms have valid numerical coords
   // may not if computed pairwise force between 2 atoms at same location
 
-  const double *_noalias const coord = &atom->x[0][0];
+  const double *_noalias const coord = atom->x[0];    // NOLINT
   const int n3 = 3 * nlocal;
   int flag = 0;
 #if defined(_OPENMP)    // clang-format off
@@ -57,8 +57,8 @@ void DomainOMP::pbc()
     if (!std::isfinite(coord[i])) flag = 1;
   if (flag) error->one(FLERR, "Non-numeric atom coords - simulation unstable");
 
-  dbl3_t *_noalias const x = (dbl3_t *) &atom->x[0][0];
-  dbl3_t *_noalias const v = (dbl3_t *) &atom->v[0][0];
+  auto *_noalias const x = (dbl3_t *) atom->x[0];
+  auto *_noalias const v = (dbl3_t *) atom->v[0];
   const double *_noalias const lo = (triclinic == 0) ? boxlo : boxlo_lamda;
   const double *_noalias const hi = (triclinic == 0) ? boxhi : boxhi_lamda;
   const double *_noalias const period = (triclinic == 0) ? prd : prd_lamda;
@@ -162,7 +162,7 @@ void DomainOMP::lamda2x(int n)
 {
   const int num = n;
   if (!n) return;
-  dbl3_t *_noalias const x = (dbl3_t *) &atom->x[0][0];
+  auto *_noalias const x = (dbl3_t *) atom->x[0];
 
 #if defined(_OPENMP)
 #pragma omp parallel for LMP_DEFAULT_NONE schedule(static)
@@ -183,7 +183,7 @@ void DomainOMP::x2lamda(int n)
 {
   const int num = n;
   if (!n) return;
-  dbl3_t *_noalias const x = (dbl3_t *) &atom->x[0][0];
+  auto *_noalias const x = (dbl3_t *) atom->x[0];
 
 #if defined(_OPENMP)
 #pragma omp parallel for LMP_DEFAULT_NONE schedule(static)

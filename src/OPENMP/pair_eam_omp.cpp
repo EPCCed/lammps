@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    This software is distributed under the GNU General Public License.
 
@@ -104,8 +104,8 @@ void PairEAMOMP::eval(int iifrom, int iito, ThrData * const thr)
 
   evdwl = 0.0;
 
-  const dbl3_t * _noalias const x = (dbl3_t *) atom->x[0];
-  dbl3_t * _noalias const f = (dbl3_t *) thr->get_f()[0];
+  const auto * _noalias const x = (dbl3_t *) atom->x[0];
+  auto * _noalias const f = (dbl3_t *) thr->get_f()[0];
   double * const rho_t = thr->get_rho();
   const int tid = thr->get_tid();
   const int nthreads = comm->nthreads;
@@ -174,7 +174,7 @@ void PairEAMOMP::eval(int iifrom, int iito, ThrData * const thr)
 #if defined(_OPENMP)
 #pragma omp master
 #endif
-    { comm->reverse_comm_pair(this); }
+    { comm->reverse_comm(this); }
 
     // wait until master thread is done with communication
     sync_threads();
@@ -216,7 +216,7 @@ void PairEAMOMP::eval(int iifrom, int iito, ThrData * const thr)
 #if defined(_OPENMP)
 #pragma omp master
 #endif
-  { comm->forward_comm_pair(this); }
+  { comm->forward_comm(this); }
 
   // wait until master thread is done with communication
   sync_threads();

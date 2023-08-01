@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -59,7 +59,7 @@ enum {NOBIAS,BIAS};
 
 
 static const char* cite_fix_nvt_manifold_rattle =
-  "fix nvt/manifold/rattle command:\n\n"
+  "fix nvt/manifold/rattle command: doi:10.1016/j.bpj.2016.02.017\n\n"
   "@article{paquay-2016,\n"
   "   author        = {Paquay, Stefan and Kusters, Remy},\n"
   "   doi           = {10.1016/j.bpj.2016.02.017},\n"
@@ -159,13 +159,13 @@ FixNVTManifoldRattle::FixNVTManifoldRattle(LAMMPS *lmp, int narg, char **arg,
 FixNVTManifoldRattle::~FixNVTManifoldRattle()
 {
   // Deallocate heap-allocated objects.
-  if (eta)        delete[] eta;
-  if (eta_dot)    delete[] eta_dot;
-  if (eta_dotdot) delete[] eta_dotdot;
-  if (eta_mass)   delete[] eta_mass;
+  delete[] eta;
+  delete[] eta_dot;
+  delete[] eta_dotdot;
+  delete[] eta_mass;
 
   modify->delete_compute(id_temp);
-  if (id_temp)    delete[] id_temp;
+  delete[] id_temp;
 }
 
 int FixNVTManifoldRattle::setmask()

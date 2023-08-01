@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -20,7 +20,6 @@
 #include "error.h"
 #include "memory.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "neighbor.h"
 #include "update.h"
 
@@ -55,9 +54,7 @@ PairSPHRhoSum::~PairSPHRhoSum() {
 
 void PairSPHRhoSum::init_style() {
   // need a full neighbor list
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
+  neighbor->add_request(this, NeighConst::REQ_FULL);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -196,7 +193,7 @@ void PairSPHRhoSum::compute(int eflag, int vflag) {
   }
 
   // communicate densities
-  comm->forward_comm_pair(this);
+  comm->forward_comm(this);
 }
 
 /* ----------------------------------------------------------------------

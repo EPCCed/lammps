@@ -2,7 +2,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -42,10 +42,6 @@ using namespace MathConst;
 PairBuckIntel::PairBuckIntel(LAMMPS *lmp) : PairBuck(lmp)
 {
   suffix_flag |= Suffix::INTEL;
-}
-
-PairBuckIntel::~PairBuckIntel()
-{
 }
 
 void PairBuckIntel::compute(int eflag, int vflag)
@@ -141,7 +137,7 @@ void PairBuckIntel::eval(const int offload, const int vflag,
 
   const int * _noalias const ilist = list->ilist;
   const int * _noalias const numneigh = list->numneigh;
-  const int ** _noalias const firstneigh = (const int **)list->firstneigh;
+  const int ** _noalias const firstneigh = (const int **)list->firstneigh;  // NOLINT
 
   const flt_t * _noalias const special_lj = fc.special_lj;
   const C_FORCE_T * _noalias const c_force = fc.c_force[0];
@@ -257,16 +253,16 @@ void PairBuckIntel::eval(const int offload, const int vflag,
           const flt_t delx = xtmp - x[j].x;
           const flt_t dely = ytmp - x[j].y;
           const flt_t delz = ztmp - x[j].z;
-          const int jtype = x[j].w;
+          const int jtype = IP_PRE_dword_index(x[j].w);
           const flt_t rsq = delx * delx + dely * dely + delz * delz;
-          const flt_t r = sqrt(rsq);
+          const flt_t r = std::sqrt(rsq);
           const flt_t r2inv = (flt_t)1.0 / rsq;
 
           #ifdef INTEL_VMASK
           if (rsq < c_forcei[jtype].cutsq) {
           #endif
             const flt_t r6inv = r2inv * r2inv * r2inv;
-            const flt_t rexp = exp(-r * c_forcei[jtype].rhoinv);
+            const flt_t rexp = std::exp(-r * c_forcei[jtype].rhoinv);
             forcebuck = r * rexp * c_forcei[jtype].buck1 -
               r6inv * c_forcei[jtype].buck2;
 
@@ -368,7 +364,7 @@ void PairBuckIntel::eval(const int offload, const int vflag,
   if (EFLAG || vflag)
     fix->add_result_array(f_start, ev_global, offload, eatom, 0, vflag);
   else
-    fix->add_result_array(f_start, 0, offload);
+    fix->add_result_array(f_start, nullptr, offload);
 }
 
 void PairBuckIntel::init_style()
@@ -376,18 +372,11 @@ void PairBuckIntel::init_style()
   PairBuck::init_style();
 
   // augment neighbor list request
-  auto request = neighbor->find_request(this);
-  if (force->newton_pair == 0) {
-    request->half = 0;
-    request->full = 1;
-  }
-  request->intel = 1;
+  if (force->newton_pair == 0)
+    neighbor->find_request(this)->enable_full();
 
-  int ifix = modify->find_fix("package_intel");
-  if (ifix < 0)
-    error->all(FLERR,
-               "The 'package intel' command is required for /intel styles");
-  fix = static_cast<FixIntel *>(modify->fix[ifix]);
+  fix = static_cast<FixIntel *>(modify->get_fix_by_id("package_intel"));
+  if (!fix) error->all(FLERR, "The 'package intel' command is required for /intel styles");
 
   fix->pair_init_check();
   #ifdef _LMP_INTEL_OFFLOAD

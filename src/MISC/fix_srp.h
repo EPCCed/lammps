@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,43 +27,40 @@ namespace LAMMPS_NS {
 class FixSRP : public Fix {
  public:
   FixSRP(class LAMMPS *, int, char **);
-  ~FixSRP();
-  int setmask();
-  void init();
+  ~FixSRP() override;
+  int setmask() override;
+  void init() override;
 
-  void pre_exchange();
-  void setup_pre_force(int);
+  void pre_exchange() override;
+  void setup_pre_force(int) override;
 
-  double memory_usage();
-  void grow_arrays(int);
-  void copy_arrays(int, int, int);
-  void set_arrays(int);
-  int pack_exchange(int, double *);
-  int unpack_exchange(int, double *);
-  int pack_border(int, int *, double *);
-  int unpack_border(int, int, double *);
-  void post_run();
+  double memory_usage() override;
+  void grow_arrays(int) override;
+  void copy_arrays(int, int, int) override;
+  void set_arrays(int) override;
+  int pack_exchange(int, double *) override;
+  int unpack_exchange(int, double *) override;
+  int pack_border(int, int *, double *) override;
+  int unpack_border(int, int, double *) override;
+  void post_run() override;
 
-  int pack_restart(int, double *);
-  void unpack_restart(int, int);
-  int maxsize_restart();
-  int size_restart(int);
-  void write_restart(FILE *);
-  void restart(char *);
-  int modify_param(int, char **);
+  int pack_restart(int, double *) override;
+  void unpack_restart(int, int) override;
+  int maxsize_restart() override;
+  int size_restart(int) override;
+  void write_restart(FILE *) override;
+  void restart(char *) override;
+  int modify_param(int, char **) override;
 
   double **array;
 
- private:
+ protected:
   int btype;
   int bptype;
+  std::string pair_name;
 };
 
 }    // namespace LAMMPS_NS
 
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-*/

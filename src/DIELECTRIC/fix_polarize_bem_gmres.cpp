@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/ Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -41,6 +41,7 @@
 #include "comm.h"
 #include "error.h"
 #include "force.h"
+#include "group.h"
 #include "kspace.h"
 #include "math_const.h"
 #include "memory.h"
@@ -48,6 +49,7 @@
 #include "pair_coul_cut_dielectric.h"
 #include "pair_coul_long_dielectric.h"
 #include "pair_lj_cut_coul_cut_dielectric.h"
+#include "pair_lj_cut_coul_debye_dielectric.h"
 #include "pair_lj_cut_coul_long_dielectric.h"
 #include "pair_lj_cut_coul_msm_dielectric.h"
 #include "pppm_dielectric.h"
@@ -59,19 +61,17 @@
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
-using namespace MathConst;
-
-//#define _POLARIZE_DEBUG
+using MathConst::MY_4PI;
 
 /* ---------------------------------------------------------------------- */
 
-FixPolarizeBEMGMRES::FixPolarizeBEMGMRES(LAMMPS *lmp, int narg, char **arg) :
-    Fix(lmp, narg, arg), q_backup(nullptr), c(nullptr), g(nullptr), h(nullptr), r(nullptr), s(nullptr), v(nullptr),
-    y(nullptr)
+FixPolarizeBEMGMRES::FixPolarizeBEMGMRES(LAMMPS *_lmp, int narg, char **arg) :
+    Fix(_lmp, narg, arg), q_backup(nullptr), c(nullptr), g(nullptr), h(nullptr), r(nullptr),
+    s(nullptr), v(nullptr), y(nullptr)
 {
   if (narg < 5) error->all(FLERR, "Illegal fix polarize/bem/gmres command");
 
-  avec = (AtomVecDielectric *) atom->style_match("dielectric");
+  avec = dynamic_cast<AtomVecDielectric *>(atom->style_match("dielectric"));
   if (!avec) error->all(FLERR, "Fix polarize requires atom style dielectric");
 
   // parse required arguments
@@ -81,7 +81,7 @@ FixPolarizeBEMGMRES::FixPolarizeBEMGMRES(LAMMPS *lmp, int narg, char **arg) :
   double tol = utils::numeric(FLERR, arg[4], false, lmp);
   tol_abs = tol_rel = tol;
 
-  itr_max = 20;
+  itr_max = 50;
   mr = 0;
   randomized = 0;
   ave_charge = 0;
@@ -211,7 +211,7 @@ void FixPolarizeBEMGMRES::init()
 
   if (randomized) {
 
-    RanPark *random = new RanPark(lmp, seed_charge + comm->me);
+    auto random = new RanPark(lmp, seed_charge + comm->me);
     for (i = 0; i < 100; i++) random->uniform();
     double sum, tmp = 0;
     for (i = 0; i < nlocal; i++) {
@@ -235,9 +235,7 @@ void FixPolarizeBEMGMRES::init()
   }
 
   if (comm->me == 0)
-    utils::logmesg(lmp,
-                   "GMRES solver for {} induced charges "
-                   "using maximum {} q-vectors\n",
+    utils::logmesg(lmp, "BEM/GMRES solver for {} induced charges using maximum {} q-vectors\n",
                    num_induced_charges, mr);
 }
 
@@ -248,33 +246,80 @@ void FixPolarizeBEMGMRES::setup(int /*vflag*/)
   // check if the pair styles in use are compatible
 
   if (strcmp(force->pair_style, "lj/cut/coul/long/dielectric") == 0)
-    efield_pair = ((PairLJCutCoulLongDielectric *) force->pair)->efield;
+    efield_pair = (dynamic_cast<PairLJCutCoulLongDielectric *>(force->pair))->efield;
   else if (strcmp(force->pair_style, "lj/cut/coul/long/dielectric/omp") == 0)
-    efield_pair = ((PairLJCutCoulLongDielectric *) force->pair)->efield;
+    efield_pair = (dynamic_cast<PairLJCutCoulLongDielectric *>(force->pair))->efield;
   else if (strcmp(force->pair_style, "lj/cut/coul/msm/dielectric") == 0)
-    efield_pair = ((PairLJCutCoulMSMDielectric *) force->pair)->efield;
+    efield_pair = (dynamic_cast<PairLJCutCoulMSMDielectric *>(force->pair))->efield;
   else if (strcmp(force->pair_style, "lj/cut/coul/cut/dielectric") == 0)
-    efield_pair = ((PairLJCutCoulCutDielectric *) force->pair)->efield;
+    efield_pair = (dynamic_cast<PairLJCutCoulCutDielectric *>(force->pair))->efield;
   else if (strcmp(force->pair_style, "lj/cut/coul/cut/dielectric/omp") == 0)
-    efield_pair = ((PairLJCutCoulCutDielectric *) force->pair)->efield;
+    efield_pair = (dynamic_cast<PairLJCutCoulCutDielectric *>(force->pair))->efield;
+  else if (strcmp(force->pair_style, "lj/cut/coul/debye/dielectric") == 0)
+    efield_pair = (dynamic_cast<PairLJCutCoulDebyeDielectric *>(force->pair))->efield;
+  else if (strcmp(force->pair_style, "lj/cut/coul/debye/dielectric/omp") == 0)
+    efield_pair = (dynamic_cast<PairLJCutCoulDebyeDielectric *>(force->pair))->efield;
   else if (strcmp(force->pair_style, "coul/long/dielectric") == 0)
-    efield_pair = ((PairCoulLongDielectric *) force->pair)->efield;
+    efield_pair = (dynamic_cast<PairCoulLongDielectric *>(force->pair))->efield;
   else if (strcmp(force->pair_style, "coul/cut/dielectric") == 0)
-    efield_pair = ((PairCoulCutDielectric *) force->pair)->efield;
+    efield_pair = (dynamic_cast<PairCoulCutDielectric *>(force->pair))->efield;
   else
-    error->all(FLERR, "Pair style not compatible with fix polarize");
+    error->all(FLERR, "Pair style not compatible with fix polarize/bem/gmres");
 
-  if (kspaceflag) {
-    if (force->kspace) {
-      if (strcmp(force->kspace_style, "pppm/dielectric") == 0)
-        efield_kspace = ((PPPMDielectric *) force->kspace)->efield;
-      else if (strcmp(force->kspace_style, "msm/dielectric") == 0)
-        efield_kspace = ((MSMDielectric *) force->kspace)->efield;
-      else
-        error->all(FLERR, "Kspace style not compatible with fix polarize/bem/gmres");
-    } else
-      error->all(FLERR, "No Kspace style available for fix polarize/bem/gmres");
+  // check if kspace is used for force computation
+
+  if (force->kspace) {
+    kspaceflag = 1;
+    if (strcmp(force->kspace_style, "pppm/dielectric") == 0)
+      efield_kspace = (dynamic_cast<PPPMDielectric *>(force->kspace))->efield;
+    else if (strcmp(force->kspace_style, "msm/dielectric") == 0)
+      efield_kspace = (dynamic_cast<MSMDielectric *>(force->kspace))->efield;
+    else
+      error->all(FLERR, "Kspace style not compatible with fix polarize/bem/gmres");
+  } else {
+    if (kspaceflag == 1) {    // users specified kspace yes but there is no kspace pair style
+      error->warning(FLERR, "No Kspace pair style available for fix polarize/bem/gmres");
+      kspaceflag = 0;
+    }
   }
+
+  // NOTE: epsilon0e2q converts (epsilon0 * efield) to the unit of (charge unit / squared distance unit)
+  // efield is computed by pair and kspace styles in the unit of energy unit / charge unit / distance unit
+  // for units real efield is in the unit of kcal/mol/e/A
+  // converting from (F/m) (kcal/mol/e/A)  to e/A^2 (1 e = 1.6e-19 C, 1 m = 1e+10 A)
+  // epsilon0e2q = 8.854187812813e-12 (C^2/N/m^2) * (4184 Nm/6.023e+23) /e/A
+  //             = 8.854187812813e-12 * (4184/6.023e+23) * (1/1.6e-19)^2 e^2 / (1e+10 A) /e/A
+  //             = 0.000240263377163643 e/A^2
+
+  // for units metal efield is in the unit of eV/e/A
+  // converting from (F/m) (eV/e/A)  to e/A^2 (1 V = 1 Nm/C)
+  // epsilon0e2q = 8.854187812813e-12 (C^2/N/m^2) * (1 e Nm/C) /e/A
+  //             = 8.854187812813e-12 * 1/1.6e-19 e^2 / (1e+10 A) /e/A
+  //             = 0.00553386738300813 e/A^2
+
+  // for units si efield is in the unit of J/C/m
+  // converting from (F/m) (J/C/m) to C/m^2
+  // epsilon0e2q = 8.854187812813e-12 (C^2/N/m^2) * (1 Nm/C/m)
+  //             = 8.854187812813e-12 C/m^2
+
+  // for units nano efield is in the unit of attogram nm^2/ns^2/e/nm
+  // converting from (F/m) (attogram nm^2/ns^2/e/nm) to e/nm^2
+  // epsilon0e2q = 8.854187812813e-12 (C^2/N/m^2) * (1e-21 kg nm^2 / (1e-18s^2) / e / nm)
+  //             = 8.854187812813e-12 (C^2/N/m^2) * (1e-21 kg 1e-9 m / (1e-18s^2) / e)
+  //             = 8.854187812813e-12 (1/1.6e-19)^2 (1e-21 * 1e-9 / (1e-18)) e / (1e+18 nm^2)
+  //             = 0.000345866711328125 e/nm^2
+
+  epsilon0e2q = 1.0;
+  if (strcmp(update->unit_style, "real") == 0)
+    epsilon0e2q = 0.000240263377163643 * MY_4PI;
+  else if (strcmp(update->unit_style, "metal") == 0)
+    epsilon0e2q = 0.00553386738300813 * MY_4PI;
+  else if (strcmp(update->unit_style, "si") == 0)
+    epsilon0e2q = 8.854187812813e-12 * MY_4PI;
+  else if (strcmp(update->unit_style, "nano") == 0)
+    epsilon0e2q = 0.000345866711328125 * MY_4PI;
+  else if (strcmp(update->unit_style, "lj") != 0)
+    error->all(FLERR, "Only unit styles 'lj', 'real', 'metal', 'si' and 'nano' are supported");
 
   first = 1;
   compute_induced_charges();
@@ -298,33 +343,34 @@ void FixPolarizeBEMGMRES::pre_force(int)
 
 void FixPolarizeBEMGMRES::compute_induced_charges()
 {
+  double *q_scaled = atom->q_scaled;
   double *q = atom->q;
-  double *q_real = atom->q_unscaled;
   double **norm = atom->mu;
   double *area = atom->area;
   double *ed = atom->ed;
   double *em = atom->em;
   double *epsilon = atom->epsilon;
   int nlocal = atom->nlocal;
-  double epsilon0 = force->dielectric;
-  int eflag = 0;
+  int eflag = 1;
   int vflag = 0;
 
   // compute the right hand side (vector b) of Eq. (40) according to Eq. (42)
   // keep the scaled real charges intact here to compute efield for the right hand side (b)
   //   and backup all the charges
-  // for induced charges q_real stores the free surface charge
+  // for induced charges q stores the free surface charge
   // set the induced charges to be zero to compute the right hand side (b)
   // the current value can be accessed via induced_charges[induced_charge_idx[i]]
 
   for (int i = 0; i < nlocal; i++) {
-    q_backup[i] = q[i];
-    if (induced_charge_idx[i] >= 0) q[i] = 0;
+    q_backup[i] = q_scaled[i];
+    if (induced_charge_idx[i] >= 0) q_scaled[i] = 0;
   }
 
-  comm->forward_comm_fix(this);
+  // communicate q_scaled between the neighboring procs
 
-  // note here q[i] are the bound charges including area
+  comm->forward_comm(this);
+
+  // note here q_scaled[i] are the bound charges including area
   // so that kspace solver can be used directly with the charge values
   // for the moment, require that newton off and full neighbor list for pair
   // Note that in the definition of the electrical fields in Equations (41) and (53)
@@ -354,9 +400,9 @@ void FixPolarizeBEMGMRES::compute_induced_charges()
       Ey += efield_kspace[i][1];
       Ez += efield_kspace[i][2];
     }
-    double dot = (Ex * norm[i][0] + Ey * norm[i][1] + Ez * norm[i][2]) / epsilon[i];
-    double sigma_f = q_real[i] / area[i];
-    buffer[idx] = (1 - em[i]) * sigma_f - epsilon0 * ed[i] * dot / (4 * MY_PI);
+    double ndotE = epsilon0e2q * (Ex * norm[i][0] + Ey * norm[i][1] + Ez * norm[i][2]) / epsilon[i];
+    double sigma_f = q[i] / area[i];
+    buffer[idx] = (1 - em[i]) * sigma_f - ed[i] * ndotE / MY_4PI;
   }
 
   MPI_Allreduce(buffer, rhs, num_induced_charges, MPI_DOUBLE, MPI_SUM, world);
@@ -388,13 +434,15 @@ void FixPolarizeBEMGMRES::compute_induced_charges()
   for (int i = 0; i < nlocal; i++) {
     if (induced_charge_idx[i] >= 0) {
       int idx = induced_charge_idx[i];
-      q[i] = induced_charges[idx] * area[i] + q_real[i];
+      q_scaled[i] = induced_charges[idx] * area[i] + q[i];
     } else {
-      q[i] = q_backup[i];
+      q_scaled[i] = q_backup[i];
     }
   }
 
-  comm->forward_comm_fix(this);
+  // communicate q_scaled to neighboring procs
+
+  comm->forward_comm(this);
 
   if (first) first = 0;
 }
@@ -519,10 +567,6 @@ void FixPolarizeBEMGMRES::gmres_solve(double *x, double *r)
 
       rho = fabs(g[k]);
 
-#ifdef _POLARIZE_DEBUG
-      if (comm->me == 0)
-        error->warning(FLERR, "itr = {}: k = {}, norm(r) = {} norm(b) = {}", itr, k, rho, normb);
-#endif
       if (rho <= rho_tol && rho <= tol_abs) break;
     }
 
@@ -552,11 +596,6 @@ void FixPolarizeBEMGMRES::gmres_solve(double *x, double *r)
 
     rho = sqrt(vec_dot(r, r, n));
 
-#ifdef _POLARIZE_DEBUG
-    if (comm->me == 0)
-      error->warning(FLERR, "itr = {}: norm(r) = {} norm(b) = {}", itr, rho, normb);
-#endif
-
     // Barros et al. suggested the condition: norm(r) < EPSILON norm(b)
 
     if (rho < tol_rel * normb) break;
@@ -577,15 +616,14 @@ void FixPolarizeBEMGMRES::gmres_solve(double *x, double *r)
 void FixPolarizeBEMGMRES::apply_operator(double *w, double *Aw, int /*n*/)
 {
   int i;
-  double *q = atom->q;
+  double *q_scaled = atom->q_scaled;
   double **norm = atom->mu;
   double *area = atom->area;
   double *ed = atom->ed;
   double *em = atom->em;
   double *epsilon = atom->epsilon;
   int nlocal = atom->nlocal;
-  double epsilon0 = force->dielectric;
-  int eflag = 0;
+  int eflag = 1;
   int vflag = 0;
 
   // set the induced charges to be w
@@ -595,14 +633,14 @@ void FixPolarizeBEMGMRES::apply_operator(double *w, double *Aw, int /*n*/)
 
   for (i = 0; i < nlocal; i++) {
     if (induced_charge_idx[i] < 0) {
-      q[i] = 0;
+      q_scaled[i] = 0;
     } else {
       int idx = induced_charge_idx[i];
-      q[i] = w[idx] * area[i];
+      q_scaled[i] = w[idx] * area[i];
     }
   }
 
-  comm->forward_comm_fix(this);
+  comm->forward_comm(this);
 
   // compute the electrical field due to w*area: y = A (w*area)
 
@@ -629,8 +667,8 @@ void FixPolarizeBEMGMRES::apply_operator(double *w, double *Aw, int /*n*/)
       Ey += efield_kspace[i][1];
       Ez += efield_kspace[i][2];
     }
-    double dot = (Ex * norm[i][0] + Ey * norm[i][1] + Ez * norm[i][2]) / epsilon[i];
-    buffer[idx] = em[i] * w[idx] + epsilon0 * ed[i] * dot / (4 * MY_PI);
+    double ndotE = epsilon0e2q * (Ex * norm[i][0] + Ey * norm[i][1] + Ez * norm[i][2]) / epsilon[i];
+    buffer[idx] = em[i] * w[idx] + ed[i] * ndotE / MY_4PI;
   }
 
   MPI_Allreduce(buffer, Aw, num_induced_charges, MPI_DOUBLE, MPI_SUM, world);
@@ -646,16 +684,15 @@ void FixPolarizeBEMGMRES::apply_operator(double *w, double *Aw, int /*n*/)
 void FixPolarizeBEMGMRES::update_residual(double *w, double *r, int /*n*/)
 {
   int i;
+  double *q_scaled = atom->q_scaled;
   double *q = atom->q;
-  double *q_real = atom->q_unscaled;
   double **norm = atom->mu;
   double *area = atom->area;
   double *ed = atom->ed;
   double *em = atom->em;
   double *epsilon = atom->epsilon;
   int nlocal = atom->nlocal;
-  double epsilon0 = force->dielectric;
-  int eflag = 0;
+  int eflag = 1;
   int vflag = 0;
 
   // compute the Coulombic forces and electrical field E
@@ -665,14 +702,16 @@ void FixPolarizeBEMGMRES::update_residual(double *w, double *r, int /*n*/)
 
   for (i = 0; i < nlocal; i++) {
     if (induced_charge_idx[i] < 0) {
-      q[i] = q_backup[i];
+      q_scaled[i] = q_backup[i];
     } else {
       int idx = induced_charge_idx[i];
-      q[i] = w[idx] * area[i] + q_real[i];
+      q_scaled[i] = w[idx] * area[i] + q[i];
     }
   }
 
-  comm->forward_comm_fix(this);
+  // communicate q_scaled between neighboring procs
+
+  comm->forward_comm(this);
 
   force_clear();
   force->pair->compute(eflag, vflag);
@@ -701,9 +740,10 @@ void FixPolarizeBEMGMRES::update_residual(double *w, double *r, int /*n*/)
       Ey += efield_kspace[i][1];
       Ez += efield_kspace[i][2];
     }
-    double dot = (Ex * norm[i][0] + Ey * norm[i][1] + Ez * norm[i][2]) / epsilon[i];
-    double sigma_f = q_real[i] / area[i];
-    buffer[idx] = (1 - em[i]) * sigma_f - em[i] * w[idx] - epsilon0 * ed[i] * dot / (4 * MY_PI);
+    double ndotE =
+        epsilon0e2q * (Ex * norm[i][0] + Ey * norm[i][1] + Ez * norm[i][2]) / epsilon[i] / MY_4PI;
+    double sigma_f = q[i] / area[i];
+    buffer[idx] = (1 - em[i]) * sigma_f - em[i] * w[idx] - ed[i] * ndotE;
   }
 
   MPI_Allreduce(buffer, r, num_induced_charges, MPI_DOUBLE, MPI_SUM, world);
@@ -864,7 +904,7 @@ int FixPolarizeBEMGMRES::pack_forward_comm(int n, int *list, double *buf, int /*
                                            int * /*pbc*/)
 {
   int m;
-  for (m = 0; m < n; m++) buf[m] = atom->q[list[m]];
+  for (m = 0; m < n; m++) buf[m] = atom->q_scaled[list[m]];
   return n;
 }
 
@@ -873,7 +913,7 @@ int FixPolarizeBEMGMRES::pack_forward_comm(int n, int *list, double *buf, int /*
 void FixPolarizeBEMGMRES::unpack_forward_comm(int n, int first, double *buf)
 {
   int i, m;
-  for (m = 0, i = first; m < n; m++, i++) atom->q[i] = buf[m];
+  for (m = 0, i = first; m < n; m++, i++) atom->q_scaled[i] = buf[m];
 }
 
 /* ----------------------------------------------------------------------
@@ -921,7 +961,7 @@ void FixPolarizeBEMGMRES::set_dielectric_params(double ediff, double emean, doub
   double *area = atom->area;
   double *ed = atom->ed;
   double *em = atom->em;
-  double *q_unscaled = atom->q_unscaled;
+  double *q = atom->q;
   double *epsilon = atom->epsilon;
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
@@ -932,7 +972,7 @@ void FixPolarizeBEMGMRES::set_dielectric_params(double ediff, double emean, doub
       em[i] = emean;
       if (areai > 0) area[i] = areai;
       if (epsiloni > 0) epsilon[i] = epsiloni;
-      if (set_charge) q_unscaled[i] = qvalue;
+      if (set_charge) q[i] = qvalue;
     }
   }
 }

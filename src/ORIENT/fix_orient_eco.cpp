@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratdir_veces
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -26,7 +26,6 @@
 #include "math_const.h"
 #include "memory.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "neighbor.h"
 #include "pair.h"
 #include "respa.h"
@@ -39,10 +38,10 @@ using namespace FixConst;
 using namespace MathConst;
 
 static const char cite_fix_orient_eco[] =
-  "fix orient/eco command:\n\n"
+  "fix orient/eco command: doi:j.commatsci.2020.109774\n\n"
   "@Article{Schratt20,\n"
-  " author = {A. A. Schratt, V. Mohles},\n"
-  " title = {Efficient calculation of the ECO driving force for atomistic simulations of grain boundary motion},\n"
+  " author = {A. A. Schratt and V. Mohles},\n"
+  " title = {Efficient Calculation of the {ECO} Driving Force for Atomistic Simulations of Grain Boundary Motion},\n"
   " journal = {Computational Materials Science},\n"
   " volume = {182},\n"
   " year = {2020},\n"
@@ -161,10 +160,9 @@ void FixOrientECO::init() {
 
   // compute normalization factor
   int neigh = get_norm();
-  if (me == 0) {
-    utils::logmesg(lmp,"  fix orient/eco: cutoff={} norm_fac={} "
-                   "neighbors={}\n", r_cut, norm_fac, neigh);
-  }
+  if (me == 0)
+    utils::logmesg(lmp,"  fix orient/eco: cutoff={} norm_fac={} neighbors={}\n",
+                   r_cut, norm_fac, neigh);
 
   inv_norm_fac = 1.0 / norm_fac;
 
@@ -178,18 +176,13 @@ void FixOrientECO::init() {
   MPI_Bcast(&inv_norm_fac, 1, MPI_DOUBLE, 0, world);
 
   if (utils::strmatch(update->integrate_style,"^respa")) {
-    ilevel_respa = ((Respa *) update->integrate)->nlevels - 1;
+    ilevel_respa = (dynamic_cast<Respa *>(update->integrate))->nlevels - 1;
     if (respa_level >= 0) ilevel_respa = MIN(respa_level, ilevel_respa);
   }
 
-  // need a full neighbor list
-  // perpetual list, built whenever re-neighboring occurs
+  // need a full perpetual neighbor list
 
-  int irequest = neighbor->request(this, instance_me);
-  neighbor->requests[irequest]->pair = 0;
-  neighbor->requests[irequest]->fix = 1;
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
+  neighbor->add_request(this, NeighConst::REQ_FULL);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -204,9 +197,9 @@ void FixOrientECO::setup(int vflag) {
   if (utils::strmatch(update->integrate_style,"^verlet"))
     post_force(vflag);
   else {
-    ((Respa *) update->integrate)->copy_flevel_f(ilevel_respa);
+    (dynamic_cast<Respa *>(update->integrate))->copy_flevel_f(ilevel_respa);
     post_force_respa(vflag,ilevel_respa, 0);
-    ((Respa *) update->integrate)->copy_f_flevel(ilevel_respa);
+    (dynamic_cast<Respa *>(update->integrate))->copy_f_flevel(ilevel_respa);
   }
 }
 
@@ -244,7 +237,7 @@ void FixOrientECO::post_force(int /* vflag */) {
   int *numneigh = list->numneigh;
   int **firstneigh = list->firstneigh;
 
-  // insure nbr and order data structures are adequate size
+  // ensure nbr and order data structures are adequate size
   if (nall > nmax) {
     nmax = nall;
     memory->destroy(nbr);
@@ -344,7 +337,7 @@ void FixOrientECO::post_force(int /* vflag */) {
   // potential is not zero
   if (u_0 != 0.0) {
     // communicate to acquire nbr data for ghost atoms
-    comm->forward_comm_fix(this);
+    comm->forward_comm(this);
 
     // loop over all atoms
     for (ii = 0; ii < inum; ++ii) {

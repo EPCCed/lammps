@@ -27,7 +27,6 @@
 
 #include "reaxff_omp.h"
 
-#include "fix_omp.h"
 #include "pair_reaxff_omp.h"
 #include "reaxff_api.h"
 
@@ -100,6 +99,7 @@ namespace ReaxFF {
           /* set the pointers */
           type_i = system->my_atoms[i].type;
           type_j = system->my_atoms[j].type;
+          if ((type_i < 0) || (type_j < 0)) continue;
           sbp_i = &(system->reax_param.sbp[type_i]);
           sbp_j = &(system->reax_param.sbp[type_j]);
           twbp = &(system->reax_param.tbp[type_i][type_j]);

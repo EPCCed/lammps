@@ -1,8 +1,7 @@
-// clang-format off
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -15,7 +14,6 @@
 /* ----------------------------------------------------------------------
    Contributing author: Rodrigo Canales (RWTH Aachen University)
 ------------------------------------------------------------------------- */
-
 
 #ifdef PAIR_CLASS
 // clang-format off
@@ -35,9 +33,9 @@ class PairBuckCoulCutIntel : public PairBuckCoulCut {
 
  public:
   PairBuckCoulCutIntel(class LAMMPS *);
-  virtual ~PairBuckCoulCutIntel();
-  virtual void compute(int, int);
-  void init_style();
+
+  void compute(int, int) override;
+  void init_style() override;
   typedef struct {
     float x, y, z;
     int w;

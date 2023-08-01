@@ -13,7 +13,7 @@
 /* ----------------------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -89,12 +89,12 @@ void ComputeSmdTlsphShape::compute_peratom() {
         }
 
         int itmp = 0;
-        Matrix3d *R = (Matrix3d *) force->pair->extract("smd/tlsph/rotation_ptr", itmp);
+        auto R = (Matrix3d *) force->pair->extract("smd/tlsph/rotation_ptr", itmp);
         if (R == nullptr) {
                 error->all(FLERR, "compute smd/tlsph_shape failed to access rotation array");
         }
 
-        Matrix3d *F = (Matrix3d *) force->pair->extract("smd/tlsph/Fincr_ptr", itmp);
+        auto F = (Matrix3d *) force->pair->extract("smd/tlsph/Fincr_ptr", itmp);
         if (F == nullptr) {
                 error->all(FLERR, "compute smd/tlsph_shape failed to access deformation gradient array");
         }

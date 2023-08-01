@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -18,6 +18,7 @@
 
 #include "lmptype.h"
 
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -27,9 +28,9 @@ namespace platform {
   /*! Return the consumed CPU time for the current process in seconds
    *
    * This is a wrapper around the POSIX function getrusage() and its Windows equivalent.
-   * It is to be used in a similar fashion than MPI_Wtime(). Its resolution may
-   * be rather low so it can only be trusted when observing processes consuming at
-   * seconds or more of CPU time.
+   * It is to be used in a similar fashion than MPI_Wtime().  Its resolution may be rather
+   * low so it can only be trusted when observing processes consuming CPU time of at least
+   * a few seconds.
    *
    *  \return used CPU time in seconds */
 
@@ -37,8 +38,8 @@ namespace platform {
 
   /*! Return the wall clock state for the current process in seconds
    *
-   * This this clock is counting continuous time is initialized during
-   * Load of the executable/library. Its absolute value must be considered
+   * This this clock is counting continuous time and is initialized during
+   * load of the executable/library.  Its absolute value must be considered
    * arbitrary and thus elapsed wall times are measured in taking differences.
    * It is therefore to be used in a similar fashion as MPI_Wtime() but
    * has a different offset, usually leading to better resolution.
@@ -124,6 +125,13 @@ namespace platform {
    * \return -1 if failure otherwise 0 */
 
   int putenv(const std::string &vardef);
+
+  /*! Delete variable from the environment
+   *
+   * \param  variable  variable name
+   * \return -1 if failure otherwise 0 */
+
+  int unsetenv(const std::string &variable);
 
   /*! Get list of entries in a path environment variable
    *
@@ -264,6 +272,11 @@ namespace platform {
 
   /*! Create a directory
    *
+   * Unlike the the ``mkdir()`` or ``_mkdir()`` functions of the
+   * C library, this function will also try to create non-existing sub-directories
+   * in case they don't exist, and thus behave like the ``mkdir -p`` command rather
+   * than plain ``mkdir`` or ``md`.
+   *
    * \param  path  directory path
    * \return -1 if unsuccessful, otherwise >= 0  */
 
@@ -271,18 +284,18 @@ namespace platform {
 
   /*! Delete a directory
    *
+   * Unlike the the ``rmdir()`` or ``_rmdir()`` functions of the
+   * C library, this function will check for the contents of the
+   * folder and recurse into any sub-folders, if necessary and
+   * delete all contained folders and their contents before
+   * deleting the folder *path*.
+   *
    * \param  path  directory path
    * \return -1 if unsuccessful, otherwise >= 0  */
 
   int rmdir(const std::string &path);
 
-  /*! Delete a directory and its contents
-   *
-   * Unlike the the ``rmdir()`` or ``_rmdir()`` function of the
-   * C library, this function will check for the contents of the
-   * folder and recurse into any sub-folders, if necessary and
-   * delete all contained folders and their contents before
-   * deleting the folder *path*.
+  /*! Delete a file
    *
    *  \param   path    path to file to be deleted
    *  \return  0 on success, -1 on error */

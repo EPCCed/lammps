@@ -20,6 +20,8 @@ FixStyle(wall/spherharm,FixWallSpherharm)
 #ifndef LMP_FIX_WALL_SPHERHARM_H
 #define LMP_FIX_WALL_SPHERHARM_H
 
+#include <functional>
+
 #include "math_extra.h"
 #include "fix.h"
 #include "math_spherharm.h"

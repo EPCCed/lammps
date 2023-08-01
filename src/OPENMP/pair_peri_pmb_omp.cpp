@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    This software is distributed under the GNU General Public License.
 
@@ -22,7 +22,6 @@
 #include "force.h"
 #include "lattice.h"
 #include "memory.h"
-#include "modify.h"
 #include "neigh_list.h"
 #include "suffix.h"
 

@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -28,19 +28,20 @@ class ComputeForceTally : public Compute {
 
  public:
   ComputeForceTally(class LAMMPS *, int, char **);
-  virtual ~ComputeForceTally();
+  ~ComputeForceTally() override;
 
-  void init();
+  void init() override;
 
-  double compute_scalar();
-  void compute_peratom();
+  double compute_scalar() override;
+  void compute_peratom() override;
 
-  int pack_reverse_comm(int, int, double *);
-  void unpack_reverse_comm(int, int *, double *);
-  double memory_usage();
+  int pack_reverse_comm(int, int, double *) override;
+  void unpack_reverse_comm(int, int *, double *) override;
+  double memory_usage() override;
 
-  void pair_setup_callback(int, int);
-  void pair_tally_callback(int, int, int, int, double, double, double, double, double, double);
+  void pair_setup_callback(int, int) override;
+  void pair_tally_callback(int, int, int, int, double, double, double, double, double,
+                           double) override;
 
  private:
   bigint did_setup;
@@ -53,13 +54,3 @@ class ComputeForceTally : public Compute {
 
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-E: Illegal ... command
-
-Self-explanatory.  Check the input script syntax and compare to the
-documentation for the command.  You can use -echo screen as a
-command-line option when running LAMMPS to see the offending line.
-
-*/

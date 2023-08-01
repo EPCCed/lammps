@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -28,13 +28,13 @@ namespace LAMMPS_NS {
 class Scafacos : public KSpace {
  public:
   Scafacos(class LAMMPS *);
-  ~Scafacos();
-  void init();
-  void setup() {}
-  void settings(int, char **);
-  void compute(int, int);
-  int modify_param(int, char **);
-  double memory_usage();
+  ~Scafacos() override;
+  void init() override;
+  void setup() override {}
+  void settings(int, char **) override;
+  void compute(int, int) override;
+  int modify_param(int, char **) override;
+  double memory_usage() override;
 
  private:
   int me;
@@ -68,7 +68,3 @@ class Scafacos : public KSpace {
 
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-*/

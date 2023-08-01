@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    This software is distributed under the GNU General Public License.
 
@@ -122,12 +122,12 @@ void PairDPDTstatOMP::eval(int iifrom, int iito, ThrData * const thr)
   int i,j,ii,jj,jnum,itype,jtype;
   double xtmp,ytmp,ztmp,delx,dely,delz,fpair;
   double vxtmp,vytmp,vztmp,delvx,delvy,delvz;
-  double rsq,r,rinv,dot,wd,randnum,factor_dpd;
+  double rsq,r,rinv,dot,wd,randnum,factor_dpd,factor_sqrt;
   int *ilist,*jlist,*numneigh,**firstneigh;
 
-  const dbl3_t * _noalias const x = (dbl3_t *) atom->x[0];
-  const dbl3_t * _noalias const v = (dbl3_t *) atom->v[0];
-  dbl3_t * _noalias const f = (dbl3_t *) thr->get_f()[0];
+  const auto * _noalias const x = (dbl3_t *) atom->x[0];
+  const auto * _noalias const v = (dbl3_t *) atom->v[0];
+  auto * _noalias const f = (dbl3_t *) thr->get_f()[0];
   const int * _noalias const type = atom->type;
   const int nlocal = atom->nlocal;
   const double *special_lj = force->special_lj;
@@ -170,6 +170,7 @@ void PairDPDTstatOMP::eval(int iifrom, int iito, ThrData * const thr)
     for (jj = 0; jj < jnum; jj++) {
       j = jlist[jj];
       factor_dpd = special_lj[sbmask(j)];
+      factor_sqrt = special_sqrt[sbmask(j)];
       j &= NEIGHMASK;
 
       delx = xtmp - x[j].x;
@@ -192,9 +193,9 @@ void PairDPDTstatOMP::eval(int iifrom, int iito, ThrData * const thr)
         // drag force = -gamma * wd^2 * (delx dot delv) / r
         // random force = sigma * wd * rnd * dtinvsqrt;
 
-        fpair = -gamma[itype][jtype]*wd*wd*dot*rinv;
-        fpair += sigma[itype][jtype]*wd*randnum*dtinvsqrt;
-        fpair *= factor_dpd*rinv;
+        fpair = -factor_dpd*gamma[itype][jtype]*wd*wd*dot*rinv;
+        fpair += factor_sqrt*sigma[itype][jtype]*wd*randnum*dtinvsqrt;
+        fpair *= rinv;
 
         fxtmp += delx*fpair;
         fytmp += dely*fpair;

@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -174,17 +174,6 @@ void PairCosineSquared::coeff(int narg, char **arg)
   if (count == 0)
     error->all(FLERR, "Incorrect args for pair coefficients (none set)");
 }
-
-/* ----------------------------------------------------------------------
-   init specific to this pair style (unnecessary)
-------------------------------------------------------------------------- */
-
-/*
-void PairCosineSquared::init_style()
-{
-  neighbor->request(this,instance_me);
-}
-*/
 
 /* ----------------------------------------------------------------------
    init for one type pair i,j and corresponding j,i

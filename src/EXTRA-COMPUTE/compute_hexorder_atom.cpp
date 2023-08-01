@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -17,21 +17,22 @@
 ------------------------------------------------------------------------- */
 
 #include "compute_hexorder_atom.h"
-#include <cmath>
-#include <cstring>
-#include <complex>
+
 #include "atom.h"
-#include "update.h"
-#include "modify.h"
-#include "neighbor.h"
-#include "neigh_list.h"
-#include "neigh_request.h"
-#include "force.h"
-#include "pair.h"
 #include "comm.h"
-#include "memory.h"
 #include "error.h"
+#include "force.h"
 #include "math_const.h"
+#include "memory.h"
+#include "modify.h"
+#include "neigh_list.h"
+#include "neighbor.h"
+#include "pair.h"
+#include "update.h"
+
+#include <cmath>
+#include <complex>
+#include <cstring>
 
 #ifdef DBL_EPSILON
   #define MY_EPSILON (10.0*DBL_EPSILON)
@@ -109,22 +110,13 @@ void ComputeHexOrderAtom::init()
     error->all(FLERR,"Compute hexorder/atom requires a pair style be defined");
   if (cutsq == 0.0) cutsq = force->pair->cutforce * force->pair->cutforce;
   else if (sqrt(cutsq) > force->pair->cutforce)
-    error->all(FLERR,
-               "Compute hexorder/atom cutoff is longer than pairwise cutoff");
+    error->all(FLERR, "Compute hexorder/atom cutoff is longer than pairwise cutoff");
 
   // need an occasional full neighbor list
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->pair = 0;
-  neighbor->requests[irequest]->compute = 1;
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
-  neighbor->requests[irequest]->occasional = 1;
+  neighbor->add_request(this, NeighConst::REQ_FULL | NeighConst::REQ_OCCASIONAL);
 
-  int count = 0;
-  for (int i = 0; i < modify->ncompute; i++)
-    if (strcmp(modify->compute[i]->style,"hexorder/atom") == 0) count++;
-  if (count > 1 && comm->me == 0)
+  if ((modify->get_compute_by_style("hexorder/atom").size() > 1) && (comm->me == 0))
     error->warning(FLERR,"More than one compute hexorder/atom");
 }
 
@@ -181,7 +173,7 @@ void ComputeHexOrderAtom::compute_peratom()
       jlist = firstneigh[i];
       jnum = numneigh[i];
 
-      // insure distsq and nearest arrays are long enough
+      // ensure distsq and nearest arrays are long enough
 
       if (jnum > maxneigh) {
         memory->destroy(distsq);
@@ -275,8 +267,8 @@ inline void ComputeHexOrderAtom::calc_qn_trig(double delx, double dely, double &
    sort auxiliary array at same time
 ------------------------------------------------------------------------- */
 
-#define SWAP(a,b)   tmp = a; a = b; b = tmp;
-#define ISWAP(a,b) itmp = a; a = b; b = itmp;
+#define SWAP(a,b)   tmp = a; (a) = b; (b) = tmp;
+#define ISWAP(a,b) itmp = a; (a) = b; (b) = itmp;
 
 /* ---------------------------------------------------------------------- */
 
@@ -289,7 +281,7 @@ void ComputeHexOrderAtom::select2(int k, int n, double *arr, int *iarr)
   iarr--;
   l = 1;
   ir = n;
-  for (;;) {
+  while (true) {
     if (ir <= l+1) {
       if (ir == l+1 && arr[ir] < arr[l]) {
         SWAP(arr[l],arr[ir])
@@ -316,7 +308,7 @@ void ComputeHexOrderAtom::select2(int k, int n, double *arr, int *iarr)
       j = ir;
       a = arr[l+1];
       ia = iarr[l+1];
-      for (;;) {
+      while (true) {
         do i++; while (arr[i] < a);
         do j--; while (arr[j] > a);
         if (j < i) break;

@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,17 +27,17 @@
 #include "comm.h"
 #include "error.h"
 #include "force.h"
+#include "math_const.h"
 #include "memory.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "neighbor.h"
 #include "potential_file_reader.h"
-#include "tokenizer.h"
 
 #include <cmath>
 #include <cstring>
 
 using namespace LAMMPS_NS;
+using MathConst::MY_PI;
 
 #define MAXLINE 1024
 #define DELTA 4
@@ -544,7 +544,6 @@ void PairTersoffTable::allocateGrids()
   double  deltaArgumentCutoffFunction, deltaArgumentExponential, deltaArgumentBetaZetaPower;
   double  deltaArgumentGtetaFunction;
   double  r, minMu, maxLambda, maxCutoff;
-  double const PI=acos(-1.0);
 
   deallocateGrids();
 
@@ -653,8 +652,8 @@ void PairTersoffTable::allocateGrids()
         }
 
         for (l = numGridPointsOneCutoffFunction; l < numGridPointsCutoffFunction; l++) {
-          cutoffFunction[i][j][l] = 0.5 + 0.5 * cos (PI * (r - cutoffR)/(cutoffS-cutoffR)) ;
-          cutoffFunctionDerived[i][j][l] =  -0.5 * PI * sin (PI * (r - cutoffR)/(cutoffS-cutoffR)) / (cutoffS-cutoffR) ;
+          cutoffFunction[i][j][l] = 0.5 + 0.5 * cos (MY_PI * (r - cutoffR)/(cutoffS-cutoffR)) ;
+          cutoffFunctionDerived[i][j][l] =  -0.5 * MY_PI * sin (MY_PI * (r - cutoffR)/(cutoffS-cutoffR)) / (cutoffS-cutoffR);
           r += deltaArgumentCutoffFunction;
         }
       }
@@ -744,9 +743,7 @@ void PairTersoffTable::init_style()
 
   // need a full neighbor list
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
+  neighbor->add_request(this, NeighConst::REQ_FULL);
 }
 
 /* ----------------------------------------------------------------------
@@ -899,11 +896,13 @@ void PairTersoffTable::setup_params()
         for (m = 0; m < nparams; m++) {
           if (i == params[m].ielement && j == params[m].jelement &&
               k == params[m].kelement) {
-            if (n >= 0) error->all(FLERR,"Potential file has duplicate entry");
+            if (n >= 0) error->all(FLERR,"Potential file has a duplicate entry for: {} {} {}",
+                                   elements[i], elements[j], elements[k]);
             n = m;
           }
         }
-        if (n < 0) error->all(FLERR,"Potential file is missing an entry");
+        if (n < 0) error->all(FLERR,"Potential file is missing an entry for: {} {} {}",
+                              elements[i], elements[j], elements[k]);
         elem3param[i][j][k] = n;
       }
 

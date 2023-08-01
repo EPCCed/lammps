@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -705,7 +705,7 @@ double PairExp6rx::init_one(int i, int j)
 void PairExp6rx::read_file(char *file)
 {
   int params_per_line = 5;
-  char **words = new char*[params_per_line+1];
+  auto words = new char*[params_per_line+1];
 
   memory->sfree(params);
   params = nullptr;
@@ -820,7 +820,7 @@ void PairExp6rx::read_file(char *file)
 void PairExp6rx::read_file2(char *file)
 {
   int params_per_line = 7;
-  char **words = new char*[params_per_line+1];
+  auto words = new char*[params_per_line+1];
 
   // open file on proc 0
 

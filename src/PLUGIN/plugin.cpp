@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -21,7 +21,6 @@
 #include "force.h"
 #include "input.h"
 #include "modify.h"
-#include "region.h"
 
 #include <cstring>
 #include <list>
@@ -33,6 +32,8 @@ static std::list<lammpsplugin_t> pluginlist;
 
 // map for counting references to dso handles
 static std::map<void *, int> dso_refcounter;
+
+static bool verbose = true;
 
 /* ---------------------------------------------------------------------- */
 
@@ -67,15 +68,26 @@ void Plugin::command(int narg, char **arg)
     }
   } else
     error->all(FLERR, "Illegal plugin command");
-#if 0
-  if (comm->me == 0)
-    error->warning(
-        FLERR, "LAMMPS must be built as a shared library for it to work.");
+}
+
+// auto-load DSOs from designated folder(s)
+void plugin_auto_load(LAMMPS *lmp)
+{
+#if defined(LMP_PLUGIN)
+  for (const auto &plugin_dir : platform::list_pathenv("LAMMPS_PLUGIN_PATH")) {
+    verbose = false;
+    int count = 0;
+    for (const auto &file : platform::list_directory(plugin_dir)) {
+      if (utils::strmatch(file, "\\plugin.so$"))
+        count += plugin_load(platform::path_join(plugin_dir, file).c_str(), lmp);
+    }
+    if (lmp->comm->me == 0) utils::logmesg(lmp, "Loaded {} plugins from {}\n", count, plugin_dir);
+  }
 #endif
 }
 
 // load DSO and call included registration function
-void plugin_load(const char *file, LAMMPS *lmp)
+int plugin_load(const char *file, LAMMPS *lmp)
 {
 #if defined(LMP_PLUGIN)
   int me = lmp->comm->me;
@@ -86,7 +98,7 @@ void plugin_load(const char *file, LAMMPS *lmp)
   void *dso = platform::dlopen(file);
   if (dso == nullptr) {
     if (me == 0) utils::logmesg(lmp, "Open of file {} failed: {}\n", file, platform::dlerror());
-    return;
+    return 0;
   }
 
   // look up lammpsplugin_init() function in DSO
@@ -100,7 +112,7 @@ void plugin_load(const char *file, LAMMPS *lmp)
     if (me == 0)
       utils::logmesg(lmp, "Plugin symbol lookup failure in file {}: {}\n", file,
                      platform::dlerror());
-    return;
+    return 0;
   }
 
   // call initializer function loaded from DSO and pass a pointer
@@ -108,6 +120,7 @@ void plugin_load(const char *file, LAMMPS *lmp)
   // and plugin registration function pointer
 
   (*(lammpsplugin_initfunc) (initfunc))((void *) lmp, dso, (void *) &plugin_register);
+  return 1;
 #endif
 }
 
@@ -121,7 +134,7 @@ void plugin_load(const char *file, LAMMPS *lmp)
 void plugin_register(lammpsplugin_t *plugin, void *ptr)
 {
 #if defined(LMP_PLUGIN)
-  LAMMPS *lmp = (LAMMPS *) ptr;
+  auto lmp = (LAMMPS *) ptr;
   int me = lmp->comm->me;
 
   if (plugin == nullptr) return;
@@ -129,13 +142,13 @@ void plugin_register(lammpsplugin_t *plugin, void *ptr)
   // ignore load request if same plugin already loaded
   int idx = plugin_find(plugin->style, plugin->name);
   if (idx >= 0) {
-    if (me == 0)
+    if (verbose && (me == 0))
       utils::logmesg(lmp, "Ignoring load of {} style {}: must unload existing {} plugin first\n",
                      plugin->style, plugin->name, plugin->name);
     return;
   }
 
-  if (me == 0) {
+  if (verbose && (me == 0)) {
     utils::logmesg(lmp, "Loading plugin: {} by {}\n", plugin->info, plugin->author);
     // print version info only if the versions of host and plugin don't match
     if ((plugin->version) && (strcmp(plugin->version, lmp->version) != 0))
@@ -194,6 +207,14 @@ void plugin_register(lammpsplugin_t *plugin, void *ptr)
     }
     (*improper_map)[plugin->name] = (Force::ImproperCreator) plugin->creator.v1;
 
+  } else if (pstyle == "kspace") {
+    auto kspace_map = lmp->force->kspace_map;
+    if (kspace_map->find(plugin->name) != kspace_map->end()) {
+      if (lmp->comm->me == 0)
+        lmp->error->warning(FLERR, "Overriding built-in kspace style {} from plugin", plugin->name);
+    }
+    (*kspace_map)[plugin->name] = (Force::KSpaceCreator) plugin->creator.v1;
+
   } else if (pstyle == "compute") {
     auto compute_map = lmp->modify->compute_map;
     if (compute_map->find(plugin->name) != compute_map->end()) {
@@ -249,9 +270,9 @@ void plugin_unload(const char *style, const char *name, LAMMPS *lmp)
   // ignore unload request from unsupported style categories
   if ((strcmp(style, "pair") != 0) && (strcmp(style, "bond") != 0) &&
       (strcmp(style, "angle") != 0) && (strcmp(style, "dihedral") != 0) &&
-      (strcmp(style, "improper") != 0) && (strcmp(style, "compute") != 0) &&
-      (strcmp(style, "fix") != 0) && (strcmp(style, "region") != 0) &&
-      (strcmp(style, "command") != 0)) {
+      (strcmp(style, "improper") != 0) && (strcmp(style, "kspace") != 0) &&
+      (strcmp(style, "compute") != 0) && (strcmp(style, "fix") != 0) &&
+      (strcmp(style, "region") != 0) && (strcmp(style, "command") != 0)) {
     if (me == 0)
       utils::logmesg(lmp, "Ignoring unload: {} is not a supported plugin style\n", style);
     return;
@@ -270,7 +291,7 @@ void plugin_unload(const char *style, const char *name, LAMMPS *lmp)
 
   // remove selected plugin from list of plugins
 
-  if (me == 0) utils::logmesg(lmp, "Unloading {} style {}\n", style, name);
+  if (verbose && (me == 0)) utils::logmesg(lmp, "Unloading {} style {}\n", style, name);
   plugin_erase(style, name);
 
   // remove style of given name from corresponding map
@@ -333,6 +354,12 @@ void plugin_unload(const char *style, const char *name, LAMMPS *lmp)
     if ((lmp->force->improper_style != nullptr) && (lmp->force->improper_match(name) != nullptr))
       lmp->force->create_improper("none", 0);
 
+  } else if (pstyle == "kspace") {
+
+    auto kspace_map = lmp->force->kspace_map;
+    auto found = kspace_map->find(name);
+    if (found != kspace_map->end()) kspace_map->erase(name);
+
   } else if (pstyle == "compute") {
 
     auto compute_map = lmp->modify->compute_map;
@@ -341,7 +368,7 @@ void plugin_unload(const char *style, const char *name, LAMMPS *lmp)
 
     // must delete all compute instances using this compute style
 
-    for (auto icompute : lmp->modify->get_compute_by_style(name))
+    for (auto &icompute : lmp->modify->get_compute_by_style(name))
       lmp->modify->delete_compute(icompute->id);
 
   } else if (pstyle == "fix") {
@@ -352,7 +379,7 @@ void plugin_unload(const char *style, const char *name, LAMMPS *lmp)
 
     // must delete all fix instances using this fix style
 
-    for (auto ifix : lmp->modify->get_fix_by_style(name)) lmp->modify->delete_fix(ifix->id);
+    for (auto &ifix : lmp->modify->get_fix_by_style(name)) lmp->modify->delete_fix(ifix->id);
 
   } else if (pstyle == "region") {
 
@@ -360,8 +387,8 @@ void plugin_unload(const char *style, const char *name, LAMMPS *lmp)
     auto found = region_map->find(name);
     if (found != region_map->end()) region_map->erase(name);
 
-    for (auto iregion : lmp->domain->get_region_by_style(name))
-      lmp->domain->delete_region(iregion->id);
+    for (auto &iregion : lmp->domain->get_region_by_style(name))
+      lmp->domain->delete_region(iregion);
 
   } else if (pstyle == "command") {
 
@@ -383,10 +410,12 @@ void plugin_unload(const char *style, const char *name, LAMMPS *lmp)
 
 void plugin_clear(LAMMPS *lmp)
 {
+  verbose = false;
   while (pluginlist.size() > 0) {
     auto p = pluginlist.begin();
     plugin_unload(p->style, p->name, lmp);
   }
+  verbose = true;
 }
 
 /* --------------------------------------------------------------------
@@ -419,7 +448,7 @@ int plugin_get_num_plugins()
 int plugin_find(const char *style, const char *name)
 {
   int i = 0;
-  for (auto entry : pluginlist) {
+  for (const auto &entry : pluginlist) {
     if ((strcmp(style, entry.style) == 0) && (strcmp(name, entry.name) == 0)) return i;
     ++i;
   }

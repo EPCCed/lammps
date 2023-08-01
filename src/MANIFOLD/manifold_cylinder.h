@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -26,13 +26,12 @@ namespace user_manifold {
    public:
     enum { NPARAMS = 1 };    // Number of parameters.
     manifold_cylinder(LAMMPS *lmp, int, char **);
-    virtual ~manifold_cylinder() {}
-    virtual double g(const double *x);
-    virtual void n(const double *x, double *n);
+    double g(const double *x) override;
+    void n(const double *x, double *n) override;
     static const char *type() { return "cylinder"; }
-    virtual const char *id() { return type(); }
+    const char *id() override { return type(); }
     static int expected_argc() { return NPARAMS; }
-    virtual int nparams() { return NPARAMS; }
+    int nparams() override { return NPARAMS; }
   };
 }    // namespace user_manifold
 

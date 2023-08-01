@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -36,13 +36,13 @@ using namespace LAMMPS_NS;
 using namespace MathConst;
 
 static const char cite_dihedral_tablecut[] =
-  "dihedral_style  table/cut  command:\n\n"
+  "dihedral_style table/cut command: doi:10.1021/acs.jctc.7b01229\n\n"
   "@Article{Salerno17,\n"
   " author =  {K. M. Salerno and N. Bernstein},\n"
   " title =   {Persistence Length, End-to-End Distance, and Structure of Coarse-Grained Polymers},\n"
-  " journal = {J.~Chem.~Theory Comput.},\n"
+  " journal = {J.~Chem.\\ Theory Comput.},\n"
   " year =    2018,\n"
-  " DOI = 10.1021/acs.jctc.7b01229"
+  " DOI = \"10.1021/acs.jctc.7b01229\"\n"
   "}\n\n";
 
 /* ---------------------------------------------------------------------- */
@@ -82,20 +82,14 @@ enum { //GSL status return codes.
   GSL_EBADLEN  = 19
 };
 
-
-
 // cyc_splintD(): Evaluate the deriviative of a cyclic spline at position x,
 //           with n control points at xa[], ya[], with parameters y2a[].
 //           The xa[] must be monotonically increasing and their
 //           range should not exceed period (ie xa[n-1] < xa[0] + period).
 //           x must lie in the range:  [(xa[n-1]-period), (xa[0]+period)]
 //           "period" is typically 2*PI.
-static double cyc_splintD(double const *xa,
-                          double const *ya,
-                          double const *y2a,
-                          int n,
-                          double period,
-                          double x)
+static double cyc_splintD(double const *xa, double const *ya, double const *y2a,
+                          int n, double period, double x)
 {
   int klo = -1;
   int khi = n; // (not n-1)
@@ -490,8 +484,7 @@ void DihedralTableCut::coeff(int narg, char **arg)
   if (tb->ninput < 2)
     error->all(FLERR,"Invalid dihedral table length: {}",arg[5]);
   else if ((tb->ninput == 2) && (tabstyle == SPLINE))
-    error->all(FLERR,"Invalid dihedral spline table length: {} "
-                                 "(Try linear)",arg[5]);
+    error->all(FLERR,"Invalid dihedral spline table length: {} (Try linear)",arg[5]);
 
   // check for monotonicity
   for (int i=0; i < tb->ninput-1; i++) {
@@ -509,12 +502,10 @@ void DihedralTableCut::coeff(int narg, char **arg)
   double phihi = tb->phifile[tb->ninput-1];
   if (tb->use_degrees) {
     if ((phihi - philo) >= 360)
-      error->all(FLERR,"Dihedral table angle range must be < 360 "
-                                   "degrees ({})",arg[5]);
+      error->all(FLERR,"Dihedral table angle range must be < 360 degrees ({})",arg[5]);
   } else {
     if ((phihi - philo) >= MY_2PI)
-      error->all(FLERR,"Dihedral table angle range must be < 2*PI "
-                                   "radians ({})",arg[5]);
+      error->all(FLERR,"Dihedral table angle range must be < 2*PI radians ({})",arg[5]);
   }
 
   // convert phi from degrees to radians
@@ -532,9 +523,9 @@ void DihedralTableCut::coeff(int narg, char **arg)
   // We also want the angles to be sorted in increasing order.
   // This messy code fixes these problems with the user's data:
   {
-    double *phifile_tmp = new double [tb->ninput];  //temporary arrays
-    double *ffile_tmp = new double [tb->ninput];  //used for sorting
-    double *efile_tmp = new double [tb->ninput];
+    auto phifile_tmp = new double[tb->ninput];  //temporary arrays
+    auto ffile_tmp = new double[tb->ninput];  //used for sorting
+    auto efile_tmp = new double[tb->ninput];
 
     // After re-imaging, does the range of angles cross the 0 or 2*PI boundary?
     // If so, find the discontinuity:
@@ -548,7 +539,7 @@ void DihedralTableCut::coeff(int narg, char **arg)
       ffile_tmp[i] = tb->ffile[i];
       if ((i>0) && (phifile_tmp[i] < phifile_tmp[i-1])) {
         //There should only be at most one discontinuity, because we have
-        //insured that the data was sorted before imaging, and because the
+        //ensured that the data was sorted before imaging, and because the
         //range of angle values does not exceed 2*PI.
         i_discontinuity = i;
       }

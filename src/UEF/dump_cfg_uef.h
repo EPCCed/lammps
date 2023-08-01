@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -29,8 +29,8 @@ namespace LAMMPS_NS {
 class DumpCFGUef : public DumpCFG {
  public:
   DumpCFGUef(LAMMPS *lmp, int narg, char **arg) : DumpCFG(lmp, narg, arg) {}
-  void init_style();
-  void write_header(bigint);
+  void init_style() override;
+  void write_header(bigint) override;
 
  protected:
   int ifix_uef;
@@ -40,11 +40,3 @@ class DumpCFGUef : public DumpCFG {
 
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-E: Can't use dump cfg/uef without defining a fix nvt/npt/uef
-
-Self-explanatory.
-
-*/

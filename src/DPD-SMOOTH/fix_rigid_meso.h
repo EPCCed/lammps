@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,13 +27,13 @@ namespace LAMMPS_NS {
 class FixRigidMeso : public FixRigid {
  public:
   FixRigidMeso(class LAMMPS *, int, char **);
-  ~FixRigidMeso();
-  int setmask();
-  void setup(int);
-  void initial_integrate(int);
-  void final_integrate();
-  double compute_scalar() { return 0.0; }
-  double compute_array(int, int);
+  ~FixRigidMeso() override;
+  int setmask() override;
+  void setup(int) override;
+  void initial_integrate(int) override;
+  void final_integrate() override;
+  double compute_scalar() override { return 0.0; }
+  double compute_array(int, int) override;
 
  protected:
   void set_xv();
@@ -45,25 +45,3 @@ class FixRigidMeso : public FixRigid {
 
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-E: fix rigid/meso command requires atom_style with both energy and density
-
-You should use atom_style meso with this fix
-
-E: Can not use thermostat with fix rigid/meso
-
-Self-explanatory
-
-E: Can not use barostat with fix rigid/meso
-
-Self-explanatory
-
-E: Illegal ... command
-
-Self-explanatory.  Check the input script syntax and compare to the
-documentation for the command.  You can use -echo screen as a
-command-line option when running LAMMPS to see the offending line.
-
-*/

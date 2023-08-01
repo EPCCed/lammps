@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -45,7 +45,6 @@
 #include "memory.h"
 #include "modify.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "neighbor.h"
 #include "npair.h"
 #include "npair_half_bin_newton_ssa.h"
@@ -64,21 +63,22 @@ using namespace random_external_state;
 #define EPSILON_SQUARED ((EPSILON) * (EPSILON))
 
 static const char cite_fix_shardlow[] =
-  "fix shardlow command:\n\n"
+  "fix shardlow command: doi:10.1016/j.cpc.2014.03.029, doi:10.1063/1.3660209\n\n"
   "@Article{Larentzos14,\n"
-  " author = {J. P. Larentzos, J. K. Brennan, J. D. Moore, M. Lisal, W. D. Mattson},\n"
-  " title = {Parallel implementation of isothermal and isoenergetic Dissipative Particle Dynamics using Shardlow-like splitting algorithms},\n"
-  " journal = {Computer Physics Communications},\n"
+  " author = {J. P. Larentzos and J. K. Brennan and J. D. Moore and M. Lisal and W. D. Mattson},\n"
+  " title = {Parallel Implementation of Isothermal and Isoenergetic Dissipative Particle Dynamics Using {S}hardlow-Like Splitting Algorithms},\n"
+  " journal = {Comput.\\ Phys.\\ Commun.},\n"
   " year =    2014,\n"
   " volume =  185\n"
   " pages =   {1987--1998}\n"
   "}\n\n"
   "@Article{Lisal11,\n"
-  " author = {M. Lisal, J. K. Brennan, J. Bonet Avalos},\n"
-  " title = {Dissipative particle dynamics at isothermal, isobaric, isoenergetic, and isoenthalpic conditions using Shardlow-like splitting algorithms},\n"
-  " journal = {Journal of Chemical Physics},\n"
+  " author = {M. Lisal and  J. K. Brennan and J. Bonet Avalos},\n"
+  " title = {Dissipative Particle Dynamics at Isothermal, Isobaric, Isoenergetic, and Isoenthalpic Conditions Using {S}hardlow-Like Splitting Algorithms},\n"
+  " journal = {J.~Chem.\\ Phys.},\n"
   " year =    2011,\n"
-  " volume =  135\n"
+  " volume =  135,\n"
+  " number =  20,\n"
   " pages =   {204105}\n"
   "}\n\n";
 
@@ -94,10 +94,10 @@ FixShardlow::FixShardlow(LAMMPS *lmp, int narg, char **arg) :
 
   pairDPD = nullptr;
   pairDPDE = nullptr;
-  pairDPD = (PairDPDfdt *) force->pair_match("dpd/fdt",1);
-  pairDPDE = (PairDPDfdtEnergy *) force->pair_match("dpd/fdt/energy",1);
+  pairDPD = dynamic_cast<PairDPDfdt *>(force->pair_match("dpd/fdt",1));
+  pairDPDE = dynamic_cast<PairDPDfdtEnergy *>(force->pair_match("dpd/fdt/energy",1));
   if (pairDPDE == nullptr)
-    pairDPDE = (PairDPDfdtEnergy *) force->pair_match("dpd/fdt/energy/kk",1);
+    pairDPDE = dynamic_cast<PairDPDfdtEnergy *>(force->pair_match("dpd/fdt/energy/kk",1));
 
   maxRNG = 0;
   if (pairDPDE) {
@@ -134,12 +134,8 @@ int FixShardlow::setmask()
 
 void FixShardlow::init()
 {
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->pair   = 0;
-  neighbor->requests[irequest]->fix    = 1;
-  neighbor->requests[irequest]->ghost  = 1;
-  neighbor->requests[irequest]->ssa    = 1;
-  neighbor->requests[irequest]->newton = 1; // SSA requires newton on
+  // SSA requires newton on
+  neighbor->add_request(this, NeighConst::REQ_GHOST|NeighConst::REQ_NEWTON_ON|NeighConst::REQ_SSA);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -553,7 +549,7 @@ void FixShardlow::initial_integrate(int /*vflag*/)
                     "Either reduce the number of processors requested, or change the cutoff/skin: "
                     "rcut= {} bbx= {} bby= {} bbz= {}\n", rcut, bbx, bby, bbz);
 
-  NPairHalfBinNewtonSSA *np_ssa = dynamic_cast<NPairHalfBinNewtonSSA*>(list->np);
+  auto np_ssa = dynamic_cast<NPairHalfBinNewtonSSA*>(list->np);
   if (!np_ssa) error->one(FLERR, "NPair wasn't a NPairHalfBinNewtonSSA object");
   int ssa_phaseCt = np_ssa->ssa_phaseCt;
   int *ssa_phaseLen = np_ssa->ssa_phaseLen;
@@ -607,7 +603,7 @@ void FixShardlow::initial_integrate(int /*vflag*/)
     int workItemCt = ssa_gphaseLen[workPhase];
 
     // Communicate the updated velocities to all nodes
-    comm->forward_comm_fix(this);
+    comm->forward_comm(this);
 
     if (useDPDE) {
       // Zero out the ghosts' uCond & uMech to be used as delta accumulators
@@ -623,7 +619,7 @@ void FixShardlow::initial_integrate(int /*vflag*/)
     }
 
     // Communicate the ghost deltas to the atom owners
-    comm->reverse_comm_fix(this);
+    comm->reverse_comm(this);
 
   }  //End Loop over all directions For airnum = Top, Top-Right, Right, Bottom-Right, Back
 

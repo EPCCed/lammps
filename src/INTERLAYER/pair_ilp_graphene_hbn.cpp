@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -11,13 +11,11 @@
 ------------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------
-   Contributing author: Wengen Ouyang (Tel Aviv University)
+   Contributing author: Wengen Ouyang (Wuhan University)
    e-mail: w.g.ouyang at gmail dot com
 
    This is a full version of the potential described in
-   [Maaravi et al, J. Phys. Chem. C 121, 22826-22835 (2017)]
-   The definition of normals are the same as that in
-   [Kolmogorov & Crespi, Phys. Rev. B 71, 235415 (2005)]
+   [Ouyang et al., J. Chem. Theory Comput. 16(1), 666-676 (2020)]
 ------------------------------------------------------------------------- */
 
 #include "pair_ilp_graphene_hbn.h"
@@ -31,35 +29,40 @@
 #include "memory.h"
 #include "my_page.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "neighbor.h"
 #include "potential_file_reader.h"
-#include "tokenizer.h"
 
 #include <cmath>
 #include <cstring>
+#include <map>
 
 using namespace LAMMPS_NS;
 using namespace InterLayer;
 
-#define MAXLINE 1024
 #define DELTA 4
 #define PGDELTA 1
 
 static const char cite_ilp[] =
     "ilp/graphene/hbn potential doi:10.1021/acs.nanolett.8b02848\n"
     "@Article{Ouyang2018\n"
-    " author = {W. Ouyang, D. Mandelli, M. Urbakh, and O. Hod},\n"
+    " author = {W. Ouyang and D. Mandelli and M. Urbakh and O. Hod},\n"
     " title = {Nanoserpents: Graphene Nanoribbon Motion on Two-Dimensional Hexagonal Materials},\n"
     " journal = {Nano Letters},\n"
     " volume =  18,\n"
-    " pages =   {6009}\n"
+    " pages =   6009,\n"
     " year =    2018,\n"
     "}\n\n";
 
+// to indicate which potential style was used in outputs
+static std::map<int, std::string> variant_map = {
+    {PairILPGrapheneHBN::ILP_GrhBN, "ilp/graphene/hbn"},
+    {PairILPGrapheneHBN::ILP_TMD, "ilp/tmd"},
+    {PairILPGrapheneHBN::AIP_WATER_2DM, "aip/water/2dm"},
+    {PairILPGrapheneHBN::SAIP_METAL, "saip/metal"}};
+
 /* ---------------------------------------------------------------------- */
 
-PairILPGrapheneHBN::PairILPGrapheneHBN(LAMMPS *lmp) : Pair(lmp)
+PairILPGrapheneHBN::PairILPGrapheneHBN(LAMMPS *lmp) : Pair(lmp), variant(ILP_GrhBN)
 {
   restartinfo = 0;
   one_coeff = 1;
@@ -87,6 +90,14 @@ PairILPGrapheneHBN::PairILPGrapheneHBN(LAMMPS *lmp) : Pair(lmp)
   dnormal = nullptr;
   dnormdri = nullptr;
 
+  // for ilp/tmd
+  dnn = nullptr;
+  vect = nullptr;
+  pvet = nullptr;
+  dpvet1 = nullptr;
+  dpvet2 = nullptr;
+  dNave = nullptr;
+
   // always compute energy offset
   offset_flag = 1;
 
@@ -105,6 +116,13 @@ PairILPGrapheneHBN::~PairILPGrapheneHBN()
   memory->destroy(normal);
   memory->destroy(dnormal);
   memory->destroy(dnormdri);
+  // adds for ilp/tmd
+  memory->destroy(dnn);
+  memory->destroy(vect);
+  memory->destroy(pvet);
+  memory->destroy(dpvet1);
+  memory->destroy(dpvet2);
+  memory->destroy(dNave);
 
   if (allocated) {
     memory->destroy(setflag);
@@ -195,7 +213,7 @@ void PairILPGrapheneHBN::read_file(char *filename)
   // open file on proc 0
 
   if (comm->me == 0) {
-    PotentialFileReader reader(lmp, filename, "ilp/graphene/hbn", unit_convert_flag);
+    PotentialFileReader reader(lmp, filename, variant_map[variant], unit_convert_flag);
     char *line;
 
     // transparently convert units for supported conversions
@@ -293,11 +311,15 @@ void PairILPGrapheneHBN::read_file(char *filename)
       int n = -1;
       for (int m = 0; m < nparams; m++) {
         if (i == params[m].ielement && j == params[m].jelement) {
-          if (n >= 0) error->all(FLERR, "ILP potential file has duplicate entry");
+          if (n >= 0)
+            error->all(FLERR, "{} potential file {} has a duplicate entry for: {} {}",
+                       variant_map[variant], filename, elements[i], elements[j]);
           n = m;
         }
       }
-      if (n < 0) error->all(FLERR, "Potential file is missing an entry");
+      if (n < 0)
+        error->all(FLERR, "{} potential file {} is missing an entry for: {} {}",
+                   variant_map[variant], filename, elements[i], elements[j]);
       elem2param[i][j] = n;
       cutILPsq[i][j] = params[n].rcut * params[n].rcut;
     }
@@ -311,16 +333,13 @@ void PairILPGrapheneHBN::read_file(char *filename)
 void PairILPGrapheneHBN::init_style()
 {
   if (force->newton_pair == 0)
-    error->all(FLERR, "Pair style ilp/graphene/hbn requires newton pair on");
+    error->all(FLERR, "Pair style {} requires newton pair on", variant_map[variant]);
   if (!atom->molecule_flag)
-    error->all(FLERR, "Pair style ilp/graphene/hbn requires atom attribute molecule");
+    error->all(FLERR, "Pair style {} requires atom attribute molecule", variant_map[variant]);
 
   // need a full neighbor list, including neighbors of ghosts
 
-  int irequest = neighbor->request(this, instance_me);
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
-  neighbor->requests[irequest]->ghost = 1;
+  neighbor->add_request(this, NeighConst::REQ_FULL | NeighConst::REQ_GHOST);
 
   // local ILP neighbor list
   // create pages if first time or if neighbor pgsize/oneatom has changed
@@ -612,7 +631,7 @@ void PairILPGrapheneHBN::calc_FRep(int eflag, int /* vflag */)
 
 void PairILPGrapheneHBN::ILP_neigh()
 {
-  int i, j, ii, jj, n, allnum, jnum, itype, jtype;
+  int i, j, ii, jj, n, inum, jnum, itype, jtype;
   double xtmp, ytmp, ztmp, delx, dely, delz, rsq;
   int *ilist, *jlist, *numneigh, **firstneigh;
   int *neighptr;
@@ -629,7 +648,7 @@ void PairILPGrapheneHBN::ILP_neigh()
         (int **) memory->smalloc(maxlocal * sizeof(int *), "ILPGrapheneHBN:firstneigh");
   }
 
-  allnum = list->inum + list->gnum;
+  inum = list->inum;
   ilist = list->ilist;
   numneigh = list->numneigh;
   firstneigh = list->firstneigh;
@@ -639,7 +658,7 @@ void PairILPGrapheneHBN::ILP_neigh()
 
   ipage->reset();
 
-  for (ii = 0; ii < allnum; ii++) {
+  for (ii = 0; ii < inum; ii++) {
     i = ilist[ii];
 
     n = 0;

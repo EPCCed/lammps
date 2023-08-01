@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -20,18 +20,19 @@
 
 #include "pair_buck6d_coul_gauss_long.h"
 
-#include <cmath>
-#include <cstring>
 #include "atom.h"
 #include "comm.h"
+#include "error.h"
 #include "force.h"
 #include "kspace.h"
-#include "neighbor.h"
-#include "neigh_list.h"
 #include "memory.h"
-#include "error.h"
+#include "neigh_list.h"
+#include "neighbor.h"
 
 #include "math_special.h"
+
+#include <cmath>
+#include <cstring>
 
 using namespace LAMMPS_NS;
 
@@ -330,13 +331,13 @@ void PairBuck6dCoulGaussLong::init_style()
   if (!atom->q_flag)
     error->all(FLERR,"Pair style buck6d/coul/dsf requires atom attribute q");
 
-  // insure use of KSpace long-range solver, set g_ewald
+  // ensure use of KSpace long-range solver, set g_ewald
 
   if (force->kspace == nullptr)
     error->all(FLERR,"Pair style requires a KSpace style");
   g_ewald = force->kspace->g_ewald;
 
-  neighbor->request(this,instance_me);
+  neighbor->add_request(this);
 
   cut_coulsq = cut_coul * cut_coul;
 

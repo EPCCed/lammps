@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -98,8 +98,8 @@ void PairLJCutTholeLongOMP::compute(int eflag, int vflag)
 template <int EVFLAG, int EFLAG, int NEWTON_PAIR>
 void PairLJCutTholeLongOMP::eval(int iifrom, int iito, ThrData * const thr)
 {
-  const dbl3_t * _noalias const x = (dbl3_t *) atom->x[0];
-  dbl3_t * _noalias const f = (dbl3_t *) thr->get_f()[0];
+  const auto * _noalias const x = (dbl3_t *) atom->x[0];
+  auto * _noalias const f = (dbl3_t *) thr->get_f()[0];
   const double * const q = atom->q;
   const int * _noalias const type = atom->type;
   const double * _noalias const special_lj = force->special_lj;

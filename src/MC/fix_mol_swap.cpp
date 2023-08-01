@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -31,6 +31,9 @@
 #include "pair.h"
 #include "random_park.h"
 #include "update.h"
+
+#include <cmath>
+#include <cstring>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -136,7 +139,7 @@ void FixMolSwap::init()
 {
   // c_pe = compute used to calculate before/after potential energy
 
-  char *id_pe = (char *) "thermo_pe";
+  auto id_pe = (char *) "thermo_pe";
   int ipe = modify->find_compute(id_pe);
   c_pe = modify->compute[ipe];
 
@@ -235,7 +238,7 @@ void FixMolSwap::pre_exchange()
 
   if (next_reneighbor != update->ntimestep) return;
 
-  // insure current system is ready to compute energy
+  // ensure current system is ready to compute energy
 
   if (domain->triclinic) domain->x2lamda(atom->nlocal);
   domain->pbc();
@@ -322,7 +325,7 @@ int FixMolSwap::attempt_swap()
     if (modify->n_pre_neighbor) modify->pre_neighbor();
     neighbor->build(1);
   } else {
-    comm->forward_comm_fix(this);
+    comm->forward_comm(this);
   }
 
   // post-swap energy
@@ -388,7 +391,7 @@ double FixMolSwap::energy_full()
 
   if (force->kspace) force->kspace->compute(eflag,vflag);
 
-  if (modify->n_post_force) modify->post_force(vflag);
+  if (modify->n_post_force_any) modify->post_force(vflag);
 
   update->eflag_global = update->ntimestep;
   double total_energy = c_pe->compute_scalar();
@@ -485,7 +488,7 @@ void FixMolSwap::write_restart(FILE *fp)
 void FixMolSwap::restart(char *buf)
 {
   int n = 0;
-  double *list = (double *) buf;
+  auto list = (double *) buf;
 
   seed = static_cast<int> (list[n++]);
   random->reset(seed);

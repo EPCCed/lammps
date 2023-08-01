@@ -1,8 +1,7 @@
-// clang-format off
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -18,34 +17,50 @@
 
 #include "pair_list.h"
 
-#include <cstring>
-#include <cmath>
 #include "atom.h"
 #include "comm.h"
-#include "force.h"
-#include "memory.h"
 #include "error.h"
+#include "force.h"
+#include "math_special.h"
+#include "memory.h"
+#include "text_file_reader.h"
 
+#include <cmath>
+#include <cstring>
+#include <exception>
+#include <map>
 
 using namespace LAMMPS_NS;
+using MathSpecial::square;
 
-static const char * const stylename[] = {
-  "none", "harmonic", "morse", "lj126", nullptr
+enum { NONE = 0, HARM, MORSE, LJ126, QUARTIC };
+
+// clang-format off
+static std::map<std::string, int> stylename = {
+    {"none",     NONE},
+    {"harmonic", HARM},
+    {"morse",    MORSE},
+    {"lj126",    LJ126},
+    {"quartic",  QUARTIC}
 };
+// clang-format on
 
 // fast power function for integer exponent > 0
-static double mypow(double x, int n) {
+static double mypow(double x, int n)
+{
   double yy;
 
   if (x == 0.0) return 0.0;
 
-  for (yy = 1.0; n != 0; n >>= 1, x *=x)
+  for (yy = 1.0; n != 0; n >>= 1, x *= x)
     if (n & 1) yy *= x;
 
   return yy;
 }
 
-typedef struct { double x,y,z; } dbl3_t;
+typedef struct {
+  double x, y, z;
+} dbl3_t;
 
 /* ---------------------------------------------------------------------- */
 
@@ -55,7 +70,6 @@ PairList::PairList(LAMMPS *lmp) : Pair(lmp)
   restartinfo = 0;
   respa_enable = 0;
   cut_global = 0.0;
-  style = nullptr;
   params = nullptr;
   check_flag = 1;
 }
@@ -66,7 +80,6 @@ PairList::~PairList()
 {
   memory->destroy(setflag);
   memory->destroy(cutsq);
-  memory->destroy(style);
   memory->destroy(params);
 }
 
@@ -78,19 +91,42 @@ PairList::~PairList()
 
 void PairList::compute(int eflag, int vflag)
 {
-  ev_init(eflag,vflag);
+  ev_init(eflag, vflag);
 
+  // get maximum allowed tag.
+
+  bigint maxtag_one, maxtag;
+  maxtag_one = maxtag = 0;
   const int nlocal = atom->nlocal;
-  const int newton_pair = force->newton_pair;
-  const dbl3_t * _noalias const x = (dbl3_t *) atom->x[0];
-  dbl3_t * _noalias const f = (dbl3_t *) atom->f[0];
+  const tagint *_noalias const tag = atom->tag;
+  for (int i = 0; i < nlocal; ++i) maxtag_one = MAX(maxtag_one, tag[i]);
+  MPI_Allreduce(&maxtag_one, &maxtag, 1, MPI_LMP_TAGINT, MPI_MAX, world);
 
-  double fpair,epair;
-  int i,j;
+  const int newton_pair = force->newton_pair;
+  const dbl3_t *_noalias const x = (dbl3_t *) atom->x[0];
+  dbl3_t *_noalias const f = (dbl3_t *) atom->f[0];    // NOLINT
+
+  double fpair, epair;
+  int i, j;
 
   int pc = 0;
-  for (int n=0; n < npairs; ++n) {
-    const list_parm_t &par = params[n];
+  for (int n = 0; n < npairs; ++n) {
+    const list_param &par = params[n];
+
+    // can only use valid tags or else atom->map() below will segfault.
+    if ((par.id1 < 1) || (par.id1 > maxtag)) {
+      if (check_flag)
+        error->all(FLERR, "Invalid pair list atom ID {}", par.id1);
+      else
+        continue;
+    }
+    if ((par.id2 < 1) || (par.id2 > maxtag)) {
+      if (check_flag)
+        error->all(FLERR, "Invalid pair list atom ID {}", par.id2);
+      else
+        continue;
+    }
+
     i = atom->map(par.id1);
     j = atom->map(par.id2);
 
@@ -104,14 +140,14 @@ void PairList::compute(int eflag, int vflag)
     // if id1 is a ghost, we skip if the sum of both ids is even.
     // if id2 is a ghost, we skip if the sum of both ids is odd.
     if (newton_pair) {
-      if ((i >= nlocal) && ((par.id1+par.id2) & 1) == 0) continue;
-      if ((j >= nlocal) && ((par.id1+par.id2) & 1) == 1) continue;
+      if ((i >= nlocal) && ((par.id1 + par.id2) & 1) == 0) continue;
+      if ((j >= nlocal) && ((par.id1 + par.id2) & 1) == 1) continue;
     }
 
     const double dx = x[i].x - x[j].x;
     const double dy = x[i].y - x[j].y;
     const double dz = x[i].z - x[j].z;
-    const double rsq = dx*dx + dy*dy + dz*dz;
+    const double rsq = dx * dx + dy * dy + dz * dz;
 
     fpair = epair = 0.0;
     if (check_flag) {
@@ -120,61 +156,68 @@ void PairList::compute(int eflag, int vflag)
     }
 
     if (rsq < par.cutsq) {
-      const double r2inv = 1.0/rsq;
+      const double r2inv = 1.0 / rsq;
 
-      if (style[n] == HARM) {
+      if (par.style == HARM) {
         const double r = sqrt(rsq);
-        const double dr = par.parm.harm.r0 - r;
-        fpair = 2.0*par.parm.harm.k*dr/r;
+        const double dr = par.param.harm.r0 - r;
+        fpair = 2.0 * par.param.harm.k * dr / r;
 
-        if (eflag_either)
-          epair = par.parm.harm.k*dr*dr - par.offset;
+        if (eflag_either) epair = par.param.harm.k * dr * dr - par.offset;
 
-      } else if (style[n] == MORSE) {
+      } else if (par.style == MORSE) {
 
         const double r = sqrt(rsq);
-        const double dr = par.parm.morse.r0 - r;
-        const double dexp = exp(par.parm.morse.alpha * dr);
-        fpair = 2.0*par.parm.morse.d0*par.parm.morse.alpha
-          * (dexp*dexp - dexp) / r;
+        const double dr = r - par.param.morse.r0;
+        const double dexp = exp(-par.param.morse.alpha * dr);
+        fpair = 2.0 * par.param.morse.d0 * par.param.morse.alpha * (dexp * dexp - dexp) / r;
 
         if (eflag_either)
-          epair = par.parm.morse.d0 * (dexp*dexp - 2.0*dexp) - par.offset;
+          epair = par.param.morse.d0 * (dexp * dexp - 2.0 * dexp + 1.0) - par.offset;
 
-      } else if (style[n] == LJ126) {
+      } else if (par.style == LJ126) {
 
-        const double r6inv = r2inv*r2inv*r2inv;
-        const double sig6  = mypow(par.parm.lj126.sigma,6);
-        fpair =  24.0*par.parm.lj126.epsilon*r6inv
-          * (2.0*sig6*sig6*r6inv - sig6) * r2inv;
+        const double r6inv = r2inv * r2inv * r2inv;
+        const double sig6 = mypow(par.param.lj126.sigma, 6);
+        fpair = 24.0 * par.param.lj126.epsilon * r6inv * (2.0 * sig6 * sig6 * r6inv - sig6) * r2inv;
 
         if (eflag_either)
-          epair = 4.0*par.parm.lj126.epsilon*r6inv
-            * (sig6*sig6*r6inv - sig6) - par.offset;
+          epair = 4.0 * par.param.lj126.epsilon * r6inv * (sig6 * sig6 * r6inv - sig6) - par.offset;
+
+      } else if (par.style == QUARTIC) {
+
+        const double r = sqrt(rsq);
+        double dr = r - par.param.quartic.r0;
+        double ra = dr - par.param.quartic.b1;
+        double rb = dr - par.param.quartic.b2;
+        double r2 = dr * dr;
+        fpair = -par.param.quartic.k / r * (r2 * (ra + rb) + 2.0 * dr * ra * rb);
+
+        if (eflag_either) epair = par.param.quartic.k * r2 * ra * rb;
       }
 
       if (newton_pair || i < nlocal) {
-        f[i].x += dx*fpair;
-        f[i].y += dy*fpair;
-        f[i].z += dz*fpair;
+        f[i].x += dx * fpair;
+        f[i].y += dy * fpair;
+        f[i].z += dz * fpair;
       }
 
       if (newton_pair || j < nlocal) {
-        f[j].x -= dx*fpair;
-        f[j].y -= dy*fpair;
-        f[j].z -= dz*fpair;
+        f[j].x -= dx * fpair;
+        f[j].y -= dy * fpair;
+        f[j].z -= dz * fpair;
       }
 
-      if (evflag) ev_tally(i,j,nlocal,newton_pair,epair,0.0,fpair,dx,dy,dz);
+      if (evflag) ev_tally(i, j, nlocal, newton_pair, epair, 0.0, fpair, dx, dy, dz);
     }
   }
   if (vflag_fdotr) virial_fdotr_compute();
 
   if (check_flag) {
     int tmp;
-    MPI_Allreduce(&pc,&tmp,1,MPI_INT,MPI_SUM,world);
-    if (tmp != 2*npairs)
-      error->all(FLERR,"Not all pairs processed in pair_style list");
+    MPI_Allreduce(&pc, &tmp, 1, MPI_INT, MPI_SUM, world);
+    if (tmp != 2 * npairs)
+      error->all(FLERR, "Not all pairs processed in pair_style list: {} vs {}", tmp, 2 * npairs);
   }
 }
 
@@ -185,14 +228,13 @@ void PairList::compute(int eflag, int vflag)
 void PairList::allocate()
 {
   allocated = 1;
-  int n = atom->ntypes;
+  int np1 = atom->ntypes + 1;
 
-  memory->create(setflag,n+1,n+1,"pair:setflag");
-  for (int i = 1; i <= n; i++)
-    for (int j = i; j <= n; j++)
-      setflag[i][j] = 0;
+  memory->create(setflag, np1, np1, "pair:setflag");
+  for (int i = 1; i < np1; i++)
+    for (int j = i; j < np1; j++) setflag[i][j] = 0;
 
-  memory->create(cutsq,n+1,n+1,"pair:cutsq");
+  memory->create(cutsq, np1, np1, "pair:cutsq");
 }
 
 /* ----------------------------------------------------------------------
@@ -201,163 +243,125 @@ void PairList::allocate()
 
 void PairList::settings(int narg, char **arg)
 {
-  if (narg < 2)
-    error->all(FLERR,"Illegal pair_style command");
+  if (narg < 2) utils::missing_cmd_args(FLERR, "pair_style list", error);
 
-  cut_global = utils::numeric(FLERR,arg[1],false,lmp);
-  if (narg > 2) {
-    if (strcmp(arg[2],"nocheck") == 0) check_flag = 0;
-    if (strcmp(arg[2],"check") == 0) check_flag = 1;
+  cut_global = utils::numeric(FLERR, arg[1], false, lmp);
+  int iarg = 2;
+  while (iarg < narg) {
+    if (strcmp(arg[iarg], "nocheck") == 0) {
+      check_flag = 0;
+      ++iarg;
+    } else if (strcmp(arg[2], "check") == 0) {
+      check_flag = 1;
+      ++iarg;
+    } else
+      error->all(FLERR, "Unknown pair style list keyword: {}", arg[iarg]);
   }
 
-  FILE *fp = utils::open_potential(arg[0],lmp,nullptr);
-  char line[1024];
-  if (fp == nullptr)
-    error->all(FLERR,"Cannot open pair list file");
+  std::vector<int> mystyles;
+  std::vector<list_param> myparams;
 
-  // count lines in file for upper limit of storage needed
-  int num = 1;
-  while (fgets(line,1024,fp)) ++num;
-  rewind(fp);
-  memory->create(style,num,"pair_list:style");
-  memory->create(params,num,"pair_list:params");
-
-  // now read and parse pair list file for real
-  npairs = 0;
-  char *ptr;
-  tagint id1, id2;
-  int nharm=0, nmorse=0, nlj126=0;
-
-  while (fgets(line,1024,fp)) {
-    ptr = strtok(line," \t\n\r\f");
-
-    // skip empty lines
-    if (!ptr) continue;
-
-    // skip comment lines starting with #
-    if (*ptr == '#') continue;
-
-    // get atom ids of pair
-    id1 = ATOTAGINT(ptr);
-    ptr = strtok(nullptr," \t\n\r\f");
-    if (!ptr)
-      error->all(FLERR,"Incorrectly formatted pair list file");
-    id2 = ATOTAGINT(ptr);
-
-    // get potential type
-    ptr = strtok(nullptr," \t\n\r\f");
-    if (!ptr)
-      error->all(FLERR,"Incorrectly formatted pair list file");
-
-    style[npairs] = NONE;
-    list_parm_t &par = params[npairs];
-    par.id1 = id1;
-    par.id2 = id2;
-
-    // harmonic potential
-    if (strcmp(ptr,stylename[HARM]) == 0) {
-      style[npairs] = HARM;
-
-      ptr = strtok(nullptr," \t\n\r\f");
-      if ((ptr == nullptr) || (*ptr == '#'))
-        error->all(FLERR,"Incorrectly formatted harmonic pair parameters");
-      par.parm.harm.k = utils::numeric(FLERR,ptr,false,lmp);
-
-      ptr = strtok(nullptr," \t\n\r\f");
-      if ((ptr == nullptr) || (*ptr == '#'))
-        error->all(FLERR,"Incorrectly formatted harmonic pair parameters");
-      par.parm.harm.r0 = utils::numeric(FLERR,ptr,false,lmp);
-
-      ++nharm;
-
-      // morse potential
-    } else if (strcmp(ptr,stylename[MORSE]) == 0) {
-      style[npairs] = MORSE;
-
-      ptr = strtok(nullptr," \t\n\r\f");
-      if (!ptr)
-        error->all(FLERR,"Incorrectly formatted morse pair parameters");
-      par.parm.morse.d0 = utils::numeric(FLERR,ptr,false,lmp);
-
-      ptr = strtok(nullptr," \t\n\r\f");
-      if (!ptr)
-        error->all(FLERR,"Incorrectly formatted morse pair parameters");
-      par.parm.morse.alpha = utils::numeric(FLERR,ptr,false,lmp);
-
-      ptr = strtok(nullptr," \t\n\r\f");
-      if (!ptr)
-        error->all(FLERR,"Incorrectly formatted morse pair parameters");
-      par.parm.morse.r0 = utils::numeric(FLERR,ptr,false,lmp);
-
-      ++nmorse;
-
-    } else if (strcmp(ptr,stylename[LJ126]) == 0) {
-      // 12-6 lj potential
-      style[npairs] = LJ126;
-
-      ptr = strtok(nullptr," \t\n\r\f");
-      if (!ptr)
-        error->all(FLERR,"Incorrectly formatted 12-6 LJ pair parameters");
-      par.parm.lj126.epsilon = utils::numeric(FLERR,ptr,false,lmp);
-
-      ptr = strtok(nullptr," \t\n\r\f");
-      if (!ptr)
-        error->all(FLERR,"Incorrectly formatted 12-6 LJ pair parameters");
-      par.parm.lj126.sigma = utils::numeric(FLERR,ptr,false,lmp);
-
-      ++nlj126;
-
-    } else {
-      error->all(FLERR,"Unknown pair list potential style");
-    }
-
-    // optional cutoff parameter. if not specified use global value
-    ptr = strtok(nullptr," \t\n\r\f");
-    if ((ptr != nullptr) && (*ptr != '#')) {
-      double cut = utils::numeric(FLERR,ptr,false,lmp);
-      par.cutsq = cut*cut;
-    } else {
-      par.cutsq = cut_global*cut_global;
-    }
-
-    // count complete entry
-    ++npairs;
-  }
-  fclose(fp);
-
-  // informative output
+  // read and parse potential file only on MPI rank 0.
   if (comm->me == 0) {
-    if (screen)
-      fprintf(screen,"Read %d (%d/%d/%d) interacting pairs from %s\n",
-              npairs, nharm, nmorse, nlj126, arg[0]);
-    if (logfile)
-      fprintf(logfile,"Read %d (%d/%d/%d) interacting pairs from %s\n",
-              npairs, nharm, nmorse, nlj126, arg[0]);
+    int nharm, nmorse, nlj126, nquartic, nskipped;
+    FILE *fp = utils::open_potential(arg[0], lmp, nullptr);
+    if (!fp)
+      error->one(FLERR, "Error opening pair list coeffs file {}: {}", arg[0], utils::getsyserror());
+    TextFileReader reader(fp, "pair list coeffs");
+    npairs = nharm = nmorse = nlj126 = nquartic = nskipped = 0;
+    char *line;
+
+    try {
+      while ((line = reader.next_line())) {
+        ValueTokenizer values(line);
+        list_param oneparam;
+        oneparam.offset = 0.0;
+        oneparam.id1 = values.next_tagint();
+        oneparam.id2 = values.next_tagint();
+        oneparam.style = stylename[values.next_string()];
+        ++npairs;
+
+        switch (oneparam.style) {
+
+          case HARM:
+            oneparam.param.harm.k = values.next_double();
+            oneparam.param.harm.r0 = values.next_double();
+            ++nharm;
+            break;
+
+          case MORSE:
+            oneparam.param.morse.d0 = values.next_double();
+            oneparam.param.morse.alpha = values.next_double();
+            oneparam.param.morse.r0 = values.next_double();
+            ++nmorse;
+            break;
+
+          case LJ126:
+            oneparam.param.lj126.epsilon = values.next_double();
+            oneparam.param.lj126.sigma = values.next_double();
+            ++nlj126;
+            break;
+
+          case QUARTIC:
+            oneparam.param.quartic.k = values.next_double();
+            oneparam.param.quartic.r0 = values.next_double();
+            oneparam.param.quartic.b1 = values.next_double();
+            oneparam.param.quartic.b2 = values.next_double();
+            ++nquartic;
+            break;
+
+          case NONE:    // fallthrough
+            error->warning(FLERR, "Skipping unrecognized pair list potential entry: {}",
+                           utils::trim(line));
+            ++nskipped;
+            break;
+        }
+        if (values.has_next())
+          oneparam.cutsq = square(values.next_double());
+        else
+          oneparam.cutsq = cut_global * cut_global;
+
+        myparams.push_back(oneparam);
+      }
+    } catch (std::exception &e) {
+      error->one(FLERR, "Error reading pair list coeffs file: {}\n{}", e.what(), line);
+    }
+    utils::logmesg(lmp,
+                   "Read {} ({}/{}/{}/{}) interacting pair lines from {}. "
+                   "{} skipped entries.\n",
+                   npairs, nharm, nmorse, nlj126, nquartic, arg[0], nskipped);
+
+    memory->create(params, npairs, "pair_list:params");
+    memcpy(params, myparams.data(), npairs * sizeof(list_param));
+    fclose(fp);
   }
+  MPI_Bcast(&npairs, 1, MPI_INT, 0, world);
+  if (comm->me != 0) memory->create(params, npairs, "pair_list:params");
+  MPI_Bcast(params, npairs * sizeof(list_param), MPI_BYTE, 0, world);
 }
 
 /* ----------------------------------------------------------------------
-   there are no coeffs to be set, but we need to update setflag and pretend
+   there are no coeffs to be set, but we need to update setflag and pretend there are
 ------------------------------------------------------------------------- */
 
 void PairList::coeff(int narg, char **arg)
 {
-  if (narg < 2) error->all(FLERR,"Incorrect args for pair coefficients");
+  if (narg < 2) utils::missing_cmd_args(FLERR, "pair_coeff list", error);
   if (!allocated) allocate();
 
-  int ilo,ihi,jlo,jhi;
-  utils::bounds(FLERR,arg[0],1,atom->ntypes,ilo,ihi,error);
-  utils::bounds(FLERR,arg[1],1,atom->ntypes,jlo,jhi,error);
+  int ilo, ihi, jlo, jhi;
+  utils::bounds(FLERR, arg[0], 1, atom->ntypes, ilo, ihi, error);
+  utils::bounds(FLERR, arg[1], 1, atom->ntypes, jlo, jhi, error);
 
   int count = 0;
   for (int i = ilo; i <= ihi; i++) {
-    for (int j = MAX(jlo,i); j <= jhi; j++) {
+    for (int j = MAX(jlo, i); j <= jhi; j++) {
       setflag[i][j] = 1;
       count++;
     }
   }
 
-  if (count == 0) error->all(FLERR,"Incorrect args for pair coefficients");
+  if (count == 0) error->all(FLERR, "Incorrect args for pair coefficients");
 }
 
 /* ----------------------------------------------------------------------
@@ -366,29 +370,31 @@ void PairList::coeff(int narg, char **arg)
 
 void PairList::init_style()
 {
-  if (atom->tag_enable == 0)
-    error->all(FLERR,"Pair style list requires atom IDs");
+  if (atom->tag_enable == 0) error->all(FLERR, "Pair style list requires atom IDs");
 
-  if (atom->map_style == Atom::MAP_NONE)
-    error->all(FLERR,"Pair style list requires an atom map");
+  if (atom->map_style == Atom::MAP_NONE) error->all(FLERR, "Pair style list requires an atom map");
 
   if (offset_flag) {
-    for (int n=0; n < npairs; ++n) {
-      list_parm_t &par = params[n];
+    for (int n = 0; n < npairs; ++n) {
+      list_param &par = params[n];
 
-      if (style[n] == HARM) {
-        const double dr = sqrt(par.cutsq) - par.parm.harm.r0;
-        par.offset = par.parm.harm.k*dr*dr;
+      if (par.style == HARM) {
+        const double dr = sqrt(par.cutsq) - par.param.harm.r0;
+        par.offset = par.param.harm.k * dr * dr;
 
-      } else if (style[n] == MORSE) {
-        const double dr = par.parm.morse.r0 - sqrt(par.cutsq);
-        const double dexp = exp(par.parm.morse.alpha * dr);
-        par.offset = par.parm.morse.d0 * (dexp*dexp - 2.0*dexp);
+      } else if (par.style == MORSE) {
+        const double dr = par.param.morse.r0 - sqrt(par.cutsq);
+        const double dexp = exp(par.param.morse.alpha * dr);
+        par.offset = par.param.morse.d0 * (dexp * dexp - 2.0 * dexp - 1.0);
 
-      } else if (style[n] == LJ126) {
-        const double r6inv = par.cutsq*par.cutsq*par.cutsq;
-        const double sig6  = mypow(par.parm.lj126.sigma,6);
-        par.offset = 4.0*par.parm.lj126.epsilon*r6inv * (sig6*sig6*r6inv - sig6);
+      } else if (par.style == LJ126) {
+        const double r6inv = par.cutsq * par.cutsq * par.cutsq;
+        const double sig6 = mypow(par.param.lj126.sigma, 6);
+        par.offset = 4.0 * par.param.lj126.epsilon * r6inv * (sig6 * sig6 * r6inv - sig6);
+
+      } else if (par.style == QUARTIC) {
+        // the offset is always 0 at rc
+        par.offset = 0.0;
       }
     }
   }
@@ -410,10 +416,10 @@ double PairList::init_one(int, int)
 
 double PairList::memory_usage()
 {
-  double bytes = (double)npairs * sizeof(int);
-  bytes += (double)npairs * sizeof(list_parm_t);
-  const int n = atom->ntypes+1;
-  bytes += (double)n*(n*sizeof(int) + sizeof(int *));
-  bytes += (double)n*(n*sizeof(double) + sizeof(double *));
+  double bytes = (double) npairs * sizeof(int);
+  bytes += (double) npairs * sizeof(list_param);
+  const int n = atom->ntypes + 1;
+  bytes += (double) n * (n * sizeof(int) + sizeof(int *));
+  bytes += (double) n * (n * sizeof(double) + sizeof(double *));
   return bytes;
 }

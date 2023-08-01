@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -22,6 +22,7 @@
 #include "domain.h"
 #include "error.h"
 #include "force.h"
+#include "intel_preprocess.h"
 #include "memory.h"
 #include "modify.h"
 #include "neighbor.h"
@@ -46,7 +47,7 @@ typedef struct { double x,y,z; } dbl3_t;
 FixNHIntel::FixNHIntel(LAMMPS *lmp, int narg, char **arg) :
   FixNH(lmp, narg, arg)
 {
-  _dtfm = 0;
+  _dtfm = nullptr;
   _nlocal3 = 0;
   _nlocal_max = 0;
 }
@@ -55,6 +56,7 @@ FixNHIntel::FixNHIntel(LAMMPS *lmp, int narg, char **arg) :
 
 FixNHIntel::~FixNHIntel()
 {
+  memory->destroy(_dtfm);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -76,7 +78,7 @@ void FixNHIntel::remap()
   double oldlo,oldhi;
   double expfac;
 
-  dbl3_t * _noalias const x = (dbl3_t *) atom->x[0];
+  auto * _noalias const x = (dbl3_t *) atom->x[0];
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
   double *h = domain->h;
@@ -106,6 +108,7 @@ void FixNHIntel::remap()
     #pragma vector aligned
     #endif
     for (int i = 0; i < nlocal; i++) {
+      i = IP_PRE_dword_index(i);
       const double d0 = x[i].x - b0;
       const double d1 = x[i].y - b1;
       const double d2 = x[i].z - b2;
@@ -124,6 +127,7 @@ void FixNHIntel::remap()
     #endif
     for (int i = 0; i < nlocal; i++) {
       if (mask[i] & dilate_group_bit) {
+        i = IP_PRE_dword_index(i);
         const double d0 = x[i].x - b0;
         const double d1 = x[i].y - b1;
         const double d2 = x[i].z - b2;
@@ -162,28 +166,28 @@ void FixNHIntel::remap()
   if (pstyle == TRICLINIC) {
 
     if (p_flag[4]) {
-      expfac = exp(dto8*omega_dot[0]);
+      expfac = std::exp(dto8*omega_dot[0]);
       h[4] *= expfac;
       h[4] += dto4*(omega_dot[5]*h[3]+omega_dot[4]*h[2]);
       h[4] *= expfac;
     }
 
     if (p_flag[3]) {
-      expfac = exp(dto4*omega_dot[1]);
+      expfac = std::exp(dto4*omega_dot[1]);
       h[3] *= expfac;
       h[3] += dto2*(omega_dot[3]*h[2]);
       h[3] *= expfac;
     }
 
     if (p_flag[5]) {
-      expfac = exp(dto4*omega_dot[0]);
+      expfac = std::exp(dto4*omega_dot[0]);
       h[5] *= expfac;
       h[5] += dto2*(omega_dot[5]*h[1]);
       h[5] *= expfac;
     }
 
     if (p_flag[4]) {
-      expfac = exp(dto8*omega_dot[0]);
+      expfac = std::exp(dto8*omega_dot[0]);
       h[4] *= expfac;
       h[4] += dto4*(omega_dot[5]*h[3]+omega_dot[4]*h[2]);
       h[4] *= expfac;
@@ -196,7 +200,7 @@ void FixNHIntel::remap()
   if (p_flag[0]) {
     oldlo = domain->boxlo[0];
     oldhi = domain->boxhi[0];
-    expfac = exp(dto*omega_dot[0]);
+    expfac = std::exp(dto*omega_dot[0]);
     domain->boxlo[0] = (oldlo-fixedpoint[0])*expfac + fixedpoint[0];
     domain->boxhi[0] = (oldhi-fixedpoint[0])*expfac + fixedpoint[0];
   }
@@ -204,7 +208,7 @@ void FixNHIntel::remap()
   if (p_flag[1]) {
     oldlo = domain->boxlo[1];
     oldhi = domain->boxhi[1];
-    expfac = exp(dto*omega_dot[1]);
+    expfac = std::exp(dto*omega_dot[1]);
     domain->boxlo[1] = (oldlo-fixedpoint[1])*expfac + fixedpoint[1];
     domain->boxhi[1] = (oldhi-fixedpoint[1])*expfac + fixedpoint[1];
     if (scalexy) h[5] *= expfac;
@@ -213,7 +217,7 @@ void FixNHIntel::remap()
   if (p_flag[2]) {
     oldlo = domain->boxlo[2];
     oldhi = domain->boxhi[2];
-    expfac = exp(dto*omega_dot[2]);
+    expfac = std::exp(dto*omega_dot[2]);
     domain->boxlo[2] = (oldlo-fixedpoint[2])*expfac + fixedpoint[2];
     domain->boxhi[2] = (oldhi-fixedpoint[2])*expfac + fixedpoint[2];
     if (scalexz) h[4] *= expfac;
@@ -225,28 +229,28 @@ void FixNHIntel::remap()
   if (pstyle == TRICLINIC) {
 
     if (p_flag[4]) {
-      expfac = exp(dto8*omega_dot[0]);
+      expfac = std::exp(dto8*omega_dot[0]);
       h[4] *= expfac;
       h[4] += dto4*(omega_dot[5]*h[3]+omega_dot[4]*h[2]);
       h[4] *= expfac;
     }
 
     if (p_flag[3]) {
-      expfac = exp(dto4*omega_dot[1]);
+      expfac = std::exp(dto4*omega_dot[1]);
       h[3] *= expfac;
       h[3] += dto2*(omega_dot[3]*h[2]);
       h[3] *= expfac;
     }
 
     if (p_flag[5]) {
-      expfac = exp(dto4*omega_dot[0]);
+      expfac = std::exp(dto4*omega_dot[0]);
       h[5] *= expfac;
       h[5] += dto2*(omega_dot[5]*h[1]);
       h[5] *= expfac;
     }
 
     if (p_flag[4]) {
-      expfac = exp(dto8*omega_dot[0]);
+      expfac = std::exp(dto8*omega_dot[0]);
       h[4] *= expfac;
       h[4] += dto4*(omega_dot[5]*h[3]+omega_dot[4]*h[2]);
       h[4] *= expfac;
@@ -293,6 +297,7 @@ void FixNHIntel::remap()
     #pragma vector aligned
     #endif
     for (int i = 0; i < nlocal; i++) {
+      i = IP_PRE_dword_index(i);
       x[i].x = h0*x[i].x + h5*x[i].y + h4*x[i].z + nb0;
       x[i].y = h1*x[i].y + h3*x[i].z + nb1;
       x[i].z = h2*x[i].z + nb2;
@@ -308,6 +313,7 @@ void FixNHIntel::remap()
     #endif
     for (int i = 0; i < nlocal; i++) {
       if (mask[i] & dilate_group_bit) {
+        i = IP_PRE_dword_index(i);
         x[i].x = h0*x[i].x + h5*x[i].y + h4*x[i].z + nb0;
         x[i].y = h1*x[i].y + h3*x[i].z + nb1;
         x[i].z = h2*x[i].z + nb2;
@@ -416,14 +422,14 @@ void FixNHIntel::nh_v_press()
     return;
   }
 
-  dbl3_t * _noalias const v = (dbl3_t *)atom->v[0];
+  auto * _noalias const v = (dbl3_t *)atom->v[0];
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
   if (igroup == atom->firstgroup) nlocal = atom->nfirst;
 
-  double f0 = exp(-dt4*(omega_dot[0]+mtk_term2));
-  double f1 = exp(-dt4*(omega_dot[1]+mtk_term2));
-  double f2 = exp(-dt4*(omega_dot[2]+mtk_term2));
+  double f0 = std::exp(-dt4*(omega_dot[0]+mtk_term2));
+  double f1 = std::exp(-dt4*(omega_dot[1]+mtk_term2));
+  double f2 = std::exp(-dt4*(omega_dot[2]+mtk_term2));
   f0 *= f0;
   f1 *= f1;
   f2 *= f2;
@@ -438,6 +444,7 @@ void FixNHIntel::nh_v_press()
     #pragma vector aligned
     #endif
     for (int i = 0; i < nlocal; i++) {
+      i = IP_PRE_dword_index(i);
       v[i].x *= f0;
       v[i].y *= f1;
       v[i].z *= f2;
@@ -453,6 +460,7 @@ void FixNHIntel::nh_v_press()
     #endif
     for (int i = 0; i < nlocal; i++) {
       if (mask[i] & groupbit) {
+        i = IP_PRE_dword_index(i);
         v[i].x *= f0;
         v[i].y *= f1;
         v[i].z *= f2;

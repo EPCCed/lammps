@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -25,7 +25,6 @@
 #include "memory.h"
 #include "modify.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "neighbor.h"
 #include "pair_dpd_fdt_energy.h"
 #include "update.h"
@@ -234,7 +233,7 @@ void FixRX::post_constructor()
   int nUniqueSpecies = 0;
   bool match;
 
-  char **tmpspecies = new char*[maxspecies];
+  auto tmpspecies = new char*[maxspecies];
   for (int jj=0; jj < maxspecies; jj++)
     tmpspecies[jj] = nullptr;
 
@@ -250,7 +249,7 @@ void FixRX::post_constructor()
 
   // Assign species names to tmpspecies array and determine the number of unique species
 
-  int n,nwords;
+  int n;
   char line[MAXLINE],*ptr;
   int eof = 0;
   char * word;
@@ -271,12 +270,10 @@ void FixRX::post_constructor()
     // strip comment, skip line if blank
 
     if ((ptr = strchr(line,'#'))) *ptr = '\0';
-    nwords = utils::count_words(line);
-    if (nwords == 0) continue;
+    if (utils::count_words(line) == 0) continue;
 
     // words = ptrs to all words in line
 
-    nwords = 0;
     word = strtok(line," \t\n\r\f");
     while (word != nullptr) {
       word = strtok(nullptr, " \t\n\r\f");
@@ -320,9 +317,9 @@ void FixRX::post_constructor()
   newcmd1 += " ghost yes";
   newcmd2 += " ghost yes";
 
-  fix_species = (FixPropertyAtom *) modify->add_fix(newcmd1);
+  fix_species = dynamic_cast<FixPropertyAtom *>(modify->add_fix(newcmd1));
   restartFlag = fix_species->restart_reset;
-  fix_species_old = (FixPropertyAtom *) modify->add_fix(newcmd2);
+  fix_species_old = dynamic_cast<FixPropertyAtom *>(modify->add_fix(newcmd2));
 
   if (nspecies==0) error->all(FLERR,"There are no rx species specified.");
 
@@ -391,7 +388,6 @@ void FixRX::initSparse()
   int mxprod = 0;
   int mxreac = 0;
   int mxspec = 0;
-  int nIntegral = 0;
   for (int i = 0; i < nreactions; ++i) {
     int nreac_i = 0, nprod_i = 0;
     std::string pstr, rstr;
@@ -431,7 +427,6 @@ void FixRX::initSparse()
     mxreac = std::max( mxreac, nreac_i );
     mxprod = std::max( mxprod, nprod_i );
     mxspec = std::max( mxspec, nreac_i + nprod_i );
-    if (allAreIntegral) nIntegral++;
   }
 
   if (comm->me == 0 && Verbosity > 1) {
@@ -521,9 +516,9 @@ void FixRX::initSparse()
   }
 
   if (comm->me == 0 && Verbosity > 1) {
-    for (int i = 1; i < nu_bin.size(); ++i)
-      if (nu_bin[i] > 0)
-        printf("nu_bin[%d] = %d\n", i, nu_bin[i]);
+    for (int i = 1; i < (int)nu_bin.size(); ++i)
+      if ((nu_bin[i] > 0) && screen)
+        fprintf(screen, "nu_bin[%d] = %d\n", i, nu_bin[i]);
 
     for (int i = 0; i < nreactions; ++i) {
       std::string pstr, rstr;
@@ -559,8 +554,8 @@ void FixRX::initSparse()
           pstr += atom->dvname[k];
         }
       }
-      if (comm->me == 0 && Verbosity > 1)
-        printf("rx%3d: %s %s %s\n", i, rstr.c_str(), /*reversible[i]*/ (false) ? "<=>" : "=", pstr.c_str());
+      if (comm->me == 0 && Verbosity > 1 && screen)
+        fprintf(screen,"rx%3d: %s %s %s\n", i, rstr.c_str(), /*reversible[i]*/ (false) ? "<=>" : "=", pstr.c_str());
     }
     // end for nreactions
   }
@@ -580,9 +575,9 @@ int FixRX::setmask()
 
 void FixRX::init()
 {
-  pairDPDE = (PairDPDfdtEnergy *) force->pair_match("dpd/fdt/energy",1);
+  pairDPDE = dynamic_cast<PairDPDfdtEnergy *>(force->pair_match("dpd/fdt/energy",1));
   if (pairDPDE == nullptr)
-    pairDPDE = (PairDPDfdtEnergy *) force->pair_match("dpd/fdt/energy/kk",1);
+    pairDPDE = dynamic_cast<PairDPDfdtEnergy *>(force->pair_match("dpd/fdt/energy/kk",1));
 
   if (pairDPDE == nullptr)
     error->all(FLERR,"Must use pair_style dpd/fdt/energy with fix rx");
@@ -595,9 +590,7 @@ void FixRX::init()
   // need a half neighbor list
   // built whenever re-neighboring occurs
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->pair = 0;
-  neighbor->requests[irequest]->fix = 1;
+  neighbor->add_request(this);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -628,7 +621,7 @@ void FixRX::setup_pre_force(int /*vflag*/)
     userData.kFor = new double[nreactions];
     userData.rxnRateLaw = new double[nreactions];
 
-    double *rwork = new double[8*nspecies];
+    auto rwork = new double[8*nspecies];
 
     if (localTempFlag) {
       int count = nlocal + (newton_pair ? nghost : 0);
@@ -657,7 +650,7 @@ void FixRX::setup_pre_force(int /*vflag*/)
       }
 
     // Communicate the updated momenta and velocities to all nodes
-    comm->forward_comm_fix(this);
+    comm->forward_comm(this);
     if (localTempFlag) delete [] dpdThetaLocal;
 
     delete [] userData.kFor;
@@ -689,22 +682,16 @@ void FixRX::pre_force(int /*vflag*/)
 
   // Zero the counters for the ODE solvers.
   int nSteps = 0;
-  int nIters = 0;
   int nFuncs = 0;
   int nFails = 0;
 
-  if (odeIntegrationFlag == ODE_LAMMPS_RKF45 && diagnosticFrequency == 1)
-  {
+  if (odeIntegrationFlag == ODE_LAMMPS_RKF45 && diagnosticFrequency == 1) {
     memory->create( diagnosticCounterPerODE[StepSum], nlocal, "FixRX::diagnosticCounterPerODE");
     memory->create( diagnosticCounterPerODE[FuncSum], nlocal, "FixRX::diagnosticCounterPerODE");
   }
 
-#if 0
-  #pragma omp parallel \
-     reduction(+: nSteps, nIters, nFuncs, nFails )
-#endif
   {
-    double *rwork = new double[8*nspecies];
+    auto rwork = new double[8*nspecies];
 
     UserRHSData userData;
     userData.kFor = new double[nreactions];
@@ -712,11 +699,8 @@ void FixRX::pre_force(int /*vflag*/)
 
     int ode_counter[4] = { 0 };
 
-    //#pragma omp for schedule(runtime)
-    for (int i = 0; i < nlocal; i++)
-    {
-      if (mask[i] & groupbit)
-      {
+    for (int i = 0; i < nlocal; i++) {
+      if (mask[i] & groupbit) {
         double theta;
         if (localTempFlag)
           theta = dpdThetaLocal[i];
@@ -735,7 +719,6 @@ void FixRX::pre_force(int /*vflag*/)
     }
 
     nSteps += ode_counter[0];
-    nIters += ode_counter[1];
     nFuncs += ode_counter[2];
     nFails += ode_counter[3];
 
@@ -748,7 +731,7 @@ void FixRX::pre_force(int /*vflag*/)
   TimerType timer_ODE = getTimeStamp();
 
   // Communicate the updated momenta and velocities to all nodes
-  comm->forward_comm_fix(this);
+  comm->forward_comm(this);
   if (localTempFlag) delete [] dpdThetaLocal;
 
   //TimerType timer_stop = getTimeStamp();
@@ -800,7 +783,7 @@ void FixRX::read_file(char *file)
 
   // Count the number of reactions from kinetics file
 
-  int n,nwords,ispecies;
+  int n,ispecies;
   char line[MAXLINE],*ptr;
   int eof = 0;
 
@@ -820,8 +803,7 @@ void FixRX::read_file(char *file)
     // strip comment, skip line if blank
 
     if ((ptr = strchr(line,'#'))) *ptr = '\0';
-    nwords = utils::count_words(line);
-    if (nwords == 0) continue;
+    if (utils::count_words(line) == 0) continue;
 
     nreactions++;
   }
@@ -874,12 +856,10 @@ void FixRX::read_file(char *file)
     // strip comment, skip line if blank
 
     if ((ptr = strchr(line,'#'))) *ptr = '\0';
-    nwords = utils::count_words(line);
-    if (nwords == 0) continue;
+    if (utils::count_words(line) == 0) continue;
 
     // words = ptrs to all words in line
 
-    nwords = 0;
     word = strtok(line," \t\n\r\f");
     while (word != nullptr) {
       tmpStoich = atof(word);
@@ -1122,8 +1102,7 @@ void FixRX::rkf45_step (const int neq, const double h, double y[], double y_out[
       y_out[k] = y[k] + r4;
    }
 
-   return;
-}
+   }
 
 int FixRX::rkf45_h0 (const int neq, const double t, const double /*t_stop*/,
                      const double hmin, const double hmax,
@@ -1435,8 +1414,6 @@ void FixRX::odeDiagnostics()
   // Reset the counters.
   for (int i = 0; i < numDiagnosticCounters; ++i)
     diagnosticCounter[i] = 0;
-
-  return;
 }
 
 void FixRX::rkf45(int id, double *rwork, void *v_param, int ode_counter[])
@@ -1588,7 +1565,7 @@ int FixRX::rhs(double t, const double *y, double *dydt, void *params)
 
 int FixRX::rhs_dense(double /*t*/, const double *y, double *dydt, void *params)
 {
-  UserRHSData *userData = (UserRHSData *) params;
+  auto userData = (UserRHSData *) params;
 
   double *rxnRateLaw = userData->rxnRateLaw;
   double *kFor       = userData->kFor;
@@ -1622,7 +1599,7 @@ int FixRX::rhs_dense(double /*t*/, const double *y, double *dydt, void *params)
 
 int FixRX::rhs_sparse(double /*t*/, const double *y, double *dydt, void *v_params) const
 {
-   UserRHSData *userData = (UserRHSData *) v_params;
+   auto userData = (UserRHSData *) v_params;
 
    const double VDPD = domain->xprd * domain->yprd * domain->zprd / atom->natoms;
 
@@ -1778,7 +1755,7 @@ void FixRX::computeLocalTemperature()
       }
     }
   }
-  if (newton_pair) comm->reverse_comm_fix(this);
+  if (newton_pair) comm->reverse_comm(this);
 
   // self-interaction for local temperature
   for (i = 0; i < nlocal; i++) {

@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,17 +27,17 @@ namespace LAMMPS_NS {
 class FixOrientECO : public Fix {
  public:
   FixOrientECO(class LAMMPS *, int, char **);
-  ~FixOrientECO();
-  int setmask();
-  void init();
-  void init_list(int, class NeighList *);
-  void setup(int);
-  void post_force(int);
-  void post_force_respa(int, int, int);
-  double compute_scalar();
-  int pack_forward_comm(int, int *, double *, int, int *);
-  void unpack_forward_comm(int, int, double *);
-  double memory_usage();
+  ~FixOrientECO() override;
+  int setmask() override;
+  void init() override;
+  void init_list(int, class NeighList *) override;
+  void setup(int) override;
+  void post_force(int) override;
+  void post_force_respa(int, int, int) override;
+  double compute_scalar() override;
+  int pack_forward_comm(int, int *, double *, int, int *) override;
+  void unpack_forward_comm(int, int, double *) override;
+  double memory_usage() override;
 
  private:
   struct Nbr;    // forward declaration. private struct for managing precomputed terms

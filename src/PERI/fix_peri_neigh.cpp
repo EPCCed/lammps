@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,7 +27,6 @@
 #include "comm.h"
 #include "neighbor.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "pair.h"
 #include "lattice.h"
 #include "memory.h"
@@ -122,12 +121,7 @@ void FixPeriNeigh::init()
 
   // need a full neighbor list once
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->pair = 0;
-  neighbor->requests[irequest]->fix  = 1;
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
-  neighbor->requests[irequest]->occasional = 1;
+  neighbor->add_request(this,NeighConst::REQ_FULL|NeighConst::REQ_OCCASIONAL);
 
   // compute PD scale factor, stored in Atom class, used by DumpCFG
 
@@ -372,7 +366,7 @@ void FixPeriNeigh::setup(int /*vflag*/)
 
   // communicate wvolume to ghosts
 
-  comm->forward_comm_fix(this);
+  comm->forward_comm(this);
 
   // bond statistics
 
@@ -566,7 +560,7 @@ void FixPeriNeigh::write_restart(FILE *fp)
 void FixPeriNeigh::restart(char *buf)
 {
   int n = 0;
-  double *list = (double *) buf;
+  auto list = (double *) buf;
 
   first = static_cast<int> (list[n++]);
   maxpartner = static_cast<int> (list[n++]);

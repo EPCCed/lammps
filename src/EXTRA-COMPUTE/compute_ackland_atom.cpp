@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,7 +27,6 @@
 #include "memory.h"
 #include "modify.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "neighbor.h"
 #include "pair.h"
 #include "update.h"
@@ -86,12 +85,7 @@ void ComputeAcklandAtom::init()
 {
   // need an occasional full neighbor list
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->pair = 0;
-  neighbor->requests[irequest]->compute = 1;
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
-  neighbor->requests[irequest]->occasional = 1;
+  neighbor->add_request(this, NeighConst::REQ_FULL | NeighConst::REQ_OCCASIONAL);
 
   int count = 0;
   for (int i = 0; i < modify->ncompute; i++)
@@ -352,8 +346,8 @@ void ComputeAcklandAtom::compute_peratom()
    2nd routine sorts auxiliary array at same time
 ------------------------------------------------------------------------- */
 
-#define SWAP(a,b)   tmp = a; a = b; b = tmp;
-#define ISWAP(a,b) itmp = a; a = b; b = itmp;
+#define SWAP(a,b)   tmp = a; (a) = b; (b) = tmp;
+#define ISWAP(a,b) itmp = a; (a) = b; (b) = itmp;
 
 void ComputeAcklandAtom::select(int k, int n, double *arr)
   {
@@ -363,7 +357,7 @@ void ComputeAcklandAtom::select(int k, int n, double *arr)
   arr--;
   l = 1;
   ir = n;
-  for (;;) {
+  while (true) {
     if (ir <= l+1) {
       if (ir == l+1 && arr[ir] < arr[l]) {
         SWAP(arr[l],arr[ir])
@@ -384,7 +378,7 @@ void ComputeAcklandAtom::select(int k, int n, double *arr)
       i = l+1;
       j = ir;
       a = arr[l+1];
-      for (;;) {
+      while (true) {
         do i++; while (arr[i] < a);
         do j--; while (arr[j] > a);
         if (j < i) break;
@@ -409,7 +403,7 @@ void ComputeAcklandAtom::select2(int k, int n, double *arr, int *iarr)
   iarr--;
   l = 1;
   ir = n;
-  for (;;) {
+  while (true) {
     if (ir <= l+1) {
       if (ir == l+1 && arr[ir] < arr[l]) {
         SWAP(arr[l],arr[ir])
@@ -436,7 +430,7 @@ void ComputeAcklandAtom::select2(int k, int n, double *arr, int *iarr)
       j = ir;
       a = arr[l+1];
       ia = iarr[l+1];
-      for (;;) {
+      while (true) {
         do i++; while (arr[i] < a);
         do j--; while (arr[j] > a);
         if (j < i) break;

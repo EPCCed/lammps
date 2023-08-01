@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/ Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS Development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -15,7 +15,10 @@
 #define TEST_MAIN_H
 
 #include "test_config.h"
+#include "lammps.h"
+#include "atom.h"
 #include <string>
+#include <vector>
 
 extern TestConfig test_config;
 extern bool print_stats;
@@ -34,10 +37,9 @@ void write_yaml_header(class YamlWriter *writer, TestConfig *cfg, const char *ve
         EXPECT_PRED_FORMAT2(::testing::DoubleLE, err, eps);   \
     } while (0);
 
-#if defined _WIN32
-static const char PATH_SEP = '\\';
-#else
-static const char PATH_SEP = '/';
-#endif
+void EXPECT_STRESS(const std::string & name, double * stress, const stress_t & expected_stress, double epsilon);
+void EXPECT_FORCES(const std::string & name, LAMMPS_NS::Atom * atom, const std::vector<coord_t> & f_ref, double epsilon);
+void EXPECT_POSITIONS(const std::string & name, LAMMPS_NS::Atom * atom, const std::vector<coord_t> & x_ref, double epsilon);
+void EXPECT_VELOCITIES(const std::string & name, LAMMPS_NS::Atom * atom, const std::vector<coord_t> & v_ref, double epsilon);
 
 #endif

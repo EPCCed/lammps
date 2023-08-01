@@ -14,7 +14,7 @@
 /* ----------------------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -89,7 +89,7 @@ void ComputeSMDTLSPHStrainRate::compute_peratom() {
         }
 
         int itmp = 0;
-        Matrix3d *D = (Matrix3d *) force->pair->extract("smd/tlsph/strain_rate_ptr", itmp);
+        auto D = (Matrix3d *) force->pair->extract("smd/tlsph/strain_rate_ptr", itmp);
         if (D == nullptr) {
                 error->all(FLERR,
                                 "compute smd/tlsph_strain_rate could not access strain rate. Are the matching pair styles present?");

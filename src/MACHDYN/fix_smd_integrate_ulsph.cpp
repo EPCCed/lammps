@@ -13,7 +13,7 @@
 /* ----------------------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -169,7 +169,7 @@ void FixSMDIntegrateUlsph::initial_integrate(int /*vflag*/) {
          * get smoothed velocities from ULSPH pair style
          */
 
-        Vector3d *smoothVel = (Vector3d *) force->pair->extract("smd/ulsph/smoothVel_ptr", itmp);
+        auto smoothVel = (Vector3d *) force->pair->extract("smd/ulsph/smoothVel_ptr", itmp);
 
         if (xsphFlag) {
                 if (smoothVel == nullptr) {
@@ -264,7 +264,7 @@ void FixSMDIntegrateUlsph::final_integrate() {
                 error->one(FLERR, "fix smd/integrate_ulsph failed to accesss num_neighs array");
         }
 
-        Matrix3d *L = (Matrix3d *) force->pair->extract("smd/ulsph/velocityGradient_ptr", itmp);
+        auto L = (Matrix3d *) force->pair->extract("smd/ulsph/velocityGradient_ptr", itmp);
         if (L == nullptr) {
                 error->one(FLERR, "fix smd/integrate_ulsph failed to accesss velocityGradient array");
         }

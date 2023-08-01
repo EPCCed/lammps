@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,20 +27,20 @@ namespace LAMMPS_NS {
 class PairCoulShield : public Pair {
  public:
   PairCoulShield(class LAMMPS *);
-  virtual ~PairCoulShield();
+  ~PairCoulShield() override;
 
-  virtual void compute(int, int);
+  void compute(int, int) override;
 
-  virtual void settings(int, char **);
-  virtual void coeff(int, char **);
-  virtual void init_style();
-  virtual double init_one(int, int);
-  virtual void write_restart(FILE *);
-  virtual void read_restart(FILE *);
-  virtual void write_restart_settings(FILE *);
-  virtual void read_restart_settings(FILE *);
+  void settings(int, char **) override;
+  void coeff(int, char **) override;
+  void init_style() override;
+  double init_one(int, int) override;
+  void write_restart(FILE *) override;
+  void read_restart(FILE *) override;
+  void write_restart_settings(FILE *) override;
+  void read_restart_settings(FILE *) override;
 
-  virtual double single(int, int, int, int, double, double, double, double &);
+  double single(int, int, int, int, double, double, double, double &) override;
 
  protected:
   double cut_global;

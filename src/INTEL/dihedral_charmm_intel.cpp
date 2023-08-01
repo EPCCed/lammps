@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -91,7 +91,7 @@ void DihedralCharmmIntel::compute(int eflag, int vflag,
   if (vflag_atom)
     error->all(FLERR,"INTEL package does not support per-atom stress");
 
-  // insure pair->ev_tally() will use 1-4 virial contribution
+  // ensure pair->ev_tally() will use 1-4 virial contribution
 
   if (weightflag && vflag_global == VIRIAL_FDOTR)
     force->pair->vflag_either = force->pair->vflag_global = 1;
@@ -195,11 +195,11 @@ void DihedralCharmmIntel::eval(const int vflag,
     for (int n = nfrom; n < nto; n++) {
     #endif
     for (int n = nfrom; n < nto; n += npl) {
-      const int i1 = dihedrallist[n].a;
-      const int i2 = dihedrallist[n].b;
-      const int i3 = dihedrallist[n].c;
-      const int i4 = dihedrallist[n].d;
-      const int type = dihedrallist[n].t;
+      const int i1 = IP_PRE_dword_index(dihedrallist[n].a);
+      const int i2 = IP_PRE_dword_index(dihedrallist[n].b);
+      const int i3 = IP_PRE_dword_index(dihedrallist[n].c);
+      const int i4 = IP_PRE_dword_index(dihedrallist[n].d);
+      const int type = IP_PRE_dword_index(dihedrallist[n].t);
 
       // 1st bond
 
@@ -240,14 +240,14 @@ void DihedralCharmmIntel::eval(const int vflag,
       const flt_t rasq = ax*ax + ay*ay + az*az;
       const flt_t rbsq = bx*bx + by*by + bz*bz;
       const flt_t rgsq = vb2xm*vb2xm + vb2ym*vb2ym + vb2zm*vb2zm;
-      const flt_t rg = sqrt(rgsq);
+      const flt_t rg = std::sqrt(rgsq);
 
       flt_t rginv, ra2inv, rb2inv;
       rginv = ra2inv = rb2inv = (flt_t)0.0;
       if (rg > 0) rginv = (flt_t)1.0/rg;
       if (rasq > 0) ra2inv = (flt_t)1.0/rasq;
       if (rbsq > 0) rb2inv = (flt_t)1.0/rbsq;
-      const flt_t rabinv = sqrt(ra2inv*rb2inv);
+      const flt_t rabinv = std::sqrt(ra2inv*rb2inv);
 
       flt_t c = (ax*bx + ay*by + az*bz)*rabinv;
       const flt_t s = rg*rabinv*(ax*vb3x + ay*vb3y + az*vb3z);
@@ -261,12 +261,12 @@ void DihedralCharmmIntel::eval(const int vflag,
       if (c > (flt_t)1.0) c = (flt_t)1.0;
       if (c < (flt_t)-1.0) c = (flt_t)-1.0;
 
-      const flt_t tcos_shift = fc.bp[type].cos_shift;
-      const flt_t tsin_shift = fc.bp[type].sin_shift;
-      const flt_t tk = fc.bp[type].k;
-      const int m = fc.bp[type].multiplicity;
+      const flt_t tcos_shift = fc.fc[type].cos_shift;
+      const flt_t tsin_shift = fc.fc[type].sin_shift;
+      const flt_t tk = fc.fc[type].k;
+      const int m = fc.fc[type].multiplicity;
 
-      flt_t p = (flt_t)1.0;
+      auto  p = (flt_t)1.0;
       flt_t ddf1, df1;
       ddf1 = df1 = (flt_t)0.0;
 
@@ -367,7 +367,7 @@ void DihedralCharmmIntel::eval(const int vflag,
 
       flt_t forcecoul;
       if (implicit) forcecoul = qqrd2e * q[i1]*q[i4]*r2inv;
-      else forcecoul = qqrd2e * q[i1]*q[i4]*sqrt(r2inv);
+      else forcecoul = qqrd2e * q[i1]*q[i4]*std::sqrt(r2inv);
       const flt_t forcelj = r6inv * (fc.ljp[itype][jtype].lj1*r6inv -
                                      fc.ljp[itype][jtype].lj2);
       const flt_t fpair = tweight * (forcelj+forcecoul)*r2inv;
@@ -384,7 +384,7 @@ void DihedralCharmmIntel::eval(const int vflag,
       }
 
       if (EFLAG || VFLAG) {
-        flt_t ev_pre = (flt_t)0;
+        auto  ev_pre = (flt_t)0;
         if (NEWTON_BOND || i1 < nlocal)
           ev_pre += (flt_t)0.5;
         if (NEWTON_BOND || i4 < nlocal)
@@ -539,10 +539,10 @@ void DihedralCharmmIntel::eval(const int vflag,
       (int *) neighbor->dihedrallist[0];
     const flt_t * _noalias const weight = &(fc.weight[0]);
     const flt_t * _noalias const x_f = &(x[0].x);
-    const flt_t * _noalias const cos_shift = &(fc.bp[0].cos_shift);
-    const flt_t * _noalias const sin_shift = &(fc.bp[0].sin_shift);
-    const flt_t * _noalias const k = &(fc.bp[0].k);
-    const int * _noalias const multiplicity = &(fc.bp[0].multiplicity);
+    const flt_t * _noalias const cos_shift = &(fc.fc[0].cos_shift);
+    const flt_t * _noalias const sin_shift = &(fc.fc[0].sin_shift);
+    const flt_t * _noalias const k = &(fc.fc[0].k);
+    const int * _noalias const multiplicity = &(fc.fc[0].multiplicity);
     const flt_t * _noalias const plj1 = &(fc.ljp[0][0].lj1);
     const flt_t * _noalias const plj2 = &(fc.ljp[0][0].lj2);
     const flt_t * _noalias const plj3 = &(fc.ljp[0][0].lj3);
@@ -905,11 +905,8 @@ void DihedralCharmmIntel::init_style()
 {
   DihedralCharmm::init_style();
 
-  int ifix = modify->find_fix("package_intel");
-  if (ifix < 0)
-    error->all(FLERR,
-               "The 'package intel' command is required for /intel styles");
-  fix = static_cast<FixIntel *>(modify->fix[ifix]);
+  fix = static_cast<FixIntel *>(modify->get_fix_by_id("package_intel"));
+  if (!fix) error->all(FLERR, "The 'package intel' command is required for /intel styles");
 
   #ifdef _LMP_INTEL_OFFLOAD
   _use_base = 0;
@@ -937,8 +934,8 @@ void DihedralCharmmIntel::pack_force_const(ForceConst<flt_t> &fc,
 {
 
   const int tp1 = atom->ntypes + 1;
-  const int bp1 = atom->ndihedraltypes + 1;
-  fc.set_ntypes(tp1,bp1,memory);
+  const int dp1 = atom->ndihedraltypes + 1;
+  fc.set_ntypes(tp1,dp1,memory);
   buffers->set_ntypes(tp1);
 
   if (weightflag) {
@@ -952,11 +949,11 @@ void DihedralCharmmIntel::pack_force_const(ForceConst<flt_t> &fc,
     }
   }
 
-  for (int i = 1; i < bp1; i++) {
-    fc.bp[i].multiplicity = multiplicity[i];
-    fc.bp[i].cos_shift = cos_shift[i];
-    fc.bp[i].sin_shift = sin_shift[i];
-    fc.bp[i].k = k[i];
+  for (int i = 1; i < dp1; i++) {
+    fc.fc[i].multiplicity = multiplicity[i];
+    fc.fc[i].cos_shift = cos_shift[i];
+    fc.fc[i].sin_shift = sin_shift[i];
+    fc.fc[i].k = k[i];
     fc.weight[i] = weight[i];
   }
 }
@@ -965,27 +962,24 @@ void DihedralCharmmIntel::pack_force_const(ForceConst<flt_t> &fc,
 
 template <class flt_t>
 void DihedralCharmmIntel::ForceConst<flt_t>::set_ntypes(const int npairtypes,
-                                                        const int nbondtypes,
+                                                        const int ndihderaltypes,
                                                         Memory *memory) {
+  if (memory != nullptr) _memory = memory;
   if (npairtypes != _npairtypes) {
-    if (_npairtypes > 0)
-      _memory->destroy(ljp);
+    _memory->destroy(ljp);
     if (npairtypes > 0)
-      memory->create(ljp,npairtypes,npairtypes,"fc.ljp");
+      _memory->create(ljp,npairtypes,npairtypes,"fc.ljp");
   }
 
-  if (nbondtypes != _nbondtypes) {
-    if (_nbondtypes > 0) {
-      _memory->destroy(bp);
-      _memory->destroy(weight);
-    }
+  if (ndihderaltypes != _ndihderaltypes) {
+    _memory->destroy(fc);
+    _memory->destroy(weight);
 
-    if (nbondtypes > 0) {
-      _memory->create(bp,nbondtypes,"dihedralcharmmintel.bp");
-      _memory->create(weight,nbondtypes,"dihedralcharmmintel.weight");
+    if (ndihderaltypes > 0) {
+      _memory->create(fc,ndihderaltypes,"dihedralcharmmintel.fc");
+      _memory->create(weight,ndihderaltypes,"dihedralcharmmintel.weight");
     }
   }
   _npairtypes = npairtypes;
-  _nbondtypes = nbondtypes;
-  _memory = memory;
+  _ndihderaltypes = ndihderaltypes;
 }

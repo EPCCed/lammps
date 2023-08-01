@@ -13,7 +13,7 @@
 /* ----------------------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -29,19 +29,17 @@
 
 #include "pair_smd_hertz.h"
 
-#include <cmath>
-
-#include <cstring>
 #include "atom.h"
-#include "domain.h"
-#include "force.h"
 #include "comm.h"
-#include "neighbor.h"
-#include "neigh_list.h"
-#include "neigh_request.h"
-#include "memory.h"
+#include "domain.h"
 #include "error.h"
+#include "force.h"
+#include "memory.h"
+#include "neigh_list.h"
+#include "neighbor.h"
 
+#include <cmath>
+#include <cstring>
 
 using namespace LAMMPS_NS;
 
@@ -265,7 +263,7 @@ void PairHertz::coeff(int narg, char **arg) {
         utils::bounds(FLERR,arg[0], 1, atom->ntypes, ilo, ihi, error);
         utils::bounds(FLERR,arg[1], 1, atom->ntypes, jlo, jhi, error);
 
-        double bulkmodulus_one = atof(arg[2]);
+        double bulkmodulus_one = utils::numeric(FLERR,arg[2],false,lmp);
 
         // set short-range force constant
         double kn_one = 0.0;
@@ -329,8 +327,7 @@ void PairHertz::init_style() {
         if (!atom->contact_radius_flag)
                 error->all(FLERR, "Pair style smd/hertz requires atom style with contact_radius");
 
-        int irequest = neighbor->request(this);
-        neighbor->requests[irequest]->size = 1;
+        neighbor->add_request(this, NeighConst::REQ_SIZE);
 
         // set maxrad_dynamic and maxrad_frozen for each type
         // include future Fix pour particles as dynamic

@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -24,7 +24,6 @@
 #include "comm.h"
 #include "neighbor.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "my_page.h"
 #include "memory.h"
 #include "error.h"
@@ -116,7 +115,7 @@ void PairLCBOP::allocate()
 ------------------------------------------------------------------------- */
 
 void PairLCBOP::settings(int narg, char **/*arg*/) {
-  if (narg != 0 ) error->all(FLERR,"Illegal pair_style command");
+  if (narg != 0) error->all(FLERR,"Illegal pair_style command");
 }
 
 /* ----------------------------------------------------------------------
@@ -153,10 +152,7 @@ void PairLCBOP::init_style()
 
   // need a full neighbor list, including neighbors of ghosts
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
-  neighbor->requests[irequest]->ghost = 1;
+  neighbor->add_request(this, NeighConst::REQ_FULL | NeighConst::REQ_GHOST);
 
   // local SR neighbor list
   // create pages if first time or if neighbor pgsize/oneatom has changed

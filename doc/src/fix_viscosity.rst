@@ -6,7 +6,7 @@ fix viscosity command
 Syntax
 """"""
 
-.. parsed-literal::
+.. code-block:: LAMMPS
 
    fix ID group-ID viscosity N vdim pdim Nbin keyword value ...
 
@@ -17,7 +17,7 @@ Syntax
 * pdim = *x* or *y* or *z* = direction of momentum transfer
 * Nbin = # of layers in pdim direction (must be even number)
 * zero or more keyword/value pairs may be appended
-* keyword = *swap* or *target*
+* keyword = *swap* or *vtarget*
 
   .. parsed-literal::
 
@@ -108,10 +108,11 @@ fluid, in appropriate units.  See the :ref:`Muller-Plathe paper <Muller-Plathe2>
 
 An alternative method for calculating a viscosity is to run a NEMD
 simulation, as described on the :doc:`Howto nemd <Howto_nemd>` doc page.
-NEMD simulations deform the simulation box via the :doc:`fix deform <fix_deform>` command.  Thus they cannot be run on a charged
-system using a :doc:`PPPM solver <kspace_style>` since PPPM does not
-currently support non-orthogonal boxes.  Using fix viscosity keeps the
-box orthogonal; thus it does not suffer from this limitation.
+NEMD simulations deform the simulation box via the :doc:`fix deform <fix_deform>` command.
+
+Some features or combination of settings in LAMMPS do not support
+non-orthogonal boxes.  Using fix viscosity keeps the box orthogonal;
+thus it does not suffer from these limitations.
 
 Restart, fix_modify, output, run start/stop, minimize info
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""

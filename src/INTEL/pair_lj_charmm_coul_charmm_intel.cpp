@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    This software is distributed under the GNU General Public License.
 
@@ -39,12 +39,6 @@ PairLJCharmmCoulCharmmIntel::PairLJCharmmCoulCharmmIntel(LAMMPS *lmp) :
   PairLJCharmmCoulCharmm(lmp)
 {
   suffix_flag |= Suffix::INTEL;
-}
-
-/* ---------------------------------------------------------------------- */
-
-PairLJCharmmCoulCharmmIntel::~PairLJCharmmCoulCharmmIntel()
-{
 }
 
 /* ---------------------------------------------------------------------- */
@@ -145,7 +139,7 @@ void PairLJCharmmCoulCharmmIntel::eval(const int offload, const int vflag,
 
   const int * _noalias const ilist = list->ilist;
   const int * _noalias const numneigh = list->numneigh;
-  const int ** _noalias const firstneigh = (const int **)list->firstneigh;
+  const int ** _noalias const firstneigh = (const int **)list->firstneigh;  // NOLINT
 
   const flt_t * _noalias const special_coul = fc.special_coul;
   const flt_t * _noalias const special_lj = fc.special_lj;
@@ -312,7 +306,7 @@ void PairLJCharmmCoulCharmmIntel::eval(const int offload, const int vflag,
           const int sbindex = tj[jj] >> SBBITS & 3;
           const flt_t rsq = trsq[jj];
           const flt_t r2inv = (flt_t)1.0 / rsq;
-          const flt_t r_inv = (flt_t)1.0 / sqrt(rsq);
+          const flt_t r_inv = (flt_t)1.0 / std::sqrt(rsq);
           forcecoul = qqrd2e * qtmp * q[j] * r_inv;
           if (rsq > cut_coul_innersq) {
             const flt_t ccr = cut_coulsq - rsq;
@@ -324,7 +318,7 @@ void PairLJCharmmCoulCharmmIntel::eval(const int offload, const int vflag,
           #ifdef INTEL_VMASK
           if (rsq < cut_ljsq) {
           #endif
-            const int jtype = tjtype[jj];
+            const int jtype = IP_PRE_dword_index(tjtype[jj]);
             flt_t r6inv = r2inv * r2inv * r2inv;
             forcelj = r6inv * (lji[jtype].x * r6inv - lji[jtype].y);
             if (EFLAG) evdwl = r6inv*(lji[jtype].z * r6inv - lji[jtype].w);
@@ -448,7 +442,7 @@ void PairLJCharmmCoulCharmmIntel::eval(const int offload, const int vflag,
   if (EFLAG || vflag)
     fix->add_result_array(f_start, ev_global, offload, eatom, 0, vflag);
   else
-    fix->add_result_array(f_start, 0, offload);
+    fix->add_result_array(f_start, nullptr, offload);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -456,19 +450,11 @@ void PairLJCharmmCoulCharmmIntel::eval(const int offload, const int vflag,
 void PairLJCharmmCoulCharmmIntel::init_style()
 {
   PairLJCharmmCoulCharmm::init_style();
-  auto request = neighbor->find_request(this);
+  if (force->newton_pair == 0)
+    neighbor->find_request(this)->enable_full();
 
-  if (force->newton_pair == 0) {
-    request->half = 0;
-    request->full = 1;
-  }
-  request->intel = 1;
-
-  int ifix = modify->find_fix("package_intel");
-  if (ifix < 0)
-    error->all(FLERR,
-               "The 'package intel' command is required for /intel styles");
-  fix = static_cast<FixIntel *>(modify->fix[ifix]);
+  fix = static_cast<FixIntel *>(modify->get_fix_by_id("package_intel"));
+  if (!fix) error->all(FLERR, "The 'package intel' command is required for /intel styles");
 
   fix->pair_init_check();
   #ifdef _LMP_INTEL_OFFLOAD

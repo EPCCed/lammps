@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,13 +27,13 @@ namespace LAMMPS_NS {
 class FixTempRescaleEff : public Fix {
  public:
   FixTempRescaleEff(class LAMMPS *, int, char **);
-  virtual ~FixTempRescaleEff();
-  int setmask();
-  void init();
-  virtual void end_of_step();
-  int modify_param(int, char **);
-  void reset_target(double);
-  double compute_scalar();
+  ~FixTempRescaleEff() override;
+  int setmask() override;
+  void init() override;
+  void end_of_step() override;
+  int modify_param(int, char **) override;
+  void reset_target(double) override;
+  double compute_scalar() override;
 
  protected:
   int which;

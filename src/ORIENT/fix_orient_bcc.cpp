@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -28,7 +28,6 @@
 #include "math_const.h"
 #include "memory.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "neighbor.h"
 #include "respa.h"
 #include "update.h"
@@ -42,14 +41,15 @@ using namespace MathConst;
 #define BIG 1000000000
 
 static const char cite_fix_orient_bcc[] =
-  "fix orient/bcc command:\n\n"
+  "fix orient/bcc command: doi:10.1016/j.commatsci.2016.02.016\n\n"
   "@Article{Wicaksono16,\n"
-  " author = {A. T. Wicaksono, C. W. Sinclair, M. Militzer},\n"
-  " title = {An atomistic study of the correlation between the migration of planar and curved grain boundaries},\n"
-  " journal = {Computational Materials Science},\n"
-  " year =    2016,\n"
-  " volume =  117,\n"
-  " pages =   {397--405}\n"
+  "  author = {A. T. Wicaksono and C. W. Sinclair and M. Militzer},\n"
+  "  title = {An Atomistic Study of the Correlation Between the Migration\n"
+  "    of Planar and Curved Grain Boundaries},\n"
+  "  journal = {Computational Materials Science},\n"
+  "  year =    2016,\n"
+  "  volume =  117,\n"
+  "  pages =   {397--405}\n"
   "}\n\n";
 
 /* ---------------------------------------------------------------------- */
@@ -91,7 +91,6 @@ FixOrientBCC::FixOrientBCC(LAMMPS *lmp, int narg, char **arg) :
 
   // initializations
 
-  half_bcc_nn = 4;
   use_xismooth = false;
   double xicutoff = 1.57;
   xicutoffsq = xicutoff * xicutoff;
@@ -107,7 +106,7 @@ FixOrientBCC::FixOrientBCC(LAMMPS *lmp, int narg, char **arg) :
 
     FILE *inpfile = fopen(xifilename,"r");
     if (inpfile == nullptr) error->one(FLERR,"Fix orient/bcc file open failed");
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < half_bcc_nn; i++) {
       result = fgets(line,IMGMAX,inpfile);
       if (!result) error->one(FLERR,"Fix orient/bcc file read failed");
       count = sscanf(line,"%lg %lg %lg",&Rxi[i][0],&Rxi[i][1],&Rxi[i][2]);
@@ -117,7 +116,7 @@ FixOrientBCC::FixOrientBCC(LAMMPS *lmp, int narg, char **arg) :
 
     inpfile = fopen(chifilename,"r");
     if (inpfile == nullptr) error->one(FLERR,"Fix orient/bcc file open failed");
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < half_bcc_nn; i++) {
       result = fgets(line,IMGMAX,inpfile);
       if (!result) error->one(FLERR,"Fix orient/bcc file read failed");
       count = sscanf(line,"%lg %lg %lg",&Rchi[i][0],&Rchi[i][1],&Rchi[i][2]);
@@ -126,12 +125,12 @@ FixOrientBCC::FixOrientBCC(LAMMPS *lmp, int narg, char **arg) :
     fclose(inpfile);
   }
 
-  MPI_Bcast(&Rxi[0][0],18,MPI_DOUBLE,0,world);
-  MPI_Bcast(&Rchi[0][0],18,MPI_DOUBLE,0,world);
+  MPI_Bcast(&Rxi[0][0],half_bcc_nn*3,MPI_DOUBLE,0,world);
+  MPI_Bcast(&Rchi[0][0],half_bcc_nn*3,MPI_DOUBLE,0,world);
 
   // make copy of the reference vectors
 
-  for (int i = 0; i < 4; i++)
+  for (int i = 0; i < half_bcc_nn; i++)
     for (int j = 0; j < 3; j++) {
       half_xi_chi_vec[0][i][j] = Rxi[i][j];
       half_xi_chi_vec[1][i][j] = Rchi[i][j];
@@ -144,7 +143,7 @@ FixOrientBCC::FixOrientBCC(LAMMPS *lmp, int narg, char **arg) :
   double xi_sq,dxi[3],rchi[3];
 
   xiid = 0.0;
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < half_bcc_nn; i++) {
     rchi[0] = Rchi[i][0];
     rchi[1] = Rchi[i][1];
     rchi[2] = Rchi[i][2];
@@ -203,18 +202,13 @@ int FixOrientBCC::setmask()
 void FixOrientBCC::init()
 {
   if (utils::strmatch(update->integrate_style,"^respa")) {
-    ilevel_respa = ((Respa *) update->integrate)->nlevels-1;
+    ilevel_respa = (dynamic_cast<Respa *>(update->integrate))->nlevels-1;
     if (respa_level >= 0) ilevel_respa = MIN(respa_level,ilevel_respa);
   }
 
-  // need a full neighbor list
-  // perpetual list, built whenever re-neighboring occurs
+  // need a full perpetual neighbor list
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->pair = 0;
-  neighbor->requests[irequest]->fix = 1;
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
+  neighbor->add_request(this,NeighConst::REQ_FULL);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -231,9 +225,9 @@ void FixOrientBCC::setup(int vflag)
   if (utils::strmatch(update->integrate_style,"^verlet"))
     post_force(vflag);
   else {
-    ((Respa *) update->integrate)->copy_flevel_f(ilevel_respa);
+    (dynamic_cast<Respa *>(update->integrate))->copy_flevel_f(ilevel_respa);
     post_force_respa(vflag,ilevel_respa,0);
-    ((Respa *) update->integrate)->copy_f_flevel(ilevel_respa);
+    (dynamic_cast<Respa *>(update->integrate))->copy_f_flevel(ilevel_respa);
   }
 }
 
@@ -264,7 +258,7 @@ void FixOrientBCC::post_force(int /*vflag*/)
   numneigh = list->numneigh;
   firstneigh = list->firstneigh;
 
-  // insure nbr and order data structures are adequate size
+  // ensure nbr and order data structures are adequate size
 
   if (nall > nmax) {
     nmax = nall;
@@ -372,7 +366,7 @@ void FixOrientBCC::post_force(int /*vflag*/)
 
   // communicate to acquire nbr data for ghost atoms
 
-  comm->forward_comm_fix(this);
+  comm->forward_comm(this);
 
   // compute grain boundary force on each owned atom
   // skip atoms not in group
@@ -573,8 +567,8 @@ void FixOrientBCC::find_best_ref(double *displs, int which_crystal,
 
 int FixOrientBCC::compare(const void *pi, const void *pj)
 {
-  FixOrientBCC::Sort *ineigh = (FixOrientBCC::Sort *) pi;
-  FixOrientBCC::Sort *jneigh = (FixOrientBCC::Sort *) pj;
+  auto ineigh = (FixOrientBCC::Sort *) pi;
+  auto jneigh = (FixOrientBCC::Sort *) pj;
 
   if (ineigh->rsq < jneigh->rsq) return -1;
   else if (ineigh->rsq > jneigh->rsq) return 1;

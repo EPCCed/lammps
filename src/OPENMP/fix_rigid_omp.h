@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,10 +27,9 @@ namespace LAMMPS_NS {
 class FixRigidOMP : public FixRigid {
  public:
   FixRigidOMP(class LAMMPS *lmp, int narg, char **args) : FixRigid(lmp, narg, args) {}
-  ~FixRigidOMP() {}
 
-  virtual void initial_integrate(int);
-  virtual void final_integrate();
+  void initial_integrate(int) override;
+  void final_integrate() override;
 
  protected:
   virtual void compute_forces_and_torques();

@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -40,10 +40,10 @@ class AngleClass2Kokkos : public AngleClass2 {
   typedef EV_FLOAT value_type;
 
   AngleClass2Kokkos(class LAMMPS *);
-  virtual ~AngleClass2Kokkos();
-  void compute(int, int);
-  void coeff(int, char **);
-  void read_restart(FILE *);
+  ~AngleClass2Kokkos() override;
+  void compute(int, int) override;
+  void coeff(int, char **) override;
+  void read_restart(FILE *) override;
 
   template<int NEWTON_BOND, int EVFLAG>
   KOKKOS_INLINE_FUNCTION
@@ -96,6 +96,3 @@ class AngleClass2Kokkos : public AngleClass2 {
 #endif
 #endif
 
-/* ERROR/WARNING messages:
-
-*/

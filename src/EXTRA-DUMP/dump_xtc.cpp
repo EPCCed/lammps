@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -121,17 +121,24 @@ void DumpXTC::init_style()
 
   if (flush_flag) error->all(FLERR,"Cannot set dump_modify flush for dump xtc");
 
-  // check that dump frequency has not changed and is not a variable
+  // check that dump modify settings are compatible with xtc
+  // but only when not being called from the "write_dump" command
 
-  int idump;
-  for (idump = 0; idump < output->ndump; idump++)
-    if (strcmp(id,output->dump[idump]->id) == 0) break;
-  if (output->every_dump[idump] == 0)
-    error->all(FLERR,"Cannot use variable every setting for dump xtc");
+  if (strcmp(id,"WRITE_DUMP") != 0) {
+    int idump;
+    for (idump = 0; idump < output->ndump; idump++)
+      if (strcmp(id,output->dump[idump]->id) == 0) break;
 
-  if (nevery_save == 0) nevery_save = output->every_dump[idump];
-  else if (nevery_save != output->every_dump[idump])
-    error->all(FLERR,"Cannot change dump_modify every for dump xtc");
+    if (output->mode_dump[idump] == 1)
+      error->all(FLERR,"Cannot use every/time setting for dump xtc");
+
+    if (output->every_dump[idump] == 0)
+      error->all(FLERR,"Cannot use every variable setting for dump xtc");
+
+    if (nevery_save == 0) nevery_save = output->every_dump[idump];
+    else if (nevery_save != output->every_dump[idump])
+      error->all(FLERR,"Cannot change dump_modify every for dump xtc");
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -374,7 +381,7 @@ static int *buf = nullptr;
  | with some routines to assist in this task (those are marked
  | static and cannot be called from user programs)
 */
-#define MAXABS INT_MAX-2
+#define MAXABS (float)(INT_MAX-2)
 
 #ifndef SQR
 #define SQR(x) ((x)*(x))
@@ -426,10 +433,10 @@ int xdropen(XDR *xdrs, const char *filename, const char *type)
     return 0;
   }
   if (*type == 'w' || *type == 'W') {
-    type = (char *) "w+";
+    type = (char *) "wb+";
     lmode = XDR_ENCODE;
   } else {
-    type = (char *) "r";
+    type = (char *) "rb";
     lmode = XDR_DECODE;
   }
   xdrfiles[xdrid] = fopen(filename, type);
@@ -733,7 +740,7 @@ static void receiveints(int buf[], const int num_of_ints, int num_of_bits,
   }
   for (i = num_of_ints-1; i > 0; i--) {
     num = 0;
-    for (j = num_of_bytes-1; j >=0; j--) {
+    for (j = num_of_bytes-1; j >= 0; j--) {
       num = (num << 8) | bytes[j];
       p = num / sizes[i];
       bytes[j] = p;
@@ -1039,7 +1046,7 @@ int xdr3dfcoord(XDR *xdrs, float *fp, int *size, float *precision)
         sizesmall[0] = sizesmall[1] = sizesmall[2] = magicints[smallidx];
       }
     }
-    if (buf[1] != 0) buf[0]++;;
+    if (buf[1] != 0) buf[0]++;
     xdr_int(xdrs, &(buf[0])); /* buf[0] holds the length in bytes */
     return errval * (xdr_opaque(xdrs, (caddr_t)&(buf[3]), (u_int)buf[0]));
   } else {

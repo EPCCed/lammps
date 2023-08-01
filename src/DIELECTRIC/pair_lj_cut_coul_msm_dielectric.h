@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/ Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,11 +27,11 @@ namespace LAMMPS_NS {
 class PairLJCutCoulMSMDielectric : public PairLJCutCoulLong {
  public:
   PairLJCutCoulMSMDielectric(class LAMMPS *);
-  virtual ~PairLJCutCoulMSMDielectric();
-  virtual void init_style();
-  virtual void compute(int, int);
-  virtual double single(int, int, int, int, double, double, double, double &);
-  virtual void *extract(const char *, int &);
+  ~PairLJCutCoulMSMDielectric() override;
+  void init_style() override;
+  void compute(int, int) override;
+  double single(int, int, int, int, double, double, double, double &) override;
+  void *extract(const char *, int &) override;
 
   double **efield;
 
@@ -45,15 +45,3 @@ class PairLJCutCoulMSMDielectric : public PairLJCutCoulLong {
 
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-E: Must use 'kspace_modify pressure/scalar no' to obtain per-atom virial with kspace_style MSM
-
-The kspace scalar pressure option cannot be used to obtain per-atom virial.
-
-E: Must use 'kspace_modify pressure/scalar no' for rRESPA with kspace_style MSM
-
-The kspace scalar pressure option cannot (yet) be used with rRESPA.
-
-*/

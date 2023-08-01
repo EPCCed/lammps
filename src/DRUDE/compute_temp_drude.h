@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,15 +27,14 @@ namespace LAMMPS_NS {
 class ComputeTempDrude : public Compute {
  public:
   ComputeTempDrude(class LAMMPS *, int, char **);
-  ~ComputeTempDrude();
-  void init();
-  void setup();
-  void compute_vector();
-  double compute_scalar();
+  ~ComputeTempDrude() override;
+  void init() override;
+  void setup() override;
+  void compute_vector() override;
+  double compute_scalar() override;
   int modify_param(int, char **);
 
  private:
-  int fix_dof;
   class FixDrude *fix_drude;
   char *id_temp;
   class Compute *temperature;
@@ -50,13 +49,3 @@ class ComputeTempDrude : public Compute {
 
 #endif
 #endif
-
-/* ERROR/WARNING messages:
-
-E: Illegal ... command
-
-Self-explanatory.  Check the input script syntax and compare to the
-documentation for the command.  You can use -echo screen as a
-command-line option when running LAMMPS to see the offending line.
-
-*/

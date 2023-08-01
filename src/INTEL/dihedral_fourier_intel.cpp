@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -199,14 +199,14 @@ void DihedralFourierIntel::eval(const int vflag,
       const flt_t rasq = ax*ax + ay*ay + az*az;
       const flt_t rbsq = bx*bx + by*by + bz*bz;
       const flt_t rgsq = vb2xm*vb2xm + vb2ym*vb2ym + vb2zm*vb2zm;
-      const flt_t rg = sqrt(rgsq);
+      const flt_t rg = std::sqrt(rgsq);
 
       flt_t rginv, ra2inv, rb2inv;
       rginv = ra2inv = rb2inv = (flt_t)0.0;
       if (rg > 0) rginv = (flt_t)1.0/rg;
       if (rasq > 0) ra2inv = (flt_t)1.0/rasq;
       if (rbsq > 0) rb2inv = (flt_t)1.0/rbsq;
-      const flt_t rabinv = sqrt(ra2inv*rb2inv);
+      const flt_t rabinv = std::sqrt(ra2inv*rb2inv);
 
       flt_t c = (ax*bx + ay*by + az*bz)*rabinv;
       const flt_t s = rg*rabinv*(ax*vb3x + ay*vb3y + az*vb3z);
@@ -221,16 +221,16 @@ void DihedralFourierIntel::eval(const int vflag,
       if (c < (flt_t)-1.0) c = (flt_t)-1.0;
 
       flt_t deng;
-      flt_t df = (flt_t)0.0;
+      auto  df = (flt_t)0.0;
       if (EFLAG) deng = (flt_t)0.0;
 
       for (int j = 0; j < nterms[type]; j++) {
-        const flt_t tcos_shift = fc.bp[j][type].cos_shift;
-        const flt_t tsin_shift = fc.bp[j][type].sin_shift;
-        const flt_t tk = fc.bp[j][type].k;
-        const int m = fc.bp[j][type].multiplicity;
+        const flt_t tcos_shift = fc.fc[j][type].cos_shift;
+        const flt_t tsin_shift = fc.fc[j][type].sin_shift;
+        const flt_t tk = fc.fc[j][type].k;
+        const int m = fc.fc[j][type].multiplicity;
 
-        flt_t p = (flt_t)1.0;
+        auto  p = (flt_t)1.0;
         flt_t ddf1, df1;
         ddf1 = df1 = (flt_t)0.0;
 
@@ -364,11 +364,8 @@ void DihedralFourierIntel::init_style()
 {
   DihedralFourier::init_style();
 
-  int ifix = modify->find_fix("package_intel");
-  if (ifix < 0)
-    error->all(FLERR,
-               "The 'package intel' command is required for /intel styles");
-  fix = static_cast<FixIntel *>(modify->fix[ifix]);
+  fix = static_cast<FixIntel *>(modify->get_fix_by_id("package_intel"));
+  if (!fix) error->all(FLERR, "The 'package intel' command is required for /intel styles");
 
   #ifdef _LMP_INTEL_OFFLOAD
   _use_base = 0;
@@ -394,16 +391,16 @@ template <class flt_t, class acc_t>
 void DihedralFourierIntel::pack_force_const(ForceConst<flt_t> &fc,
                                             IntelBuffers<flt_t,acc_t> * /*buffers*/)
 {
-  const int bp1 = atom->ndihedraltypes + 1;
-  fc.set_ntypes(bp1, setflag, nterms, memory);
+  const int dp1 = atom->ndihedraltypes + 1;
+  fc.set_ntypes(dp1, setflag, nterms, memory);
 
-  for (int i = 1; i < bp1; i++) {
+  for (int i = 1; i < dp1; i++) {
     if (setflag[i]) {
       for (int j = 0; j < nterms[i]; j++) {
-        fc.bp[j][i].cos_shift = cos_shift[i][j];
-        fc.bp[j][i].sin_shift = sin_shift[i][j];
-        fc.bp[j][i].k = k[i][j];
-        fc.bp[j][i].multiplicity = multiplicity[i][j];
+        fc.fc[j][i].cos_shift = cos_shift[i][j];
+        fc.fc[j][i].sin_shift = sin_shift[i][j];
+        fc.fc[j][i].k = k[i][j];
+        fc.fc[j][i].multiplicity = multiplicity[i][j];
       }
     }
   }
@@ -412,22 +409,20 @@ void DihedralFourierIntel::pack_force_const(ForceConst<flt_t> &fc,
 /* ---------------------------------------------------------------------- */
 
 template <class flt_t>
-void DihedralFourierIntel::ForceConst<flt_t>::set_ntypes(const int nbondtypes,
+void DihedralFourierIntel::ForceConst<flt_t>::set_ntypes(const int ndihedraltypes,
                                                          int *setflag,
                                                          int *nterms,
                                                          Memory *memory) {
-  if (nbondtypes != _nbondtypes) {
-    if (_nbondtypes > 0)
-      _memory->destroy(bp);
+  if (memory != nullptr) _memory = memory;
+  if (ndihedraltypes != _ndihedraltypes) {
+    _memory->destroy(fc);
 
-    if (nbondtypes > 0) {
+    if (ndihedraltypes > 0) {
       _maxnterms = 1;
-      for (int i = 1; i <= nbondtypes; i++)
+      for (int i = 1; i < ndihedraltypes; i++)
         if (setflag[i]) _maxnterms = MAX(_maxnterms, nterms[i]);
-
-      _memory->create(bp, _maxnterms, nbondtypes, "dihedralfourierintel.bp");
+      _memory->create(fc, _maxnterms, ndihedraltypes, "dihedralfourierintel.fc");
     }
   }
-  _nbondtypes = nbondtypes;
-  _memory = memory;
+  _ndihedraltypes = ndihedraltypes;
 }

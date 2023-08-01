@@ -13,7 +13,7 @@
 /* ----------------------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
- Steve Plimpton, sjplimp@sandia.gov
+ LAMMPS development team: developers@lammps.org
 
  Copyright (2003) Sandia Corporation.  Under the terms of Contract
  DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -137,7 +137,7 @@ void FixSMDIntegrateTlsph::initial_integrate(int /*vflag*/) {
         if (igroup == atom->firstgroup)
                 nlocal = atom->nfirst;
 
-        Vector3d *smoothVelDifference = (Vector3d *) force->pair->extract("smd/tlsph/smoothVel_ptr", itmp);
+        auto smoothVelDifference = (Vector3d *) force->pair->extract("smd/tlsph/smoothVel_ptr", itmp);
 
         if (xsphFlag) {
                 if (smoothVelDifference == nullptr) {

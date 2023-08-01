@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -45,12 +45,6 @@ typedef struct { int a,b,c,t;  } int4_t;
 AngleHarmonicIntel::AngleHarmonicIntel(LAMMPS *lmp) : AngleHarmonic(lmp)
 {
   suffix_flag |= Suffix::INTEL;
-}
-
-/* ---------------------------------------------------------------------- */
-
-AngleHarmonicIntel::~AngleHarmonicIntel()
-{
 }
 
 /* ---------------------------------------------------------------------- */
@@ -172,10 +166,10 @@ void AngleHarmonicIntel::eval(const int vflag,
     #else
     for (int n = nfrom; n < nto; n += npl) {
     #endif
-      const int i1 = anglelist[n].a;
-      const int i2 = anglelist[n].b;
-      const int i3 = anglelist[n].c;
-      const int type = anglelist[n].t;
+      const int i1 = IP_PRE_dword_index(anglelist[n].a);
+      const int i2 = IP_PRE_dword_index(anglelist[n].b);
+      const int i3 = IP_PRE_dword_index(anglelist[n].c);
+      const int type = IP_PRE_dword_index(anglelist[n].t);
 
       // 1st bond
 
@@ -184,7 +178,7 @@ void AngleHarmonicIntel::eval(const int vflag,
       const flt_t delz1 = x[i1].z - x[i2].z;
 
       const flt_t rsq1 = delx1*delx1 + dely1*dely1 + delz1*delz1;
-      const flt_t r1 = (flt_t)1.0/sqrt(rsq1);
+      const flt_t r1 = (flt_t)1.0/std::sqrt(rsq1);
 
       // 2nd bond
 
@@ -193,7 +187,7 @@ void AngleHarmonicIntel::eval(const int vflag,
       const flt_t delz2 = x[i3].z - x[i2].z;
 
       const flt_t rsq2 = delx2*delx2 + dely2*dely2 + delz2*delz2;
-      const flt_t r2 = (flt_t)1.0/sqrt(rsq2);
+      const flt_t r2 = (flt_t)1.0/std::sqrt(rsq2);
 
       // angle (cos and sin)
 
@@ -205,12 +199,12 @@ void AngleHarmonicIntel::eval(const int vflag,
       if (c < (flt_t)-1.0) c = (flt_t)-1.0;
 
       const flt_t sd = (flt_t)1.0 - c * c;
-      flt_t s = (flt_t)1.0/sqrt(sd);
+      flt_t s = (flt_t)1.0/std::sqrt(sd);
       if (sd < SMALL2) s = INVSMALL;
 
       // harmonic force & energy
 
-      const flt_t dtheta = acos(c) - fc.fc[type].theta0;
+      const flt_t dtheta = std::acos(c) - fc.fc[type].theta0;
       const flt_t tk = fc.fc[type].k * dtheta;
 
       flt_t eangle;
@@ -299,11 +293,8 @@ void AngleHarmonicIntel::init_style()
 {
   AngleHarmonic::init_style();
 
-  int ifix = modify->find_fix("package_intel");
-  if (ifix < 0)
-    error->all(FLERR,
-               "The 'package intel' command is required for /intel styles");
-  fix = static_cast<FixIntel *>(modify->fix[ifix]);
+  fix = static_cast<FixIntel *>(modify->get_fix_by_id("package_intel"));
+  if (!fix) error->all(FLERR, "The 'package intel' command is required for /intel styles");
 
   #ifdef _LMP_INTEL_OFFLOAD
   _use_base = 0;
@@ -343,13 +334,11 @@ void AngleHarmonicIntel::pack_force_const(ForceConst<flt_t> &fc,
 template <class flt_t>
 void AngleHarmonicIntel::ForceConst<flt_t>::set_ntypes(const int nangletypes,
                                                      Memory *memory) {
+  if (memory != nullptr) _memory = memory;
   if (nangletypes != _nangletypes) {
-    if (_nangletypes > 0)
-      _memory->destroy(fc);
-
+    _memory->destroy(fc);
     if (nangletypes > 0)
       _memory->create(fc,nangletypes,"anglecharmmintel.fc");
   }
   _nangletypes = nangletypes;
-  _memory = memory;
 }

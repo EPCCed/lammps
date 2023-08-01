@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -63,8 +63,7 @@ class NPairSkipKokkos : public NPair {
   typedef ArrayTypes<DeviceType> AT;
 
   NPairSkipKokkos(class LAMMPS *);
-  ~NPairSkipKokkos() {}
-  void build(class NeighList *);
+  void build(class NeighList *) override;
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagNPairSkipCompute, const int&, int&, const bool&) const;
@@ -98,6 +97,3 @@ class NPairSkipKokkos : public NPair {
 #endif
 #endif
 
-/* ERROR/WARNING messages:
-
-*/

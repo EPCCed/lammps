@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,25 +27,25 @@ namespace LAMMPS_NS {
 class PairGaussCut : public Pair {
  public:
   PairGaussCut(class LAMMPS *);
-  ~PairGaussCut();
+  ~PairGaussCut() override;
 
-  virtual void compute(int, int);
+  void compute(int, int) override;
 
-  virtual double single(int, int, int, int, double, double, double, double &);
+  double single(int, int, int, int, double, double, double, double &) override;
 
-  virtual void settings(int, char **);
-  virtual void coeff(int, char **);
+  void settings(int, char **) override;
+  void coeff(int, char **) override;
 
-  virtual double init_one(int, int);
+  double init_one(int, int) override;
 
-  virtual void write_restart(FILE *);
-  virtual void read_restart(FILE *);
-  virtual void write_restart_settings(FILE *);
-  virtual void read_restart_settings(FILE *);
-  virtual void write_data(FILE *fp);
-  virtual void write_data_all(FILE *fp);
+  void write_restart(FILE *) override;
+  void read_restart(FILE *) override;
+  void write_restart_settings(FILE *) override;
+  void read_restart_settings(FILE *) override;
+  void write_data(FILE *fp) override;
+  void write_data_all(FILE *fp) override;
 
-  virtual double memory_usage();
+  double memory_usage() override;
 
  protected:
   double cut_global;

@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -203,7 +203,7 @@ void FixEOStableRX::setup(int /*vflag*/)
   }
 
   // Communicate the updated momenta and velocities to all nodes
-  comm->forward_comm_fix(this);
+  comm->forward_comm(this);
 
   for (int i = 0; i < nlocal; i++)
     if (mask[i] & groupbit)
@@ -274,7 +274,7 @@ void FixEOStableRX::end_of_step()
   double *uCGnew = atom->uCGnew;
 
   // Communicate the ghost uCGnew
-  comm->reverse_comm_fix(this);
+  comm->reverse_comm(this);
 
   for (int i = 0; i < nlocal; i++)
     if (mask[i] & groupbit) {
@@ -285,7 +285,7 @@ void FixEOStableRX::end_of_step()
     }
 
   // Communicate the updated momenta and velocities to all nodes
-  comm->forward_comm_fix(this);
+  comm->forward_comm(this);
 
   for (int i = 0; i < nlocal; i++)
     if (mask[i] & groupbit) {
@@ -301,7 +301,7 @@ void FixEOStableRX::read_file(char *file)
 {
   int min_params_per_line = 2;
   int max_params_per_line = 5;
-  char **words = new char*[max_params_per_line+1];
+  auto words = new char*[max_params_per_line+1];
 
   // open file on proc 0
 
@@ -476,16 +476,14 @@ void FixEOStableRX::read_table(Table *tb, Table *tb2, char *file, char *keyword)
     utils::sfgets(FLERR,line,MAXLINE,fp,file,error);
 
     nwords = utils::count_words(utils::trim_comment(line));
-    if (nwords != nspecies+2) {
-      printf("nwords=%d  nspecies=%d\n",nwords,nspecies);
-      error->all(FLERR,"Illegal fix eos/table/rx command");
-    }
-    nwords = 0;
+    if (nwords != nspecies+2)
+      error->all(FLERR,"Illegal fix eos/table/rx command: nwords={} nspecies={}", nwords, nspecies);
+
     word = strtok(line," \t\n\r\f");
     word = strtok(nullptr," \t\n\r\f");
     rtmp = atof(word);
 
-    for (int icolumn=0;icolumn<ncolumn;icolumn++) {
+    for (int icolumn=0; icolumn < ncolumn; icolumn++) {
       ispecies = eosSpecies[icolumn];
 
       Table *tbl = &tables[ispecies];
@@ -641,7 +639,7 @@ void FixEOStableRX::spline(double *x, double *y, int n,
 {
   int i,k;
   double p,qn,sig,un;
-  double *u = new double[n];
+  auto u = new double[n];
 
   if (yp1 > 0.99e30) y2[0] = u[0] = 0.0;
   else {

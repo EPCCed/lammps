@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -32,9 +32,9 @@ template <class DeviceType>
 class FixDPDenergyKokkos : public FixDPDenergy {
  public:
   FixDPDenergyKokkos(class LAMMPS *, int, char **);
-  virtual ~FixDPDenergyKokkos() {}
-  virtual void initial_integrate(int);
-  virtual void final_integrate();
+
+  void initial_integrate(int) override;
+  void final_integrate() override;
 
   void take_half_step();
  protected:
@@ -46,10 +46,3 @@ class FixDPDenergyKokkos : public FixDPDenergy {
 #endif
 #endif
 
-/* ERROR/WARNING messages:
-
-E: Must use pair_style dpd/fdt/energy/kk with fix dpd/energy/kk
-
-Self-explanatory.
-
-*/

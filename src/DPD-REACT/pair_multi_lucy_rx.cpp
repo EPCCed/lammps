@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -39,6 +39,7 @@
 #include <cstring>
 
 using namespace LAMMPS_NS;
+using MathConst::MY_PI;
 
 enum{NONE,RLINEAR,RSQ};
 
@@ -54,11 +55,11 @@ enum{NONE,RLINEAR,RSQ};
 #define isOneFluid(_site) ( (_site) == oneFluidParameter )
 
 static const char cite_pair_multi_lucy_rx[] =
-  "pair_style multi/lucy/rx command:\n\n"
+  "pair_style multi/lucy/rx command: doi:10.1063/1.4942520\n\n"
   "@Article{Moore16,\n"
-  " author = {J.D. Moore, B.C. Barnes, S. Izvekov, M. Lisal, M.S. Sellers, D.E. Taylor and J. K. Brennan},\n"
-  " title = {A coarse-grain force field for RDX:  Density dependent and energy conserving},\n"
-  " journal = {J. Chem. Phys.},\n"
+  " author = {J. D. Moore and B. C. Barnes and S. Izvekov and M. Lisal and M. S. Sellers and D. E. Taylor and J. K. Brennan},\n"
+  " title = {A Coarse-Grain Force Field for {RDX}:  {D}ensity Dependent and Energy Conserving},\n"
+  " journal = {J.~Chem.\\ Phys.},\n"
   " year =    2016,\n"
   " volume =  144\n"
   " pages =   {104501}\n"
@@ -127,7 +128,6 @@ void PairMultiLucyRX::compute(int eflag, int vflag)
   double *uCG = atom->uCG;
   double *uCGnew = atom->uCGnew;
 
-  double pi = MathConst::MY_PI;
   double A_i, A_j;
   double fraction_i,fraction_j;
   int jtable;
@@ -276,7 +276,7 @@ void PairMultiLucyRX::compute(int eflag, int vflag)
       evdwl = tb->e[itable] + fraction_i*tb->de[itable];
     } else error->one(FLERR,"Only LOOKUP and LINEAR table styles have been implemented for pair multi/lucy/rx");
 
-    evdwl *=(pi*cutsq[itype][itype]*cutsq[itype][itype])/84.0;
+    evdwl *=(MY_PI*cutsq[itype][itype]*cutsq[itype][itype])/84.0;
     evdwlOld = mixWtSite1old_i*evdwl;
     evdwl = mixWtSite1_i*evdwl;
 
@@ -397,7 +397,7 @@ void PairMultiLucyRX::coeff(int narg, char **arg)
   else tb->cut = tb->rfile[tb->ninput-1];
 
   // error check on table parameters
-  // insure cutoff is within table
+  // ensure cutoff is within table
 
   if (tb->ninput <= 1) error->one(FLERR,"Invalid pair table length");
   if (tb->rflag == 0) {
@@ -763,7 +763,7 @@ void PairMultiLucyRX::spline(double *x, double *y, int n,
 {
   int i,k;
   double p,qn,sig,un;
-  double *u = new double[n];
+  auto u = new double[n];
 
   if (yp1 > 0.99e30) y2[0] = u[0] = 0.0;
   else {
@@ -866,15 +866,13 @@ void PairMultiLucyRX::computeLocalDensity()
   const int *numneigh = list->numneigh;
         int **firstneigh = list->firstneigh;
 
-  const double pi = MathConst::MY_PI;
-
   const bool newton_pair = force->newton_pair;
   const bool one_type = (atom->ntypes == 1);
 
   // Special cut-off values for when there's only one type.
   const double cutsq_type11 = cutsq[1][1];
   const double rcut_type11 = sqrt(cutsq_type11);
-  const double factor_type11 = 84.0/(5.0*pi*rcut_type11*rcut_type11*rcut_type11);
+  const double factor_type11 = 84.0/(5.0*MY_PI*rcut_type11*rcut_type11*rcut_type11);
 
   double *rho = atom->rho;
 
@@ -925,7 +923,7 @@ void PairMultiLucyRX::computeLocalDensity()
         const double rcut = sqrt(cutsq[itype][jtype]);
         const double tmpFactor = 1.0-sqrt(rsq)/rcut;
         const double tmpFactor4 = tmpFactor*tmpFactor*tmpFactor*tmpFactor;
-        const double factor = (84.0/(5.0*pi*rcut*rcut*rcut))*(1.0+3.0*sqrt(rsq)/(2.0*rcut))*tmpFactor4;
+        const double factor = (84.0/(5.0*MY_PI*rcut*rcut*rcut))*(1.0+3.0*sqrt(rsq)/(2.0*rcut))*tmpFactor4;
         rho_i += factor;
         if (newton_pair || j < nlocal)
           rho[j] += factor;
@@ -934,9 +932,9 @@ void PairMultiLucyRX::computeLocalDensity()
 
     rho[i] = rho_i;
   }
-  if (newton_pair) comm->reverse_comm_pair(this);
+  if (newton_pair) comm->reverse_comm(this);
 
-  comm->forward_comm_pair(this);
+  comm->forward_comm(this);
 
 }
 

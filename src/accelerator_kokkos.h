@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -52,7 +52,6 @@ class KokkosLMP {
   int kokkos_exists;
   int nthreads;
   int ngpus;
-  int numa;
 
   KokkosLMP(class LAMMPS *, int, char **) { kokkos_exists = 0; }
   ~KokkosLMP() {}
@@ -66,7 +65,6 @@ class AtomKokkos : public Atom {
  public:
   tagint **k_special;
   AtomKokkos(class LAMMPS *lmp) : Atom(lmp) {}
-  ~AtomKokkos() {}
   void sync(const ExecutionSpace /*space*/, unsigned int /*mask*/) {}
   void modified(const ExecutionSpace /*space*/, unsigned int /*mask*/) {}
 };
@@ -74,39 +72,33 @@ class AtomKokkos : public Atom {
 class CommKokkos : public CommBrick {
  public:
   CommKokkos(class LAMMPS *lmp) : CommBrick(lmp) {}
-  ~CommKokkos() {}
 };
 
 class CommTiledKokkos : public CommTiled {
  public:
   CommTiledKokkos(class LAMMPS *lmp) : CommTiled(lmp) {}
   CommTiledKokkos(class LAMMPS *lmp, Comm *oldcomm) : CommTiled(lmp, oldcomm) {}
-  ~CommTiledKokkos() {}
 };
 
 class DomainKokkos : public Domain {
  public:
   DomainKokkos(class LAMMPS *lmp) : Domain(lmp) {}
-  ~DomainKokkos() {}
 };
 
 class NeighborKokkos : public Neighbor {
  public:
   NeighborKokkos(class LAMMPS *lmp) : Neighbor(lmp) {}
-  ~NeighborKokkos() {}
 };
 
 class MemoryKokkos : public Memory {
  public:
   MemoryKokkos(class LAMMPS *lmp) : Memory(lmp) {}
-  ~MemoryKokkos() {}
   void grow_kokkos(tagint **, tagint **, int, int, const char *) {}
 };
 
 class ModifyKokkos : public Modify {
  public:
   ModifyKokkos(class LAMMPS *lmp) : Modify(lmp) {}
-  ~ModifyKokkos() {}
 };
 
 class DAT {

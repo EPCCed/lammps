@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -52,16 +52,16 @@ DihedralSpherical::~DihedralSpherical()
     memory->destroy(nterms);
 
     for (int i = 1; i <= atom->ndihedraltypes; i++) {
-      if (Ccoeff[i]) delete[] Ccoeff[i];
-      if (phi_mult[i]) delete[] phi_mult[i];
-      if (phi_shift[i]) delete[] phi_shift[i];
-      if (phi_offset[i]) delete[] phi_offset[i];
-      if (theta1_mult[i]) delete[] theta1_mult[i];
-      if (theta1_shift[i]) delete[] theta1_shift[i];
-      if (theta1_offset[i]) delete[] theta1_offset[i];
-      if (theta2_mult[i]) delete[] theta2_mult[i];
-      if (theta2_shift[i]) delete[] theta2_shift[i];
-      if (theta2_offset[i]) delete[] theta2_offset[i];
+      delete[] Ccoeff[i];
+      delete[] phi_mult[i];
+      delete[] phi_shift[i];
+      delete[] phi_offset[i];
+      delete[] theta1_mult[i];
+      delete[] theta1_shift[i];
+      delete[] theta1_offset[i];
+      delete[] theta2_mult[i];
+      delete[] theta2_shift[i];
+      delete[] theta2_offset[i];
     }
     delete[] Ccoeff;
     delete[] phi_mult;
@@ -133,7 +133,7 @@ static double Phi(double const *x1,    //array holding x,y,z coords atom 1
 
   if (dot3(n123, vb34) > 0.0) {
     phi = -phi;       //(Note: Negative dihedral angles are possible only in 3-D.)
-    phi += MY_2PI;    //<- This insure phi is always in the range 0 to 2*PI
+    phi += MY_2PI;    //<- This ensure phi is always in the range 0 to 2*PI
   }
   return phi;
 }    // DihedralSpherical::Phi()

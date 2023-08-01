@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,16 +27,16 @@ namespace LAMMPS_NS {
 class FixAddTorque : public Fix {
  public:
   FixAddTorque(class LAMMPS *, int, char **);
-  ~FixAddTorque();
-  int setmask();
-  void init();
-  void setup(int);
-  void min_setup(int);
-  void post_force(int);
-  void post_force_respa(int, int, int);
-  void min_post_force(int);
-  double compute_scalar();
-  double compute_vector(int);
+  ~FixAddTorque() override;
+  int setmask() override;
+  void init() override;
+  void setup(int) override;
+  void min_setup(int) override;
+  void post_force(int) override;
+  void post_force_respa(int, int, int) override;
+  void min_post_force(int) override;
+  double compute_scalar() override;
+  double compute_vector(int) override;
 
  private:
   double xvalue, yvalue, zvalue;

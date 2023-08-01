@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -117,7 +117,7 @@ FixDeposit::FixDeposit(LAMMPS *lmp, int narg, char **arg) :
       if (atom->molecular == Atom::TEMPLATE && onemols != atom->avec->onemols)
         error->all(FLERR,"Fix deposit molecule template ID must be same "
                    "as atom_style template ID");
-      onemols[i]->check_attributes(0);
+      onemols[i]->check_attributes();
 
       // fix deposit uses geoemetric center of molecule for insertion
 
@@ -569,10 +569,12 @@ void FixDeposit::pre_exchange()
     //   coord is new position of geometric center of mol, not COM
     // FixShake::set_molecule stores shake info for molecule
 
-    if (rigidflag)
-      fixrigid->set_molecule(nlocalprev,maxtag_all,imol,coord,vnew,quat);
-    else if (shakeflag)
-      fixshake->set_molecule(nlocalprev,maxtag_all,imol,coord,vnew,quat);
+    if (mode == MOLECULE) {
+      if (rigidflag)
+        fixrigid->set_molecule(nlocalprev,maxtag_all,imol,coord,vnew,quat);
+      else if (shakeflag)
+        fixshake->set_molecule(nlocalprev,maxtag_all,imol,coord,vnew,quat);
+    }
 
     success = 1;
     break;
@@ -842,7 +844,7 @@ void FixDeposit::write_restart(FILE *fp)
 void FixDeposit::restart(char *buf)
 {
   int n = 0;
-  double *list = (double *) buf;
+  auto list = (double *) buf;
 
   seed = static_cast<int>(list[n++]);
   ninserted = static_cast<int>(list[n++]);

@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -47,7 +47,7 @@ void DihedralCharmmOMP::compute(int eflag, int vflag)
 {
   ev_init(eflag,vflag);
 
-  // insure pair->ev_tally() will use 1-4 virial contribution
+  // ensure pair->ev_tally() will use 1-4 virial contribution
 
   if (weightflag && vflag_global == VIRIAL_FDOTR)
     force->pair->vflag_either = force->pair->vflag_global = 1;
@@ -103,8 +103,8 @@ void DihedralCharmmOMP::eval(int nfrom, int nto, ThrData * const thr)
 
   ecoul = evdwl = edihedral = 0.0;
 
-  const dbl3_t * _noalias const x = (dbl3_t *) atom->x[0];
-  dbl3_t * _noalias const f = (dbl3_t *) thr->get_f()[0];
+  const auto * _noalias const x = (dbl3_t *) atom->x[0];
+  auto * _noalias const f = (dbl3_t *) thr->get_f()[0];
   const double * _noalias const q = atom->q;
   const int * const atomtype = atom->type;
   const int5_t * _noalias const dihedrallist = (int5_t *) neighbor->dihedrallist[0];

@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -98,7 +98,7 @@ DumpMolfile::DumpMolfile(LAMMPS *lmp, int narg, char **arg)
 
     mf = new MolfileInterface(arg[5],MFI::M_WRITE);
 
-    const char *path = (const char *) ".";
+    const char *path = (const char *) "."; // NOLINT
     if (narg > 6)
       path=arg[6];
 
@@ -212,7 +212,7 @@ void DumpMolfile::write()
 
   if (multifile) openfile();
 
-  // insure proc 0 can receive everyone's info
+  // ensure proc 0 can receive everyone's info
   // limit nmax*size_one to int since used as arg in MPI_Rsend() below
   // pack my data into buf
   // if sorting on IDs also request ID list from pack()
@@ -274,29 +274,12 @@ void DumpMolfile::openfile()
 
     // if one file per timestep, replace '*' with current timestep
 
-    char *filecurrent = new char[strlen(filename) + 16];
-    if (multifile == 0) {
-      strcpy(filecurrent,filename);
-    } else {
-      char *ptr = strchr(filename,'*');
-      char *p1 = filename;
-      char *p2 = filecurrent;
-      while (p1 != ptr)
-        *p2++ = *p1++;
+    std::string filecurrent = filename;
+    if (multifile == 1)
+      filecurrent = utils::star_subst(filename, update->ntimestep, padflag);
 
-      if (padflag == 0) {
-        sprintf(p2,BIGINT_FORMAT "%s",update->ntimestep,ptr+1);
-      } else {
-        char bif[8],pad[16];
-        strcpy(bif,BIGINT_FORMAT);
-        sprintf(pad,"%%0%d%s%%s",padflag,&bif[1]);
-        sprintf(p2,pad,update->ntimestep,ptr+1);
-      }
-    }
-
-    if (mf->open(filecurrent,&natoms))
-      error->one(FLERR,"Cannot open dump file");
-    delete[] filecurrent;
+    if (mf->open(filecurrent.c_str(), &natoms))
+      error->one(FLERR,"Cannot open dump file {}: {}", filecurrent, utils::getsyserror());
   }
 }
 
@@ -437,11 +420,7 @@ int DumpMolfile::modify_param(int narg, char **arg)
     }
 
     typenames = new char*[ntypes+1];
-    for (int itype = 1; itype <= ntypes; itype++) {
-      int n = strlen(arg[itype]) + 1;
-      typenames[itype] = new char[n];
-      strcpy(typenames[itype],arg[itype]);
-    }
+    for (int itype = 1; itype <= ntypes; itype++) typenames[itype] = utils::strdup(arg[itype]);
 
     return ntypes+1;
   }

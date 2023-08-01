@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -26,10 +26,8 @@
 #include "math_const.h"
 #include "memory.h"
 #include "neigh_list.h"
-#include "neigh_request.h"
 #include "neighbor.h"
 #include "potential_file_reader.h"
-#include "tokenizer.h"
 
 #include <cmath>
 #include <cstring>
@@ -144,13 +142,11 @@ void PairCoulStreitz::init_style()
   if (!atom->q_flag)
     error->all(FLERR,"Pair style coul/streitz requires atom attribute q");
 
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->half = 0;
-  neighbor->requests[irequest]->full = 1;
+  neighbor->add_request(this, NeighConst::REQ_FULL);
 
   cut_coulsq = cut_coul * cut_coul;
 
-  // insure use of KSpace long-range solver when ewald specified, set g_ewald
+  // ensure use of KSpace long-range solver when ewald specified, set g_ewald
 
   if (ewaldflag) {
     if (force->kspace == nullptr)
@@ -257,11 +253,11 @@ void PairCoulStreitz::setup_params()
     n = -1;
     for (m = 0; m < nparams; m++) {
       if (i == params[m].ielement) {
-        if (n >= 0) error->all(FLERR,"Potential file has duplicate entry");
+        if (n >= 0) error->all(FLERR,"Potential file has duplicate entry for: {}", elements[i]);
         n = m;
       }
     }
-    if (n < 0) error->all(FLERR,"Potential file is missing an entry");
+    if (n < 0) error->all(FLERR,"Potential file is missing an entry for: {}", elements[i]);
     elem1param[i] = n;
   }
 

@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -19,7 +19,6 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #if defined(_WIN32)
@@ -424,6 +423,15 @@ int MPI_Group_incl(MPI_Group group, int n, int *ranks, MPI_Group *newgroup)
     *newgroup = group;
   return 0;
 }
+
+/* ---------------------------------------------------------------------- */
+
+int MPI_Group_free(MPI_Group *group)
+{
+  if (group) *group = MPI_GROUP_NULL;
+  return 0;
+}
+
 /* ---------------------------------------------------------------------- */
 
 int MPI_Cart_create(MPI_Comm comm_old, int ndims, int *dims, int *periods, int reorder,

@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -29,11 +29,8 @@ using namespace LAMMPS_NS;
 /* ---------------------------------------------------------------------- */
 
 NPairIntel::NPairIntel(LAMMPS *lmp) : NPair(lmp) {
-  int ifix = modify->find_fix("package_intel");
-  if (ifix < 0)
-    error->all(FLERR,
-               "The 'package intel' command is required for /intel styles");
-  _fix = static_cast<FixIntel *>(modify->fix[ifix]);
+  _fix = static_cast<FixIntel *>(modify->get_fix_by_id("package_intel"));
+  if (!_fix) error->all(FLERR, "The 'package intel' command is required for /intel styles");
   #ifdef _LMP_INTEL_OFFLOAD
   _cop = _fix->coprocessor_number();
   _off_map_stencil = 0;
@@ -42,15 +39,15 @@ NPairIntel::NPairIntel(LAMMPS *lmp) : NPair(lmp) {
 
 /* ---------------------------------------------------------------------- */
 
+#ifdef _LMP_INTEL_OFFLOAD
 NPairIntel::~NPairIntel() {
-  #ifdef _LMP_INTEL_OFFLOAD
   if (_off_map_stencil) {
     const int * stencil = this->stencil;
     #pragma offload_transfer target(mic:_cop)   \
       nocopy(stencil:alloc_if(0) free_if(1))
   }
-  #endif
 }
+#endif
 
 /* ---------------------------------------------------------------------- */
 
@@ -290,16 +287,17 @@ void NPairIntel::bin_newton(const int offload, NeighList *list,
         if (imod) e_ito += pack_width - imod;
       }
       #endif
-      const int list_size = (e_ito + tid * 2 + 2) * maxnbors;
+      const bigint list_size = (bigint)(e_ito + tid * 2 + 2) *
+        (bigint)maxnbors;
 
       #ifdef LMP_INTEL_3BODY_FAST
       const int pack_offset = maxnbors * pack_width;
-      const int obound = pack_offset + maxnbors * 2;
+      const bigint obound = pack_offset + maxnbors * 2;
       #else
       const int pack_offset = 0;
-      const int obound = maxnbors * 3;
+      const bigint obound = maxnbors * 3;
       #endif
-      int ct = (ifrom + tid * 2) * maxnbors;
+      bigint ct = (bigint)(ifrom + tid * 2) * (bigint)maxnbors;
       int * _noalias neighptr = intel_list + ct;
       int * _noalias neighptr2;
       if (THREE) neighptr2 = neighptr;
@@ -362,7 +360,7 @@ void NPairIntel::bin_newton(const int offload, NeighList *list,
           #pragma vector aligned
           #endif
           for (int u = 0; u < ncount; u++) {
-            const int j = tj[u];
+            const int j = IP_PRE_dword_index(tj[u]);
             tx[u] = x[j].x;
             ty[u] = x[j].y;
             tz[u] = x[j].z;
@@ -390,7 +388,7 @@ void NPairIntel::bin_newton(const int offload, NeighList *list,
 #endif
             #endif
             for (int jj = bstart; jj < bend; jj++) {
-              const int j = binpacked[jj];
+              const int j = IP_PRE_dword_index(binpacked[jj]);
               itj[icount] = j;
               itx[icount] = x[j].x;
               ity[icount] = x[j].y;
@@ -659,6 +657,7 @@ void NPairIntel::bin_newton(const int offload, NeighList *list,
           ns += n2 - pack_offset - maxnbors;
 
           #ifdef LMP_INTEL_3BODY_FAST
+          int alln = n;
           n = lane;
           for (int u = pack_offset; u < alln; u++) {
             neighptr[n] = neighptr2[u];
@@ -724,7 +723,7 @@ void NPairIntel::bin_newton(const int offload, NeighList *list,
             if (ct + obound > list_size) {
               if (i < ito - 1) {
                 *overflow = 1;
-                ct = (ifrom + tid * 2) * maxnbors;
+                ct = (bigint)(ifrom + tid * 2) * (bigint)maxnbors;
               }
             }
           }
@@ -738,7 +737,7 @@ void NPairIntel::bin_newton(const int offload, NeighList *list,
           if (ct + obound > list_size) {
             if (i < ito - 1) {
               *overflow = 1;
-              ct = (ifrom + tid * 2) * maxnbors;
+              ct = (bigint)(ifrom + tid * 2) * (bigint)maxnbors;
             }
           }
         }

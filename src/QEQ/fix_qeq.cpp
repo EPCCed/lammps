@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -40,14 +40,14 @@
 using namespace LAMMPS_NS;
 using namespace FixConst;
 
-#define MAXLINE 1024
+static constexpr double QSUMSMALL = 0.00001;
 
 namespace {
   class qeq_parser_error : public std::exception {
     std::string message;
   public:
     explicit qeq_parser_error(const std::string &mesg) { message = mesg; }
-    const char *what() const noexcept { return message.c_str(); }
+    const char *what() const noexcept override { return message.c_str(); }
   };
 }
 
@@ -60,7 +60,7 @@ FixQEq::FixQEq(LAMMPS *lmp, int narg, char **arg) :
   b_t(nullptr), p(nullptr), q(nullptr), r(nullptr), d(nullptr),
   qf(nullptr), q1(nullptr), q2(nullptr), qv(nullptr)
 {
-  if (narg < 8) error->all(FLERR,"Illegal fix qeq command");
+  if (narg < 8) utils::missing_cmd_args(FLERR, "fix " + std::string(style), error);
 
   scalar_flag = 1;
   extscalar = 0;
@@ -143,7 +143,8 @@ FixQEq::FixQEq(LAMMPS *lmp, int narg, char **arg) :
 FixQEq::~FixQEq()
 {
   // unregister callbacks to this fix from Atom class
-  atom->delete_callback(id,Atom::GROW);
+
+  if (modify->get_fix_by_id(id)) atom->delete_callback(id,Atom::GROW);
 
   memory->destroy(s_hist);
   memory->destroy(t_hist);
@@ -308,7 +309,19 @@ void FixQEq::init()
     error->warning(FLERR,"Fix efield is ignored during charge equilibration");
 
   if (utils::strmatch(update->integrate_style,"^respa"))
-    nlevels_respa = ((Respa *) update->integrate)->nlevels;
+    nlevels_respa = (dynamic_cast<Respa *>(update->integrate))->nlevels;
+
+  // compute net charge and print warning if too large
+
+  double qsum_local = 0.0, qsum = 0.0;
+  for (int i = 0; i < atom->nlocal; i++) {
+    if (atom->mask[i] & groupbit)
+      qsum_local += atom->q[i];
+  }
+  MPI_Allreduce(&qsum_local,&qsum,1,MPI_DOUBLE,MPI_SUM,world);
+
+  if ((comm->me == 0) && (fabs(qsum) > QSUMSMALL))
+    error->warning(FLERR,"Fix {} group is not charge neutral, net charge = {:.8}", style, qsum);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -399,7 +412,7 @@ int FixQEq::CG(double *b, double *x)
 
   pack_flag = 1;
   sparse_matvec(&H, x, q);
-  comm->reverse_comm_fix(this);
+  comm->reverse_comm(this);
 
   vector_sum(r , 1.,  b, -1., q, inum);
 
@@ -414,9 +427,9 @@ int FixQEq::CG(double *b, double *x)
   sig_new = parallel_dot(r, d, inum);
 
   for (loop = 1; loop < maxiter && sqrt(sig_new)/b_norm > tolerance; ++loop) {
-    comm->forward_comm_fix(this);
+    comm->forward_comm(this);
     sparse_matvec(&H, d, q);
-    comm->reverse_comm_fix(this);
+    comm->reverse_comm(this);
 
     tmp = parallel_dot(d, q, inum);
     alfa = sig_new / tmp;
@@ -507,7 +520,7 @@ void FixQEq::calculate_Q()
   }
 
   pack_flag = 4;
-  comm->forward_comm_fix(this); //Dist_vector(atom->q);
+  comm->forward_comm(this); //Dist_vector(atom->q);
 }
 
 /* ---------------------------------------------------------------------- */

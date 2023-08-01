@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -49,17 +49,10 @@ class FixFreezeKokkos : public FixFreeze {
       values[2] += rhs.values[2];
       return *this;
     }
-
-    KOKKOS_INLINE_FUNCTION
-    void operator+=(const volatile OriginalForce &rhs) volatile {
-      values[0] += rhs.values[0];
-      values[1] += rhs.values[1];
-      values[2] += rhs.values[2];
-    }
   };
 
   FixFreezeKokkos(class LAMMPS *, int, char **);
-  void post_force(int);
+  void post_force(int) override;
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const int i, OriginalForce &original) const;

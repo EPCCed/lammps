@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -27,15 +27,15 @@ namespace LAMMPS_NS {
 class PairMLIAP : public Pair {
  public:
   PairMLIAP(class LAMMPS *);
-  ~PairMLIAP();
-  virtual void compute(int, int);
-  void settings(int, char **);
-  virtual void coeff(int, char **);
+  ~PairMLIAP() override;
+  void compute(int, int) override;
+  void settings(int, char **) override;
+  void coeff(int, char **) override;
   void e_tally(class MLIAPData *);
   void v_tally(int, int, double *, double *);
-  virtual void init_style();
-  virtual double init_one(int, int);
-  virtual double memory_usage();
+  void init_style() override;
+  double init_one(int, int) override;
+  double memory_usage() override;
   int *map;    // mapping from atom types to elements
 
  protected:
@@ -44,6 +44,7 @@ class PairMLIAP : public Pair {
   class MLIAPModel *model;
   class MLIAPDescriptor *descriptor;
   class MLIAPData *data;
+  bool is_child;
 };
 
 }    // namespace LAMMPS_NS

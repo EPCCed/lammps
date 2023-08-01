@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -26,7 +26,6 @@
 #include "force.h"
 #include "lattice.h"
 #include "memory.h"
-#include "modify.h"
 #include "neigh_list.h"
 #include "neighbor.h"
 #include "update.h"
@@ -179,12 +178,12 @@ void PairPeriVES::compute(int eflag, int vflag)
   compute_dilatation(0,nlocal);
 
   // communicate dilatation (theta) of each particle
-  comm->forward_comm_pair(this);
+  comm->forward_comm(this);
 
   // communicate weighted volume (wvolume) upon every reneighbor
 
   if (neighbor->ago == 0)
-    comm->forward_comm_fix(fix_peri_neigh);
+    comm->forward_comm(fix_peri_neigh);
 
   // volume-dependent part of the energy
 

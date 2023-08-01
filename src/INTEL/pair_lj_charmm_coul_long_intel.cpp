@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    This software is distributed under the GNU General Public License.
 
@@ -43,12 +43,6 @@ PairLJCharmmCoulLongIntel::PairLJCharmmCoulLongIntel(LAMMPS *lmp) :
   suffix_flag |= Suffix::INTEL;
   respa_enable = 0;
   cut_respa = nullptr;
-}
-
-/* ---------------------------------------------------------------------- */
-
-PairLJCharmmCoulLongIntel::~PairLJCharmmCoulLongIntel()
-{
 }
 
 /* ---------------------------------------------------------------------- */
@@ -149,7 +143,7 @@ void PairLJCharmmCoulLongIntel::eval(const int offload, const int vflag,
 
   const int * _noalias const ilist = list->ilist;
   const int * _noalias const numneigh = list->numneigh;
-  const int ** _noalias const firstneigh = (const int **)list->firstneigh;
+  const int ** _noalias const firstneigh = (const int **)list->firstneigh;  // NOLINT
 
   const flt_t * _noalias const special_coul = fc.special_coul;
   const flt_t * _noalias const special_lj = fc.special_lj;
@@ -330,7 +324,7 @@ void PairLJCharmmCoulLongIntel::eval(const int offload, const int vflag,
 
           const int j = tj[jj] & NEIGHMASK;
           const int sbindex = tj[jj] >> SBBITS & 3;
-          const int jtype = tjtype[jj];
+          const int jtype = IP_PRE_dword_index(tjtype[jj]);
           const flt_t rsq = trsq[jj];
           const flt_t r2inv = (flt_t)1.0 / rsq;
 
@@ -345,9 +339,9 @@ void PairLJCharmmCoulLongIntel::eval(const int offload, const int vflag,
             const flt_t EWALD_F = 1.12837917;
             const flt_t INV_EWALD_P = 1.0 / 0.3275911;
 
-            const flt_t r = (flt_t)1.0 / sqrt(r2inv);
+            const flt_t r = (flt_t)1.0 / std::sqrt(r2inv);
             const flt_t grij = g_ewald * r;
-            const flt_t expm2 = exp(-grij * grij);
+            const flt_t expm2 = std::exp(-grij * grij);
             const flt_t t = INV_EWALD_P / (INV_EWALD_P + grij);
             const flt_t erfc = t * (A1+t*(A2+t*(A3+t*(A4+t*A5)))) * expm2;
             const flt_t prefactor = qqrd2e * qtmp * q[j] / r;
@@ -513,7 +507,7 @@ void PairLJCharmmCoulLongIntel::eval(const int offload, const int vflag,
   if (EFLAG || vflag)
     fix->add_result_array(f_start, ev_global, offload, eatom, 0, vflag);
   else
-    fix->add_result_array(f_start, 0, offload);
+    fix->add_result_array(f_start, nullptr, offload);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -521,19 +515,11 @@ void PairLJCharmmCoulLongIntel::eval(const int offload, const int vflag,
 void PairLJCharmmCoulLongIntel::init_style()
 {
   PairLJCharmmCoulLong::init_style();
-  auto request = neighbor->find_request(this);
+  if (force->newton_pair == 0)
+    neighbor->find_request(this)->enable_full();
 
-  if (force->newton_pair == 0) {
-    request->half = 0;
-    request->full = 1;
-  }
-  request->intel = 1;
-
-  int ifix = modify->find_fix("package_intel");
-  if (ifix < 0)
-    error->all(FLERR,
-               "The 'package intel' command is required for /intel styles");
-  fix = static_cast<FixIntel *>(modify->fix[ifix]);
+  fix = static_cast<FixIntel *>(modify->get_fix_by_id("package_intel"));
+  if (!fix) error->all(FLERR, "The 'package intel' command is required for /intel styles");
 
   fix->pair_init_check();
   #ifdef _LMP_INTEL_OFFLOAD
@@ -605,10 +591,10 @@ void PairLJCharmmCoulLongIntel::pack_force_const(ForceConst<flt_t> &fc,
     for (int j = 1; j < tp1; j++) {
       if (i <= j) {
         fc.lj[i][j].x = epsilon[i][j] * 4.0;
-        fc.lj[i][j].y = pow(sigma[i][j],6.0);
+        fc.lj[i][j].y = std::pow(sigma[i][j],6.0);
       } else {
         fc.lj[i][j].x = epsilon[j][i] * 4.0;
-        fc.lj[i][j].y = pow(sigma[j][i],6.0);
+        fc.lj[i][j].y = std::pow(sigma[j][i],6.0);
       }
       fc.cutsq[i][j] = cutsq[i][j];
     }

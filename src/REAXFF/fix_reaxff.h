@@ -2,7 +2,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -41,16 +41,16 @@ class FixReaxFF : public Fix {
 
  public:
   FixReaxFF(class LAMMPS *, int, char **);
-  ~FixReaxFF();
-  int setmask();
+  ~FixReaxFF() override;
+  int setmask() override;
 
-  double memory_usage();
-  void grow_arrays(int);
-  void copy_arrays(int, int, int);
-  int pack_exchange(int, double *);
-  int unpack_exchange(int, double *);
-  int pack_forward_comm(int, int *, double *, int, int *);
-  void unpack_forward_comm(int, int, double *);
+  double memory_usage() override;
+  void grow_arrays(int) override;
+  void copy_arrays(int, int, int) override;
+  int pack_exchange(int, double *) override;
+  int unpack_exchange(int, double *) override;
+  int pack_forward_comm(int, int *, double *, int, int *) override;
+  void unpack_forward_comm(int, int, double *) override;
 
  private:
   int maxbonds;       // max # of bonds for any atom
