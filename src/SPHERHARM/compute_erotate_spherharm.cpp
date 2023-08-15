@@ -12,6 +12,7 @@
 ------------------------------------------------------------------------- */
 /* ------------------------------------------------------------------------
    Contributing authors: James Young (UoE)
+                         Mohammad Imaran (UoE)
                          Kevin Hanley (UoE)
 
    Please cite the related publication:

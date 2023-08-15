@@ -53,6 +53,12 @@ class PairSH : public Pair {
   int refine_cap_angle(int &kk_count, int ishtype, int jshtype, double iang,  double radj,
                        double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
                        const double xj[3], double (&jrot)[3][3]);
+
+double find_inner_radius_directly(double rad_body,double radtol, double theta_sf, double phi_sf,double theta_proj, double phi_proj,const double xi[3], const double xj[3], double radi,  double radj,int ishtype,int jshtype,double (&irot)[3][3],double (&jrot)[3][3]);
+
+// double find_inner_radius(const double ix_sf[3],
+//                                             const double xi[3], const double xj[3],  double radj, int jshtype,  double (&jrot)[3][3]);
+
   void calc_norm_force_torque(int kk_count, int ishtype, int jshtype, double iang, double radi,  double radj,
                          double (&iquat_cont)[4], double (&iquat_sf_bf)[4], const double xi[3],
                          const double xj[3], double (&irot)[3][3],  double (&jrot)[3][3],
@@ -72,10 +78,11 @@ class PairSH : public Pair {
                                      double theta_n, double phi_n, double t_n, double radtol,
                                      int sht, const double jrot[3][3]);
 
+
   double cur_time;
   int file_count;
   int write_surfpoints_to_file(double *x, bool append_file, int cont, int ifnorm, double *norm) const;
-
+ int write_vol_overlap_to_file(int, int, double (&iforce)[3], double, double, bool);
   // Gaussian quadrature arrays
   double *abscissa{};          // Abscissa of gaussian quadrature (same for all shapes)
   double *weights{};           // Weights of gaussian quadrature (same for all shapes)

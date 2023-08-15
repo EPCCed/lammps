@@ -82,9 +82,6 @@ protected:
   int maxshexpan;             // Maximum degree of the shperical harmonic expansion
   int nshtypes;               // Number of spherical harmonic shapes
 
-  // Testing properties (not for release)
-  int verbose_out;            // Whether to print all the cout statements used in testing
-
   void read_sh_coeffs(const char *, int); // Reads the spherical harmonic coefficients from file
   void get_quadrature_values();     // Get the gaussian quadrature angles and weights
   void getI();                      // Calculate the inertia of each shape

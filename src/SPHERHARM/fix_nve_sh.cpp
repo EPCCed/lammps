@@ -12,6 +12,7 @@
 ------------------------------------------------------------------------- */
 /* ------------------------------------------------------------------------
    Contributing authors: James Young (UoE)
+                         Mohammad Imaran (UoE)
                          Kevin Hanley (UoE)
 
    Please cite the related publication:
@@ -42,7 +43,7 @@ void FixNVESh::init()
   if (!avec)
     error->all(FLERR,"Fix nve/sh requires atom style spherharm");
 
-  // check that all particles are finite-size ellipsoids
+  // check that all particles are finite-size
   // no point particles allowed, spherical is OK
 
   int *mask = atom->mask;
@@ -78,7 +79,6 @@ void FixNVESh::initial_integrate(int /*vflag*/)
   int *shtype = atom->shtype;
   int ishtype;
 
-  // set timestep here since dt may have changed or come via rRESPA
 
   dtq = 0.5 * dtv;
 
