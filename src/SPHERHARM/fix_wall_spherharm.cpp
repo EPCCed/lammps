@@ -55,7 +55,6 @@ enum{XPLANE=0,YPLANE=1,ZPLANE=2,ZCYLINDER,REGION};
 enum{VOLUME_BASED};
 enum{NONE,CONSTANT,EQUAL};
 
-#define EPSILON 1e-10
 #define BIG 1.0e20
 
 /* ---------------------------------------------------------------------- */
@@ -581,7 +580,7 @@ int FixWallSpherharm::refine_cap_angle_cylinder(int &kk_count, int ishtype, doub
 
   int kk, ll, n;
   double theta_pole, phi_pole, theta, phi;
-  double rad_body, dtemp, cosang, delxy;
+  double rad_body, dtemp, cosang;
   double aa, bb, cc, t, dist1, dist2, discrim;
   double ix_sf[3], gp[3], gp_bf[3], gp_sf[3], line_normal[3];
   double p[3], p1[3], p2[3];
@@ -678,16 +677,12 @@ void FixWallSpherharm::calc_force_torque(const int wall_type, int ishtype, doubl
   double rad_body;
   double ix_sf[3], x_testpoint[3];
 
-  double rad_wall, dv, numer, denom;
+  double rad_wall, dv, numer;
   double inorm_bf[3], inorm_sf[3], dtor[3];
   double gp[3], gp_bf[3], gp_sf[3];
   double wall_normal[3],line_normal[3];
   double quat[4];
   double rot_np_bf[3][3], rot_np_sf[3][3];
-
-  double aa, bb, cc, discrim;
-  double t1, t2;
-  double p[3];
 
   static int file_count = 0;
   bool first_call = true;
@@ -700,7 +695,6 @@ void FixWallSpherharm::calc_force_torque(const int wall_type, int ishtype, doubl
   MathExtra::quat_to_mat(quat, rot_np_bf);
 
   const int n = 2*(num_pole_quad-1);
-  const int n4 = int(std::ceil(double(n)/4.0));
   const double cosang = std::cos(iang);
   const double fac = ((1.0-cosang)/2.0)*(MY_2PI/double(n+1));
 

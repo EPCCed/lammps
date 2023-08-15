@@ -45,7 +45,6 @@
 using namespace LAMMPS_NS;
 using namespace MathConst;
 
-#define EPSILON 1e-10
 /* ---------------------------------------------------------------------- */
 
 PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
@@ -95,7 +94,6 @@ void PairSH::compute(int eflag, int vflag)
   ev_init(eflag,vflag);
 
   double **x = atom->x;
-  double **v = atom->v;
   double **f = atom->f;
   int *type = atom->type;
   int *shtype = atom->shtype;
@@ -110,8 +108,8 @@ void PairSH::compute(int eflag, int vflag)
   firstneigh = list->firstneigh;
 
   int me,kk_count;
-  bool first_call,candidates_found, cont_calc;
-  double vol_overlap,factor,pn,fn,Sn;
+  bool first_call,candidates_found;
+  double vol_overlap,factor,pn,fn;
   double torsum[3],xcont[3], iforce[3];
   double irot_cont[3][3];
   int maxshexpan;
@@ -137,7 +135,6 @@ void PairSH::compute(int eflag, int vflag)
     MathExtra::qnormalize(iquat_sf_bf);
 
     for (jj = 0; jj < jnum; jj++) {
-      cont_calc = false;
       j = jlist[jj];
       j &= NEIGHMASK;
       MathExtra::copy3(x[i], delvec);
@@ -151,7 +148,6 @@ void PairSH::compute(int eflag, int vflag)
       kk_count = -1;
       first_call = true;
       vol_overlap = 0.0;
-      Sn=0.0;
       MathExtra::zero3(iforce);
       MathExtra::zero3(torsum);
 
@@ -164,12 +160,6 @@ void PairSH::compute(int eflag, int vflag)
           iang = std::asin(r_i/radi);
 
         }
-        // else if (r>radi){
-        //   double h = 0.5 + (radi * radj - radi * radi)/(2.0 * r*r);
-        //   double r_j = std::sqrt(radj*radj - h*h*r*r);
-        //   iang = std::asin(r_j/radj);
-        // }
-
         else { // Can't use either spherical cap
           error->all(FLERR, "Error, centre within radius!");
         }
@@ -202,14 +192,10 @@ void PairSH::compute(int eflag, int vflag)
             calc_norm_force_torque(kk_count, ishtype, jshtype, iang, radi, radj, iquat_cont, iquat_sf_bf, x[i], x[j],
                                    irot,jrot, vol_overlap, iforce, torsum, factor, first_call, ii, jj);
 
-            // write_vol_overlap_to_file(maxshexpan,file_count,iforce,vol_overlap,Sn,true);
-
-
           }
           else{ // simplified case of sphere-sphere overlap
             sphere_sphere_norm_force_torque(radi, radj, radi+radj-r, x[i], x[j], iforce, torsum, vol_overlap);
 
-            // write_vol_overlap_to_file(maxshexpan,file_count,iforce,vol_overlap,Sn,true);
           }
 
           fpair = normal_coeffs[itype][jtype][0];
@@ -223,7 +209,6 @@ void PairSH::compute(int eflag, int vflag)
 
           // N.B on a single proc, N3L is always imposed, regardless of Newton On/Off
           if (force->newton_pair || j < nlocal) {
-            cont_calc = true;
             // Force on particle b
             MathExtra::sub3(f[j], iforce, f[j]);
             // Torque on particle b
@@ -522,9 +507,9 @@ void PairSH::calc_norm_force_torque(int kk_count, int ishtype, int jshtype, doub
   double theta_pole, phi_pole, theta_proj, phi_proj;
   double theta_bf, phi_bf, theta_sf, phi_sf;
   double rad_body, dtemp, finalrad;
-  double ix_sf[3], x_testpoint[3], x_projtestpoint[3],r_s[3];
+  double ix_sf[3], x_testpoint[3], x_projtestpoint[3];
 
-  double rad_sample,rad_sample1, dv;
+  double rad_sample, dv;
   double inorm_bf[3],inorm_sf[3], dtor[3];
   double gp[3], gp_bf[3], gp_sf[3];
   double quat[4];
@@ -706,9 +691,9 @@ void PairSH::sphere_sphere_norm_force_torque(double ri, double rj, double delta,
 
 double PairSH::find_inner_radius_directly(double rad_body,double radtol, double theta_sf, double phi_sf,double theta_proj, double phi_proj,const double xi[3], const double xj[3], double radi,  double radj,int ishtype,int jshtype,double (&irot)[3][3],double (&jrot)[3][3]){
 
-  double rad_sample,rad_1,rad_sample1,dtemp,finalrad;
+  double rad_sample,rad_sample1,dtemp,finalrad;
   double st,theta_proj1,phi_proj1;
-  double  jx_sf[3],jnorm_proj[3], x_testpoint[3],x_testpoint1[3], x_projtestpoint[3],r_s[3],x_projtestpoint1[3];
+  double  jx_sf[3],jnorm_proj[3], x_testpoint[3],x_testpoint1[3], x_projtestpoint[3],r_s[3];
 
     st = avec->get_shape_radius_and_normal(jshtype, theta_proj, phi_proj,jnorm_proj);
     jx_sf[0] = xj[0]-(st * sin(theta_sf)*cos(phi_sf)); // Global coordinates of point
@@ -812,39 +797,6 @@ double PairSH::find_intersection_by_bisection(double rad_body, double radtol, do
   }
   return rad_sample;
 }
-
-/* ----------------------------------------------------------------------
-  Write the overlap volume in a file --- MI tesintg...
-
-  This method writes the overlap volume between the particles at different time steps.
-  files name is according to the number of quadrature points used for the interaction calculation.
-------------------------------------------------------------------------- */
-
-int PairSH:: write_vol_overlap_to_file( int maxshexpan,int file_count,double (&iforce)[3], double vol_overlap,double Sn, bool append_file1)  {
-
-  maxshexpan = avec->get_max_expansion();
-  Sn = MathExtra::len3(iforce);
-
-  std::ofstream outfile1;
-  if (append_file1){
-
-    outfile1.open("vol_overlap_N_"+std::to_string(maxshexpan)+"_m_"+std::to_string(num_pole_quad)+".dat", std::ios_base::app);
-    if (outfile1.is_open()) {
-        outfile1 << std::setprecision(16) <<file_count << " " << vol_overlap << " " << Sn<<"\n";
-      outfile1.close();
-    } else std::cout << "Unable to open file";
-  }
-  else {
-    outfile1.open("vol_overlap_N_"+std::to_string(maxshexpan)+"_m_"+std::to_string(num_pole_quad)+".dat");
-    if (outfile1.is_open()) {
-        outfile1 << std::setprecision(16) << file_count << " " << vol_overlap << " "<< Sn<< "\n";
-      outfile1.close();
-    } else std::cout << "Unable to open file";
-  }
-  return 0;
-};
-
-
 
 
 /* ----------------------------------------------------------------------

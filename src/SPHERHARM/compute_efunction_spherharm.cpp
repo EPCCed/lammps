@@ -75,7 +75,6 @@ double ComputeEFunctionSpherharm::compute_scalar()
   int *mask = atom->mask;
   int *shtype = atom->shtype;
   double *mass = atom->rmass;
-  int *type = atom->type;
   int nlocal = atom->nlocal;
   double dt = update->dt;
   int ishtype;

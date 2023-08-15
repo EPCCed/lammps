@@ -21,7 +21,6 @@
 
 #include "atom_vec_spherharm.h"
 #include "atom.h"
-#include "complex"
 #include "error.h"
 #include "fix.h"
 #include "fix_adapt.h"
@@ -37,7 +36,6 @@
 #include "potential_file_reader.h"
 #include "utils.h"
 
-#include <iostream>    // just for testing, should be removed prior to production release
 
 using namespace LAMMPS_NS;
 using namespace MathConst;
@@ -143,10 +141,8 @@ void AtomVecSpherharm::process_args(int narg, char **arg)
     for (int i = 0; i < numcoeffs; i++) { shcoeffs_byshape[type][i] = 0.0; }
   }
 
-  if (me ==
-      0) {    // Only want the 0th processor to read in the coefficients
-    for (int i = 2; i < narg;
-         i++) {    // Can list a number of files storing coefficients, each will be read in turn
+  if (me == 0) {    // Only want the 0th processor to read in the coefficients
+    for (int i = 2; i < narg; i++) {    // Can list a number of files storing coefficients, each will be read in turn
       read_sh_coeffs(arg[i], i - 2);    // method for coefficient reading
     }
 
@@ -429,7 +425,7 @@ void AtomVecSpherharm::calcexpansionfactors_gauss()
   double safety_factor = 1.00;
   double theta, phi, factor;
   double x_val, mphi;
-  double P_n_m, P_n_m_c17, norm_fact;
+  double P_n_m;
   int nloc, loc, k;
   int num_quad2 = num_quadrature * num_quadrature;
   std::vector<double> r_n, r_npo;
@@ -453,10 +449,8 @@ void AtomVecSpherharm::calcexpansionfactors_gauss()
     for (int n = 0; n <= maxshexpan; n++) {    // For each harmonic n
       nloc = n * (n + 1);
       k = 0;
-      for (int i = 0; i < num_quadrature;
-           i++) {    // For each theta value (k corresponds to angle pair)
-        for (int j = 0; j < num_quadrature;
-             j++) {    // For each phi value (k corresponds to angle pair)
+      for (int i = 0; i < num_quadrature; i++) {    // For each theta value (k corresponds to angle pair)
+        for (int j = 0; j < num_quadrature; j++) {    // For each phi value (k corresponds to angle pair)
           theta = angles[0][k];
           phi = angles[1][k];
           x_val = cos(theta);
@@ -481,8 +475,7 @@ void AtomVecSpherharm::calcexpansionfactors_gauss()
                 2.0 * P_n_m;
             loc += 2;
           }
-          if (n <= maxshexpan -
-                  1) {    // Get the ratios of radii between subsequent harmonics (except the final two)
+          if (n <= maxshexpan - 1) {    // Get the ratios of radii between subsequent harmonics (except the final two)
             r_npo[k] = r_n[k];
             n++;
             loc = n * (n + 1);
@@ -572,7 +565,7 @@ int AtomVecSpherharm::check_contact(int sht, double phi_proj, double theta_proj,
   }
 
   int n, nloc, loc;
-  double P_n_m, x_val, mphi, Pnm_nn, norm_fact;
+  double P_n_m, x_val, mphi, Pnm_nn;
   std::vector<double> Pnm_m2, Pnm_m1;
 
   Pnm_m2.resize(maxshexpan + 1, 0.0);
@@ -582,9 +575,6 @@ int AtomVecSpherharm::check_contact(int sht, double phi_proj, double theta_proj,
   while (n <= maxshexpan) {
     nloc = n * (n + 1);
     if (n == 1) {
-      norm_fact = pow(-1, 0) *
-          std::sqrt(((2 * 1 + 1) * MathSpecial::factorial(1 - 0)) /
-                    (MY_4PI * MathSpecial::factorial(1 + 0)));
       P_n_m = plegendre(1, 0, x_val);
       Pnm_m2[0] = P_n_m;
       rad_val += shcoeffs_byshape[sht][4] * P_n_m;
@@ -672,7 +662,7 @@ double AtomVecSpherharm::get_shape_radius(int sht, double theta, double phi)
   double rad_val = shcoeffs_byshape[sht][0] * std::sqrt(1.0 / (4.0 * MY_PI));
 
   int n, nloc, loc;
-  double P_n_m, x_val, mphi, Pnm_nn, norm_fact;
+  double P_n_m, x_val, mphi, Pnm_nn;
   std::vector<double> Pnm_m2, Pnm_m1;
 
   Pnm_m2.resize(maxshexpan + 1, 0.0);
@@ -1287,8 +1277,6 @@ void AtomVecSpherharm::get_normal(double theta, double phi, double r, double rp,
 {
 
   double st, sp, ct, cp;
-  double denom;
-  double sfac;
 
   st = std::sin(theta);
   ct = std::cos(theta);
