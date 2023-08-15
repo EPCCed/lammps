@@ -75,9 +75,6 @@ double find_inner_radius_directly(double rad_body,double radtol, double theta_sf
                                      double theta_n, double phi_n, double t_n, double radtol,
                                      int sht, const double jrot[3][3]);
 
-  double cur_time;
-  int file_count;
-
   // Gaussian quadrature arrays
   double *abscissa{};          // Abscissa of gaussian quadrature (same for all shapes)
   double *weights{};           // Weights of gaussian quadrature (same for all shapes)

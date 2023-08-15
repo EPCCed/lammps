@@ -28,7 +28,6 @@
 #include "math_extra.h"
 
 using namespace LAMMPS_NS;
-#include <iostream>
 
 /* ---------------------------------------------------------------------- */
 

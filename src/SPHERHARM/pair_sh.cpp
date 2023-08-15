@@ -52,12 +52,10 @@ PairSH::PairSH(LAMMPS *lmp) : Pair(lmp)
 
   no_virial_fdotr_compute = 1;
 
-
   single_enable = 0;
   restartinfo = 0;
   writedata = 0;
   respa_enable = 0;
-  file_count = 0; // for temp file writing
 
   // Flag indicating if lammps types have been matches with SH type.
   matchtypes = 0;
@@ -115,7 +113,6 @@ void PairSH::compute(int eflag, int vflag)
   int maxshexpan;
 
   maxshexpan = avec->get_max_expansion();
-    file_count++;
 
   MPI_Comm_rank(world,&me);
   // loop over neighbors of my atoms

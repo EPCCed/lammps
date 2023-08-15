@@ -464,7 +464,6 @@ void FixWallSpherharm::vol_based(double dx, double dy, double dz, double iang,
     MathExtra::add3(f, iforce, f);           // Force and torque on particle a
     MathExtra::add3(torque, torsum, torque);
 
-    //std::cout << "fn  " << iforce[0] << " " << iforce[1] << " "<< iforce[2] << " " << std::endl;
 
     if (tang){ // Tangential component
       // This only works for a particle interacting with a flat plane. Need to modify for the interaction with a cylinder
@@ -482,8 +481,6 @@ void FixWallSpherharm::vol_based(double dx, double dy, double dz, double iang,
         MathExtra::sub3(vwall, v, vr); //vr = vj - vi
       }
       else if (wall_type==1){
-       // std::cout << "LO "<< line_origin[0] << " "<< line_origin[1] << " "<< line_origin[2] << std::endl;
-        //std::cout << "LN "<< linenorm[0] << " "<< linenorm[1] << " "<< linenorm[2] << std::endl;
         if (MathSpherharm::get_contact_point_cylinder(maxrad[ishtype], x, linenorm, line_origin, cp, cylradius, inside)){
           error->all(FLERR, "Error, Contact line does not intersect with bounding sphere or cylinder boundary");
         }
@@ -906,8 +903,6 @@ void FixWallSpherharm::calc_velCoulomb_force_torque(int ishtype, double const (&
   MathExtra::cross3(rw, n, rwn);
   MathExtra::sub3(vt, rwn, vtr);
   MathExtra::norm3(vtr);
-
-  //std::cout << std::endl << "t " << vtr[0] << " " << vtr[1] << " " << vtr[2] << std::endl<< std::endl;
 
   tforce[0] = tangcoeff*fn*vtr[0]; // Tangential force
   tforce[1] = tangcoeff*fn*vtr[1];
