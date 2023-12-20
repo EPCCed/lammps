@@ -48,7 +48,6 @@ class AtomVecSHDEM : public AtomVec {
   static void get_normal(double theta, double phi, double r, double rp, double rt, double rnorm[3]);
   int check_contact(int, double, double, double, double &); // Check for contact given shape, theta, phi, and distance
   double get_shape_volume(int sht); // Get the shape volume
-  void get_coefficients(int sht, double *coeff);
 
 protected:
   // per-atom arrays

@@ -1047,25 +1047,7 @@ void AtomVecSHDEM::read_sh_coeffs(const char *file, int shapenum)
     }
   }
 }
-#ifdef DEAD_CODE
-/* ----------------------------------------------------------------------
-  Given a SH type, return the coefficients corresponding to that type
-------------------------------------------------------------------------- */
-void AtomVecSHDEM::get_coefficients(int sht, double *coeff)
-{
 
-  int loc;
-
-  for (int n = 0; n <= maxshexpan; n++) {
-    loc = n * (n + 1);
-    for (int m = n; m >= 0; m--) {
-      coeff[loc] = shcoeffs_byshape[sht][loc];
-      coeff[loc + 1] = shcoeffs_byshape[sht][loc + 1];
-      loc = loc + 2;
-    }
-  }
-}
-#endif
 double AtomVecSHDEM::get_shape_volume(int sht)
 {
   return vol_byshape[sht];
