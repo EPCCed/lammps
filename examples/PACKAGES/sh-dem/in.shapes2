@@ -1,0 +1,68 @@
+# Test
+# This test is for five different shape types, the expansion coefficients
+# for which are supplied by the files: A-anm-00001.dat, cement-anm.dat,
+# class_a.dat, class_b.dat, and class_c.dat.
+
+# Particles are placed randomly in the box (with overlaps), with no initial
+# velocity
+
+atom_style	shdem 7  120 A-anm-00001.dat cement-anm.dat class_A.dat class_B.dat class_C.dat
+units		si
+newton          on
+neigh_modify	delay 0 every 100 check yes
+
+###############################################
+# Geometry-related parameters
+###############################################
+
+variable	box_side equal 1500
+
+region		boxreg block 0.0 ${box_side} 0.0 ${box_side} 0.0 ${box_side}
+create_box	5 boxreg
+change_box	all boundary  p p p
+
+###############################################
+# Create 200 particles of each shape
+###############################################
+
+create_atoms    1 random 200 12345 boxreg  maxtry  100000
+create_atoms    2 random 200 56945 boxreg  maxtry  100000
+create_atoms    3 random 200 23795 boxreg  maxtry  100000
+create_atoms    4 random 200 95011 boxreg  maxtry  100000
+create_atoms    5 random 200  4669 boxreg  maxtry  100000
+
+set             type *  mass    1.0
+
+
+## Setting-up sh  shape type for atom types
+
+set		type 1 sh/shape 1
+set		type 2 sh/shape 2
+set		type 3 sh/shape 3
+set		type 4 sh/shape 4
+set		type 5 sh/shape 5
+
+set		group all sh/quat/random 4
+
+fix		time_fix all nve/sh
+
+
+thermo 1
+
+compute TransKE all ke
+compute RotKE   all erotate/shdem
+compute PEcalc  all efunction/shdem
+
+variable ETotal equal "c_PEcalc + c_TransKE + c_RotKE"
+variable ERot   equal "C_RotKE"
+thermo_style custom	step	c_PEcalc c_TransKE c_RotKE v_ETotal
+
+# The pair stype is "sh-dem" and the coefficients are
+# k_n = 1.0e-05, alpha = 2, L = 30 (number of quadrature points for overlap)
+
+pair_style 	shdem
+pair_coeff 	* * 1.0e-02 2.0 30
+
+
+timestep	1.0e-04
+run		10000

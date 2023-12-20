@@ -1,35 +1,34 @@
 # Test
 
-variable	name string spherical_harmonics_testing
-atom_style	spherharm 20 120 sphere.dat
-units		si
-newton off
-# newton on
+atom_style	shdem 20 120 A-anm-00001.dat
+units		cgs
+newton          off
+
 
 ###############################################
 # Geometry-related parameters
 ###############################################
 
-variable	boxx equal 500
-variable	boxy equal 500
-variable	boxz equal 500
+variable	boxx equal 40
+variable	boxy equal 40
+variable	boxz equal 40
 
-
-#############
-processors * * 1
 region		boxreg block 0 ${boxx} 0 ${boxy} 0 ${boxz}
 create_box	2 boxreg
 change_box	all boundary f f f
 
-create_atoms 	1 single 50.0 50.0 50.0
+create_atoms 	1 single 20.0 20.0 17.0
 
-set 		atom 1 vx 1.0 vy 0.0 vz 0.0
+set 		atom 1 vx 0.0 vy 0.0 vz -5.0
 set		atom 1 sh/shape 1
 set		group all sh/quat/random 4
-set             group all mass 1.0
+
+pair_style      shdem
+pair_coeff      * * 1.0e-05 2.0 30
+
 
 fix		time_fix all nve/sh
-fix     xwall all wall/spherharm 2.0e-11 2.0 NULL xplane NULL 115.0
+fix             zwall all wall/shdem 1.0e-5 2.0 30 NULL zplane 0.0 40.0
 
 neigh_modify	delay 0 every 1 check yes
 comm_modify	vel yes
@@ -37,11 +36,12 @@ comm_modify	vel yes
 thermo 1
 
 compute TransKE all ke
-compute RotKE all erotate/spherharm
-compute PEcalc all efunction/spherharm
+compute RotKE all erotate/shdem
+compute PEcalc all efunction/shdem
 variable ETotal equal "c_PEcalc + c_TransKE + c_RotKE"
 thermo_style custom step c_PEcalc c_TransKE c_RotKE v_ETotal
 
-timestep	1.0e-1
 
-run	200000
+timestep	0.001
+
+run		15000

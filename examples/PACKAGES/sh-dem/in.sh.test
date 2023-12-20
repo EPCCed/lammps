@@ -1,6 +1,0 @@
-# Test
-
-variable	name string spherical_harmonics_testing
-atom_style	shperatom 0 120 ellipsoid.dat
-units		lj
-

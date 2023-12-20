@@ -1,35 +1,33 @@
 # Test
 
-variable	name string spherical_harmonics_testing
-atom_style	spherharm 120 /home/james/lammps/examples/USER/spherharm/A-anm-00001.dat
+atom_style	shdem 10	120 A-anm-00001.dat
 units		si
 newton off
-# newton on
 
 ###############################################
 # Geometry-related parameters
 ###############################################
 
-variable	boxx equal 500
-variable	boxy equal 500
-variable	boxz equal 500
+variable	boxx equal 100
+variable	boxy equal 100
+variable	boxz equal 100
 
 
-#############
-processors * * 1
 region		boxreg block 0 ${boxx} 0 ${boxy} 0 ${boxz}
 create_box	2 boxreg
 change_box	all boundary f f f
 
-create_atoms 	1 single 50.0 50.0 50.0
+create_atoms 	1 single 34.5 50.0 50.0
+create_atoms 	2 single 52.5 50.0 50.0
 
-mass *      1.0
 set 		atom 1 vx 1.0 vy 0.0 vz 0.0
+set 		atom 2 vx -1.0 vy 0.0 vz 0.0
+
 set		atom 1 sh/shape 1
-set		group all sh/quat 0 1 0 90.0
+set		atom 2 sh/shape 1
+set		group all sh/quat/random 4
 
 fix		time_fix all nve/sh
-fix     xwall all wall/spherharm 1.0e-5 2.0 xplane NULL 115.0 shear y 1.0
 
 neigh_modify	delay 0 every 1 check yes
 comm_modify	vel yes
@@ -37,11 +35,15 @@ comm_modify	vel yes
 thermo 1
 
 compute TransKE all ke
-compute RotKE all erotate/spherharm
-compute PEcalc all efunction/spherharm
+compute RotKE all erotate/shdem
+compute PEcalc all efunction/shdem
 variable ETotal equal "c_PEcalc + c_TransKE + c_RotKE"
+variable ERot equal "C_RotKE"
 thermo_style custom step c_PEcalc c_TransKE c_RotKE v_ETotal
 
-timestep	5.0e-2
+pair_style 	shdem
+pair_coeff 	* * 5.0e-2 2.0  30
 
-run	200000
+timestep	1.0e-3
+variable 	step equal step
+run		1000

@@ -1,6 +1,0 @@
-# Test
-
-variable	name string spherical_harmonics_testing
-atom_style	spherharmtest 20 120 A-anm-00001.dat
-units		lj
-newton off
