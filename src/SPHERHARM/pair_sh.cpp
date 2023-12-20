@@ -108,6 +108,7 @@ void PairSH::compute(int eflag, int vflag)
   int me,kk_count;
   bool first_call,candidates_found;
   double vol_overlap,factor,pn,fn;
+  double e_overlap;
   double torsum[3],xcont[3], iforce[3];
   double irot_cont[3][3];
   int maxshexpan;
@@ -145,6 +146,7 @@ void PairSH::compute(int eflag, int vflag)
       kk_count = -1;
       first_call = true;
       vol_overlap = 0.0;
+      e_overlap   = 0.0;
       MathExtra::zero3(iforce);
       MathExtra::zero3(torsum);
 
@@ -188,7 +190,6 @@ void PairSH::compute(int eflag, int vflag)
           if (maxshexpan!=0){
             calc_norm_force_torque(kk_count, ishtype, jshtype, iang, radi, radj, iquat_cont, iquat_sf_bf, x[i], x[j],
                                    irot,jrot, vol_overlap, iforce, torsum, factor, first_call, ii, jj);
-
           }
           else{ // simplified case of sphere-sphere overlap
             sphere_sphere_norm_force_torque(radi, radj, radi+radj-r, x[i], x[j], iforce, torsum, vol_overlap);
@@ -203,6 +204,9 @@ void PairSH::compute(int eflag, int vflag)
           // Force and torque on particle a
           MathExtra::add3(f[i], iforce, f[i]);
           MathExtra::add3(torque[i], torsum, torque[i]);
+
+	  // Potential energy
+	  e_overlap = fpair*std::pow(vol_overlap, exponent);
 
           // N.B on a single proc, N3L is always imposed, regardless of Newton On/Off
           if (force->newton_pair || j < nlocal) {
@@ -220,11 +224,8 @@ void PairSH::compute(int eflag, int vflag)
           } // newton_pair
 
           if (evflag) {
-            ev_tally_spherharm_sphere(i, j, nlocal, force->newton_pair,
-                               iforce[0], iforce[1], iforce[2],
-                               x[i][0], x[i][1], x[i][2], avec->get_shape_volume(ishtype),
-                               x[j][0], x[j][1], x[j][2], avec->get_shape_volume(jshtype),
-                               radi, radj);
+	    ev_tally(i, j, nlocal, force->newton_pair, e_overlap, 0.0, fpair,
+		     0.0, 0.0, 0.0);
           }
 
         } // candidates found
