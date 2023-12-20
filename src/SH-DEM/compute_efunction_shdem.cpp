@@ -19,7 +19,7 @@
    TBC
 ------------------------------------------------------------------------- */
 
-#include "compute_efunction_spherharm.h"
+#include "compute_efunction_shdem.h"
 
 #include "atom.h"
 #include "error.h"
@@ -31,7 +31,7 @@ using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-ComputeEFunctionSpherharm::ComputeEFunctionSpherharm(LAMMPS *lmp, int narg, char **arg) :
+ComputeEFunctionSHDEM::ComputeEFunctionSHDEM(LAMMPS *lmp, int narg, char **arg) :
   Compute(lmp, narg, arg)
 {
   if (narg != 3) error->all(FLERR,"Illegal compute erotate/sphere command");
@@ -42,13 +42,13 @@ ComputeEFunctionSpherharm::ComputeEFunctionSpherharm(LAMMPS *lmp, int narg, char
 
   // error check
 
-  if (!atom->spherharm_flag)
-    error->all(FLERR,"Compute erotate/sphere requires atom style spherharm");
+  if (!atom->shdem_flag)
+    error->all(FLERR,"Compute erotate/sphere requires atom style shdem");
 }
 
 /* ---------------------------------------------------------------------- */
 
-void ComputeEFunctionSpherharm::init()
+void ComputeEFunctionSHDEM::init()
 {
   pfactor = force->mvv2e; // No 0.5 here because not explicitly calculating 0.5mv^2, but are in units of mv^2
   dw_back = dw_back_nextstep = 0.0;
@@ -60,7 +60,7 @@ void ComputeEFunctionSpherharm::init()
 // the "front half" t+dt/2->t+dt of the time step. At the end of the time step, i.e t+dt, it is not possible
 // to calculate the "back half" of the work done, so this must be carried forward from the previous time step.
 /* ---------------------------------------------------------------------- */
-double ComputeEFunctionSpherharm::compute_scalar()
+double ComputeEFunctionSHDEM::compute_scalar()
 {
   invoked_scalar = update->ntimestep;
 

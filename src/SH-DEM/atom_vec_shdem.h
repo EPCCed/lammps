@@ -13,22 +13,22 @@
 
 #ifdef ATOM_CLASS
 
-AtomStyle(spherharm,AtomVecSpherharm)
+AtomStyle(shdem,AtomVecSHDEM)
 
 #else
 
-#ifndef LMP_ATOM_VEC_SPHERHARM_H
-#define LMP_ATOM_VEC_SPHERHARM_H
+#ifndef LMP_ATOM_VEC_SHDEM_H
+#define LMP_ATOM_VEC_SHDEM_H
 
 #include "atom_vec.h"
 
 namespace LAMMPS_NS {
 
-class AtomVecSpherharm : public AtomVec {
+class AtomVecSHDEM : public AtomVec {
  public:
 
   // Mandatory LAMMPS methods
-  AtomVecSpherharm(class LAMMPS *);
+  AtomVecSHDEM(class LAMMPS *);
   void process_args(int, char **);
   void init();
   void grow_pointers();
@@ -36,24 +36,19 @@ class AtomVecSpherharm : public AtomVec {
   void data_atom_post(int);
   void pack_data_pre(int);
   void pack_data_post(int);
-  ~AtomVecSpherharm();
+  ~AtomVecSHDEM();
 
   // Public methods used for contact detection. These are called by the pair_style and ensure that shcoeffs_byshape and
   // expfacts_byshape remain local to the atom style.
   int get_max_expansion() const; // Get the maximum spherical harmonic expansion
   double get_shape_radius(int sht, double theta, double phi); // Get the shape radius given theta and phi
   double get_shape_radius_and_normal(int sht, double theta, double phi, double rnorm[3]); // As above, with unit normal
-  double get_shape_radius_and_normal(double theta, double phi, double rnorm[3], const double *coeffs);
+
   double get_shape_radius_and_gradients(int sht, double theta, double phi, double &rad_dphi, double &rad_dtheta); // As above, with unit normal
   static void get_normal(double theta, double phi, double r, double rp, double rt, double rnorm[3]);
   int check_contact(int, double, double, double, double &); // Check for contact given shape, theta, phi, and distance
   double get_shape_volume(int sht); // Get the shape volume
   void get_coefficients(int sht, double *coeff);
-
-  // Not actively used but might be helpful in the future. Feel free to delete if unwanted.
-  double get_shape_radius_and_normal_compensated(int sht, double theta, double phi, double rnorm[3]); // As above, compensated sum
-  void doRotate(double *coeffin,  double *coeffout, double alpha, double beta, double gamma);
-  void dump_ply(int i, int shape, int plycount, double irot[3][3], const double offset[3]);
 
 protected:
   // per-atom arrays
@@ -85,10 +80,8 @@ protected:
   void read_sh_coeffs(const char *, int); // Reads the spherical harmonic coefficients from file
   void get_quadrature_values();     // Get the gaussian quadrature angles and weights
   void getI();                      // Calculate the inertia of each shape
-  void calcexpansionfactors();      // Calculate the expansion factors of each shape using a regular grid
   void calcexpansionfactors_gauss();// Calculate the expansion factors of each shape using the quadrature points
 
-  int getIndex(int n, int m) { return (m + n); }; // used by doRotate
 };
 
 }

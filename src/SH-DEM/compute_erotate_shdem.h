@@ -11,32 +11,45 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
-#ifdef FIX_CLASS
+#ifdef COMPUTE_CLASS
 
-FixStyle(nve/sh,FixNVESh)
+ComputeStyle(erotate/shdem,ComputeERotateSHDEM)
 
 #else
 
-#ifndef LMP_FIX_NVE_SH_H
-#define LMP_FIX_NVE_SH_H
+#ifndef LMP_COMPUTE_EROTATE_SHDEM_H
+#define LMP_COMPUTE_EROTATE_SHDEM_H
 
-#include "fix_nve.h"
+#include "compute.h"
 
 namespace LAMMPS_NS {
 
-class FixNVESh : public FixNVE {
+class ComputeERotateSHDEM : public Compute {
  public:
-  FixNVESh(class LAMMPS *, int, char **);
+  ComputeERotateSHDEM(class LAMMPS *, int, char **);
+  ~ComputeERotateSHDEM() {}
   void init();
-  void initial_integrate(int);
-  void final_integrate();
+  double compute_scalar();
 
  private:
-  double dtq;
-  class AtomVecSpherharm *avec;
+  double pfactor;
 };
 
 }
+
 #endif
 #endif
 
+/* ERROR/WARNING messages:
+
+E: Illegal ... command
+
+Self-explanatory.  Check the input script syntax and compare to the
+documentation for the command.  You can use -echo screen as a
+command-line option when running LAMMPS to see the offending line.
+
+E: Compute erotate/sphere requires atom style sphere
+
+Self-explanatory.
+
+*/

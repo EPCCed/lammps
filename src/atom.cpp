@@ -638,7 +638,7 @@ void Atom::set_atomflag_defaults()
   // 3rd customization section: customize by adding new flag
   // identical list as 2nd customization in atom.h
 
-  spherharm_flag = 0;
+  shdem_flag = 0;
   labelmapflag = 0;
   sphere_flag = ellipsoid_flag = line_flag = tri_flag = body_flag = 0;
   quat_flag = 0;

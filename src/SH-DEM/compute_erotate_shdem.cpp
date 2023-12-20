@@ -19,7 +19,7 @@
    TBC
 ------------------------------------------------------------------------- */
 
-#include "compute_erotate_spherharm.h"
+#include "compute_erotate_shdem.h"
 
 #include "atom.h"
 #include "error.h"
@@ -32,7 +32,7 @@ using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-ComputeERotateSpherharm::ComputeERotateSpherharm(LAMMPS *lmp, int narg, char **arg) :
+ComputeERotateSHDEM::ComputeERotateSHDEM(LAMMPS *lmp, int narg, char **arg) :
   Compute(lmp, narg, arg)
 {
   if (narg != 3) error->all(FLERR,"Illegal compute erotate/sphere command");
@@ -42,20 +42,20 @@ ComputeERotateSpherharm::ComputeERotateSpherharm(LAMMPS *lmp, int narg, char **a
 
   // error check
 
-  if (!atom->spherharm_flag)
-    error->all(FLERR,"Compute erotate/sphere requires atom style spherharm");
+  if (!atom->shdem_flag)
+    error->all(FLERR,"Compute erotate/sphere requires atom style shdem");
 }
 
 /* ---------------------------------------------------------------------- */
 
-void ComputeERotateSpherharm::init()
+void ComputeERotateSHDEM::init()
 {
   pfactor = 0.5 * force->mvv2e;
 }
 
 /* ---------------------------------------------------------------------- */
 
-double ComputeERotateSpherharm::compute_scalar()
+double ComputeERotateSHDEM::compute_scalar()
 {
   invoked_scalar = update->ntimestep;
 

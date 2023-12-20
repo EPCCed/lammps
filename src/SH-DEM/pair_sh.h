@@ -13,7 +13,7 @@
 
 #ifdef PAIR_CLASS
 
-PairStyle(spherharm,PairSH)
+PairStyle(shdem,PairSH)
 
 #else
 
@@ -37,7 +37,7 @@ class PairSH : public Pair {
  protected:
   double **cut{};
 
-  class AtomVecSpherharm *avec{};
+  class AtomVecSHDEM *avec{};
 
   virtual void allocate();
 

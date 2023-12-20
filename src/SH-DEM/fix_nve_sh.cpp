@@ -24,7 +24,7 @@
 #include "atom.h"
 #include "atom_vec_ellipsoid.h"
 #include "error.h"
-#include "atom_vec_spherharm.h"
+#include "atom_vec_shdem.h"
 
 
 using namespace LAMMPS_NS;
@@ -39,9 +39,9 @@ FixNVESh::FixNVESh(LAMMPS *lmp, int narg, char **arg) :
 
 void FixNVESh::init()
 {
-  avec = (AtomVecSpherharm *) atom->style_match("spherharm");
+  avec = (AtomVecSHDEM *) atom->style_match("shdem");
   if (!avec)
-    error->all(FLERR,"Fix nve/sh requires atom style spherharm");
+    error->all(FLERR,"Fix nve/sh requires atom style shdem");
 
   // check that all particles are finite-size
   // no point particles allowed, spherical is OK

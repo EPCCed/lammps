@@ -11,13 +11,13 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
-#include "math_spherharm.h"
+#include "math_shdem.h"
 #include "math_const.h"
 #include "gaussquad_const.h"
 
 using namespace LAMMPS_NS::GaussquadConst;
 
-namespace MathSpherharm {
+namespace MathSHDEM {
 
 /* ----------------------------------------------------------------------
   Calculate the Associated Legendre polynomials (generic)

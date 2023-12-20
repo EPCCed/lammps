@@ -13,21 +13,21 @@
 
 #ifdef COMPUTE_CLASS
 
-ComputeStyle(efunction/spherharm,ComputeEFunctionSpherharm)
+ComputeStyle(efunction/shdem,ComputeEFunctionSHDEM)
 
 #else
 
-#ifndef LMP_COMPUTE_EFUNCTION_SPHERHARM_H
-#define LMP_COMPUTE_EFUNCTION_SPHERHARM_H
+#ifndef LMP_COMPUTE_EFUNCTION_SHDEM_H
+#define LMP_COMPUTE_EFUNCTION_SHDEM_H
 
 #include "compute.h"
 
 namespace LAMMPS_NS {
 
-class ComputeEFunctionSpherharm : public Compute {
+class ComputeEFunctionSHDEM : public Compute {
  public:
-  ComputeEFunctionSpherharm(class LAMMPS *, int, char **);
-  ~ComputeEFunctionSpherharm() {}
+  ComputeEFunctionSHDEM(class LAMMPS *, int, char **);
+  ~ComputeEFunctionSHDEM() {}
   void init();
   double compute_scalar();
 

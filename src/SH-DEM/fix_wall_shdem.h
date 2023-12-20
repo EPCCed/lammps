@@ -13,24 +13,24 @@
 
 #ifdef FIX_CLASS
 
-FixStyle(wall/spherharm,FixWallSpherharm)
+FixStyle(wall/shdem,FixWallSHDEM)
 
 #else
 
-#ifndef LMP_FIX_WALL_SPHERHARM_H
-#define LMP_FIX_WALL_SPHERHARM_H
+#ifndef LMP_FIX_WALL_SHDEM_H
+#define LMP_FIX_WALL_SHDEM_H
 
 #include "math_extra.h"
 #include "fix.h"
-#include "math_spherharm.h"
+#include "math_shdem.h"
 #include <functional>
 
 namespace LAMMPS_NS {
 
-class FixWallSpherharm : public Fix {
+class FixWallSHDEM : public Fix {
  public:
-  FixWallSpherharm(class LAMMPS *, int, char **);
-  virtual ~FixWallSpherharm();
+  FixWallSHDEM(class LAMMPS *, int, char **);
+  virtual ~FixWallSHDEM();
   int setmask();
   virtual void init();
   void setup(int);
@@ -63,7 +63,7 @@ class FixWallSpherharm : public Fix {
   double vwall[3];
   char *idregion;
 
-  class AtomVecSpherharm *avec{};
+  class AtomVecSHDEM *avec{};
 
   // Creating a vector of functions, should be C++11 compliant, can't use auto lambdas.
   // https://stackoverflow.com/questions/30268507/in-c-how-to-choose-to-run-a-specific-member-function-without-using-if-stateme
@@ -82,7 +82,7 @@ class FixWallSpherharm : public Fix {
           double &rad, const double numer)-> int{
        double t1, t2;
        int not_ok;
-       not_ok = MathSpherharm::line_cylinder_intersection(ix, unit_line_normal,t1,t2, cylradius);
+       not_ok = MathSHDEM::line_cylinder_intersection(ix, unit_line_normal,t1,t2, cylradius);
        rad = t1*t2 > 0.0 ? std::min(t1,t2) : std::max(t1,t2);
        return(not_ok);
    }

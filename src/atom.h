@@ -72,8 +72,8 @@ class Atom : protected Pointers {
   imageint *image;
   double **x, **v, **f;
 
-  // spherical harmonics
-  // KS we are currently borrowing "quat" from finite size particles
+  // spherical harmonics SH-DEM
+  // We are currently borrowing "quat" from finite size particles
 
   int *shtype;             // integer array or spherical harmonic types
   int nshtypes;              // Number of spherical harmonic particle types
@@ -189,7 +189,7 @@ class Atom : protected Pointers {
   // most are existence flags for per-atom vectors and arrays
   // 1 if variable is used, 0 if not
 
-  int spherharm_flag;
+  int shdem_flag;
   int labelmapflag, types_style;
   int sphere_flag, ellipsoid_flag, line_flag, tri_flag, body_flag;
   int peri_flag, electron_flag;

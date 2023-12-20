@@ -12,7 +12,7 @@
 ------------------------------------------------------------------------- */
 
 // See https://people.math.sc.edu/Burkardt/cpp_src/fastgl/fastgl.html
-// Used in math_spherharm to calculate the weights and points of Gaussian quadrature
+// Used to calculate the weights and points of Gaussian quadrature
 
 #ifndef LMP_GAUSSQUAD_CONST_H
 #define LMP_GAUSSQUAD_CONST_H

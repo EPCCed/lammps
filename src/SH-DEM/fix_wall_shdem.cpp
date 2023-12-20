@@ -24,7 +24,7 @@
    TBC
 ------------------------------------------------------------------------- */
 
-#include "fix_wall_spherharm.h"
+#include "fix_wall_shdem.h"
 #include "cmath"
 #include "cstring"
 #include "math_extra.h"
@@ -39,8 +39,8 @@
 #include "memory.h"
 #include "error.h"
 #include "neighbor.h"
-#include "math_spherharm.h"
-#include "atom_vec_spherharm.h"
+#include "math_shdem.h"
+#include "atom_vec_shdem.h"
 
 #include "limits"
 typedef std::numeric_limits< double > dbl;
@@ -59,13 +59,13 @@ enum{NONE,CONSTANT,EQUAL};
 
 /* ---------------------------------------------------------------------- */
 
-FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
+FixWallSHDEM::FixWallSHDEM(LAMMPS *lmp, int narg, char **arg) :
         Fix(lmp, narg, arg), idregion(nullptr)
 {
-  if (narg < 8) error->all(FLERR,"Illegal fix wall/spherharm command");
+  if (narg < 8) error->all(FLERR,"Illegal fix wall/shdem command");
 
-  if (!atom->spherharm_flag)
-    error->all(FLERR,"Fix wall/spherharm requires atom style spherharm");
+  if (!atom->shdem_flag)
+    error->all(FLERR,"Fix wall/shdem requires atom style shdem");
 
   create_attribute = 1;
   restart_peratom = 0;
@@ -84,7 +84,7 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
   else tangcoeff = utils::numeric(FLERR, arg[5], false, lmp);
 
   if (kn < 0.0 || mexpon < 1.0 || tangcoeff < 0.0)
-    error->all(FLERR, "Illegal fix wall/spherharm command");
+    error->all(FLERR, "Illegal fix wall/shdem command");
 
   iarg = 7;
 
@@ -93,7 +93,7 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
   idregion = nullptr;
 
   if (strcmp(arg[iarg],"xplane") == 0) {
-    if (narg < iarg+3) error->all(FLERR,"Illegal fix wall/spherharm command");
+    if (narg < iarg+3) error->all(FLERR,"Illegal fix wall/shdem command");
     wallstyle = XPLANE;
     if (strcmp(arg[iarg+1],"NULL") == 0) lo = -BIG;
     else lo = utils::numeric(FLERR,arg[iarg+1],false,lmp);
@@ -101,7 +101,7 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
     else hi = utils::numeric(FLERR,arg[iarg+2],false,lmp);
     iarg += 3;
   } else if (strcmp(arg[iarg],"yplane") == 0) {
-    if (narg < iarg+3) error->all(FLERR,"Illegal fix wall/spherharm command");
+    if (narg < iarg+3) error->all(FLERR,"Illegal fix wall/shdem command");
     wallstyle = YPLANE;
     if (strcmp(arg[iarg+1],"NULL") == 0) lo = -BIG;
     else lo = utils::numeric(FLERR,arg[iarg+1],false,lmp);
@@ -109,7 +109,7 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
     else hi = utils::numeric(FLERR,arg[iarg+2],false,lmp);
     iarg += 3;
   } else if (strcmp(arg[iarg],"zplane") == 0) {
-    if (narg < iarg+3) error->all(FLERR,"Illegal fix wall/spherharm command");
+    if (narg < iarg+3) error->all(FLERR,"Illegal fix wall/shdem command");
     wallstyle = ZPLANE;
     if (strcmp(arg[iarg+1],"NULL") == 0) lo = -BIG;
     else lo = utils::numeric(FLERR,arg[iarg+1],false,lmp);
@@ -117,13 +117,13 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
     else hi = utils::numeric(FLERR,arg[iarg+2],false,lmp);
     iarg += 3;
   } else if (strcmp(arg[iarg],"zcylinder") == 0) {
-    if (narg < iarg+2) error->all(FLERR,"Illegal fix wall/spherharm command");
+    if (narg < iarg+2) error->all(FLERR,"Illegal fix wall/shdem command");
     wallstyle = ZCYLINDER;
     lo = hi = 0.0;
     cylradius = utils::numeric(FLERR,arg[iarg+1],false,lmp);
     iarg += 2;
   } else if (strcmp(arg[iarg],"region") == 0) {
-    if (narg < iarg+2) error->all(FLERR,"Illegal fix wall/spherharm command");
+    if (narg < iarg+2) error->all(FLERR,"Illegal fix wall/shdem command");
     wallstyle = REGION;
     int n = strlen(arg[iarg+1]) + 1;
     idregion = new char[n];
@@ -141,21 +141,21 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
 
   while (iarg < narg) {
     if (strcmp(arg[iarg],"wiggle") == 0) {
-      if (iarg+4 > narg) error->all(FLERR,"Illegal fix wall/spherharm command");
+      if (iarg+4 > narg) error->all(FLERR,"Illegal fix wall/shdem command");
       if (strcmp(arg[iarg+1],"x") == 0) axis = 0;
       else if (strcmp(arg[iarg+1],"y") == 0) axis = 1;
       else if (strcmp(arg[iarg+1],"z") == 0) axis = 2;
-      else error->all(FLERR,"Illegal fix wall/spherharm command");
+      else error->all(FLERR,"Illegal fix wall/shdem command");
       amplitude = utils::numeric(FLERR,arg[iarg+2],false,lmp);
       period = utils::numeric(FLERR,arg[iarg+3],false,lmp);
       wiggle = 1;
       iarg += 4;
     } else if (strcmp(arg[iarg],"shear") == 0) {
-      if (iarg+3 > narg) error->all(FLERR,"Illegal fix wall/spherharm command");
+      if (iarg+3 > narg) error->all(FLERR,"Illegal fix wall/shdem command");
       if (strcmp(arg[iarg+1],"x") == 0) axis = 0;
       else if (strcmp(arg[iarg+1],"y") == 0) axis = 1;
       else if (strcmp(arg[iarg+1],"z") == 0) axis = 2;
-      else error->all(FLERR,"Illegal fix wall/spherharm command");
+      else error->all(FLERR,"Illegal fix wall/shdem command");
       vshear = utils::numeric(FLERR,arg[iarg+2],false,lmp);
       wshear = 1;
       iarg += 3;
@@ -170,7 +170,7 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
       size_peratom_cols = 8;
       peratom_freq = 1;
       iarg += 1;
-    } else error->all(FLERR,"Illegal fix wall/spherharm command");
+    } else error->all(FLERR,"Illegal fix wall/shdem command");
   }
 
   if (wallstyle == XPLANE && domain->xperiodic)
@@ -183,23 +183,23 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
     error->all(FLERR,"Cannot use wall in periodic dimension");
 
   if (wiggle && wshear)
-    error->all(FLERR,"Cannot wiggle and shear fix wall/spherharm");
+    error->all(FLERR,"Cannot wiggle and shear fix wall/shdem");
   if (wiggle && wallstyle == ZCYLINDER && axis != 2)
-    error->all(FLERR,"Invalid wiggle direction for fix wall/spherharm");
+    error->all(FLERR,"Invalid wiggle direction for fix wall/shdem");
   if (wshear && wallstyle == XPLANE && axis == 0)
-    error->all(FLERR,"Invalid shear direction for fix wall/spherharm");
+    error->all(FLERR,"Invalid shear direction for fix wall/shdem");
   if (wshear && wallstyle == YPLANE && axis == 1)
-    error->all(FLERR,"Invalid shear direction for fix wall/spherharm");
+    error->all(FLERR,"Invalid shear direction for fix wall/shdem");
   if (wshear && wallstyle == ZPLANE && axis == 2)
-    error->all(FLERR,"Invalid shear direction for fix wall/spherharm");
+    error->all(FLERR,"Invalid shear direction for fix wall/shdem");
   if ((wiggle || wshear) && wallstyle == REGION)
-    error->all(FLERR,"Cannot wiggle or shear with fix wall/spherharm/region");
+    error->all(FLERR,"Cannot wiggle or shear with fix wall/shdem/region");
 
 
   if (wtranslate && wallstyle == ZCYLINDER) // added wscontrol [MO - 28 Aug 2015]
-    error->all(FLERR,"Cannot use translate with cylinder fix wall/spherharm");
+    error->all(FLERR,"Cannot use translate with cylinder fix wall/shdem");
   if (wtranslate && (wiggle || wshear)) // added wscontrol [MO - 28 Aug 2015]
-    error->all(FLERR,"Cannot translate and wiggle or shear fix wall/spherharm");
+    error->all(FLERR,"Cannot translate and wiggle or shear fix wall/shdem");
 
   // setup oscillations
 
@@ -221,7 +221,7 @@ FixWallSpherharm::FixWallSpherharm(LAMMPS *lmp, int narg, char **arg) :
 
 /* ---------------------------------------------------------------------- */
 
-FixWallSpherharm::~FixWallSpherharm()
+FixWallSHDEM::~FixWallSHDEM()
 {
   // unregister callbacks to this fix from Atom class
 
@@ -238,7 +238,7 @@ FixWallSpherharm::~FixWallSpherharm()
 
 /* ---------------------------------------------------------------------- */
 
-int FixWallSpherharm::setmask()
+int FixWallSHDEM::setmask()
 {
   int mask = 0;
   mask |= POST_FORCE;
@@ -247,19 +247,19 @@ int FixWallSpherharm::setmask()
 
 /* ---------------------------------------------------------------------- */
 
-void FixWallSpherharm::init()
+void FixWallSHDEM::init()
 {
   dt = update->dt;
 
-  avec = (AtomVecSpherharm *) atom->style_match("spherharm");
-  if (!avec) error->all(FLERR,"Pair SH requires atom style spherharm");
+  avec = (AtomVecSHDEM *) atom->style_match("shdem");
+  if (!avec) error->all(FLERR,"Pair SH requires atom style shdem");
 
   get_quadrature_values(num_pole_quad);
 }
 
 /* ---------------------------------------------------------------------- */
 
-void FixWallSpherharm::setup(int vflag)
+void FixWallSHDEM::setup(int vflag)
 {
   if (strstr(update->integrate_style,"verlet"))
     post_force(vflag);
@@ -267,7 +267,7 @@ void FixWallSpherharm::setup(int vflag)
 
 /* ---------------------------------------------------------------------- */
 
-void FixWallSpherharm::post_force(int /*vflag*/)
+void FixWallSHDEM::post_force(int /*vflag*/)
 {
   double dx,dy,dz,del1,del2,delxy,delr,rsq;
   double vwall[3];
@@ -392,7 +392,7 @@ void FixWallSpherharm::post_force(int /*vflag*/)
   }
 }
 
-void FixWallSpherharm::clear_stored_contacts() {
+void FixWallSHDEM::clear_stored_contacts() {
   const int nlocal = atom->nlocal;
   for (int i = 0; i < nlocal; i++) {
     for (int m = 0; m < size_peratom_cols; m++) {
@@ -402,7 +402,7 @@ void FixWallSpherharm::clear_stored_contacts() {
 }
 
 
-void FixWallSpherharm::vol_based(double dx, double dy, double dz, double iang,
+void FixWallSHDEM::vol_based(double dx, double dy, double dz, double iang,
                                  int ishtype, double *quat, double *x, double *f,
                                  double *torque, double *v, double *omegaa, double *contact, double *maxrad,
                                  double (&vwall)[3]){
@@ -442,7 +442,7 @@ void FixWallSpherharm::vol_based(double dx, double dy, double dz, double iang,
   MathExtra::qnormalize(iquat_sf_bf);
 
   // Get the quaternion from north pole of atom "i" to the vector connecting the centre line of atom "i" to the wall
-  MathSpherharm::get_contact_quat(delvec, iquat_cont);
+  MathSHDEM::get_contact_quat(delvec, iquat_cont);
 
 
   kk_count = num_pole_quad-1;
@@ -475,13 +475,13 @@ void FixWallSpherharm::vol_based(double dx, double dy, double dz, double iang,
       MathExtra::normalize3(linenorm, linenorm); // Ensuring that the line normal is a unit vector
 
       if (wall_type==0) {
-        if (MathSpherharm::get_contact_point_plane(maxrad[ishtype], zerocord, linenorm, line_origin, delvec, cp)){
+        if (MathSHDEM::get_contact_point_plane(maxrad[ishtype], zerocord, linenorm, line_origin, delvec, cp)){
           error->all(FLERR, "Error, Contact line does not intersect with bounding sphere or wall boundary");
         }
         MathExtra::sub3(vwall, v, vr); //vr = vj - vi
       }
       else if (wall_type==1){
-        if (MathSpherharm::get_contact_point_cylinder(maxrad[ishtype], x, linenorm, line_origin, cp, cylradius, inside)){
+        if (MathSHDEM::get_contact_point_cylinder(maxrad[ishtype], x, linenorm, line_origin, cp, cylradius, inside)){
           error->all(FLERR, "Error, Contact line does not intersect with bounding sphere or cylinder boundary");
         }
         vr[0] = -v[0]; // for cylinder this is [-v1, -v2, vw3-v3], cyl can only have z velocity
@@ -509,7 +509,7 @@ void FixWallSpherharm::vol_based(double dx, double dy, double dz, double iang,
 
 /* ----------------------------------------------------------------------
 ------------------------------------------------------------------------- */
-int FixWallSpherharm::refine_cap_angle_plane(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
+int FixWallSHDEM::refine_cap_angle_plane(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
                                              double (&iquat_sf_bf)[4], const double xi[3], const double delvec[3]){
 
   int kk, ll, n;
@@ -572,7 +572,7 @@ int FixWallSpherharm::refine_cap_angle_plane(int &kk_count, int ishtype, double 
 
 /* ----------------------------------------------------------------------
 ------------------------------------------------------------------------- */
-int FixWallSpherharm::refine_cap_angle_cylinder(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
+int FixWallSHDEM::refine_cap_angle_cylinder(int &kk_count, int ishtype, double iang, double (&iquat_cont)[4],
                                                 double (&iquat_sf_bf)[4], const double xi[3], const double delvec[3]){
 
   int kk, ll, n;
@@ -663,7 +663,7 @@ int FixWallSpherharm::refine_cap_angle_cylinder(int &kk_count, int ishtype, doub
 ------------------------------------------------------------------------- */
 
 
-void FixWallSpherharm::calc_force_torque(const int wall_type, int ishtype, double iang, double (&iquat_cont)[4],
+void FixWallSHDEM::calc_force_torque(const int wall_type, int ishtype, double iang, double (&iquat_cont)[4],
                                          double (&iquat_sf_bf)[4], const double xi[3], double (&irot)[3][3],
                                          double &vol_overlap, double (&iforce)[3], double (&torsum)[3],
                                          double delvec[3]){
@@ -763,7 +763,7 @@ void FixWallSpherharm::calc_force_torque(const int wall_type, int ishtype, doubl
    memory usage of local atom-based arrays
 ------------------------------------------------------------------------- */
 
-double FixWallSpherharm::memory_usage()
+double FixWallSHDEM::memory_usage()
 {
   int nmax = atom->nmax;
   double bytes = 0.0;
@@ -776,10 +776,10 @@ double FixWallSpherharm::memory_usage()
    allocate local atom-based arrays
 ------------------------------------------------------------------------- */
 
-void FixWallSpherharm::grow_arrays(int nmax)
+void FixWallSHDEM::grow_arrays(int nmax)
 {
   if (peratom_flag) {
-    memory->grow(array_atom,nmax,size_peratom_cols,"fix_wall_spherharm:array_atom");
+    memory->grow(array_atom,nmax,size_peratom_cols,"fix_wall_shdem:array_atom");
   }
 }
 
@@ -787,7 +787,7 @@ void FixWallSpherharm::grow_arrays(int nmax)
    copy values within local atom-based arrays
 ------------------------------------------------------------------------- */
 
-void FixWallSpherharm::copy_arrays(int i, int j, int /*delflag*/)
+void FixWallSHDEM::copy_arrays(int i, int j, int /*delflag*/)
 {
   if (peratom_flag) {
     for (int m = 0; m < size_peratom_cols; m++)
@@ -799,7 +799,7 @@ void FixWallSpherharm::copy_arrays(int i, int j, int /*delflag*/)
    initialize one atom's array values, called when atom is created
 ------------------------------------------------------------------------- */
 
-void FixWallSpherharm::set_arrays(int i)
+void FixWallSHDEM::set_arrays(int i)
 {
   if (peratom_flag) {
     for (int m = 0; m < size_peratom_cols; m++)
@@ -811,7 +811,7 @@ void FixWallSpherharm::set_arrays(int i)
    pack values in local atom-based arrays for exchange with another proc
 ------------------------------------------------------------------------- */
 
-int FixWallSpherharm::pack_exchange(int i, double *buf)
+int FixWallSHDEM::pack_exchange(int i, double *buf)
 {
   int n = 0;
   if (peratom_flag) {
@@ -825,7 +825,7 @@ int FixWallSpherharm::pack_exchange(int i, double *buf)
    unpack values into local atom-based arrays after exchange
 ------------------------------------------------------------------------- */
 
-int FixWallSpherharm::unpack_exchange(int nlocal, double *buf)
+int FixWallSHDEM::unpack_exchange(int nlocal, double *buf)
 {
   int n = 0;
   if (peratom_flag) {
@@ -837,22 +837,22 @@ int FixWallSpherharm::unpack_exchange(int nlocal, double *buf)
 
 /* ---------------------------------------------------------------------- */
 
-void FixWallSpherharm::reset_dt()
+void FixWallSHDEM::reset_dt()
 {
   dt = update->dt;
 }
 
 /* ---------------------------------------------------------------------- */
 
-void FixWallSpherharm::get_quadrature_values(int num_quadrature){
+void FixWallSHDEM::get_quadrature_values(int num_quadrature){
 
   memory->create(weights, num_quadrature, "PairSH:weights");
   memory->create(abscissa, num_quadrature, "PairSH:abscissa");
 
-  MathSpherharm::QuadPair p;
+  MathSHDEM::QuadPair p;
   // Get the quadrature weights, and abscissa.
   for (int i = 0; i < num_quadrature; i++) {
-    p = MathSpherharm::GLPair(num_quadrature, i + 1);
+    p = MathSHDEM::GLPair(num_quadrature, i + 1);
     weights[i] = p.weight;
     abscissa[i] = p.x();
   }
@@ -861,7 +861,7 @@ void FixWallSpherharm::get_quadrature_values(int num_quadrature){
 
 
 // contact point cp is relative to particle a's centre
-void FixWallSpherharm::calc_velCoulomb_force_torque(int ishtype, double const (&normforce)[3], double const (&vr)[3],
+void FixWallSHDEM::calc_velCoulomb_force_torque(int ishtype, double const (&normforce)[3], double const (&vr)[3],
                                                     const double *omegaa, double const (&cp)[3], double const xi[3],
                                                     double (&iquat_sf_bf)[4], double (&tforce)[3], double (&ttorque)[3])
 {
@@ -917,7 +917,7 @@ void FixWallSpherharm::calc_velCoulomb_force_torque(int ishtype, double const (&
 /* ----------------------------------------------------------------------
   A function that implements wall movement
 ------------------------------------------------------------------------- */
-void FixWallSpherharm::move_wall() {
+void FixWallSHDEM::move_wall() {
   if (lo != -BIG) {
     lo+=vwall[wallstyle]*dt;
     domain->boxlo[wallstyle] = lo;

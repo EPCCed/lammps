@@ -11,14 +11,14 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
-#ifndef LMP_MATH_SPHERHARM_H
-#define LMP_MATH_SPHERHARM_H
+#ifndef LMP_MATH_SHDEM_H
+#define LMP_MATH_SHDEM_H
 
 #include "cmath"
 #include "math_extra.h"
 #include "iostream"
 
-namespace MathSpherharm {
+namespace MathSHDEM {
 
   // Inline methods
   inline void quat_to_spherical(double q[4], double &theta, double &phi);
@@ -86,7 +86,7 @@ namespace MathSpherharm {
 /* ----------------------------------------------------------------------
   Convert quaternion into spherical theta, phi values
 ------------------------------------------------------------------------- */
-inline void MathSpherharm::quat_to_spherical(double q[4], double &theta, double &phi)
+inline void MathSHDEM::quat_to_spherical(double q[4], double &theta, double &phi)
 {
   double norm = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
   theta = 2.0*acos(sqrt((q[0]*q[0] + q[3]*q[3])/norm));
@@ -97,7 +97,7 @@ inline void MathSpherharm::quat_to_spherical(double q[4], double &theta, double 
   Convert quaternion into z-y-z convention euler angles alpha, beta, and gamma
   Theory from MATLABs quat2rotm and rotm2eul
 ------------------------------------------------------------------------- */
-inline int MathSpherharm::quat_to_euler(double q[4], double &alpha, double &beta, double &gamma, const std::string& seq)
+inline int MathSHDEM::quat_to_euler(double q[4], double &alpha, double &beta, double &gamma, const std::string& seq)
 {
 
   if (seq=="ZYX") {
@@ -134,7 +134,7 @@ inline int MathSpherharm::quat_to_euler(double q[4], double &alpha, double &beta
   return 0;
 }
 
-inline int MathSpherharm::quat_to_euler_test(double q[4], double &alpha, double &beta, double &gamma, const std::string& seq)
+inline int MathSHDEM::quat_to_euler_test(double q[4], double &alpha, double &beta, double &gamma, const std::string& seq)
 {
 
   double sy, temp;
@@ -232,7 +232,7 @@ inline int MathSpherharm::quat_to_euler_test(double q[4], double &alpha, double 
   https://github.com/moble/quaternion/blob/master/src/quaternion.c
   https://quaternion.readthedocs.io/en/latest/Package%20API%3A/quaternion/
 ------------------------------------------------------------------------- */
-inline void MathSpherharm::spherical_to_quat(double theta, double phi, double q[4])
+inline void MathSHDEM::spherical_to_quat(double theta, double phi, double q[4])
 {
   double ct = cos(theta/2.0);
   double cp = cos(phi/2.0);
@@ -245,7 +245,7 @@ inline void MathSpherharm::spherical_to_quat(double theta, double phi, double q[
 }
 
 
-inline void MathSpherharm::times4(const double m[4][4], const double m2[4][4],
+inline void MathSHDEM::times4(const double m[4][4], const double m2[4][4],
                               double ans[4][4])
 {
   ans[0][0] = m[0][0]*m2[0][0] + m[0][1]*m2[1][0] + m[0][2]*m2[2][0] + m[0][3]*m2[3][0];
@@ -269,7 +269,7 @@ inline void MathSpherharm::times4(const double m[4][4], const double m2[4][4],
   ans[3][3] = m[3][0]*m2[0][3] + m[3][1]*m2[1][3] + m[3][2]*m2[2][3] + m[3][3]*m2[3][3];
 }
 
-inline bool MathSpherharm::invert4(const double m[4][4], double invOut[4][4])
+inline bool MathSHDEM::invert4(const double m[4][4], double invOut[4][4])
 {
   double inv[16], det;
   int i, j;
@@ -400,7 +400,7 @@ inline bool MathSpherharm::invert4(const double m[4][4], double invOut[4][4])
   return true;
 }
 
-inline void MathSpherharm::matvec4(const double M[4][4], const double v[4], double ans[4])
+inline void MathSHDEM::matvec4(const double M[4][4], const double v[4], double ans[4])
 {
   ans[0] = M[0][0]*v[0] + M[0][1]*v[1] + M[0][2]*v[2] + M[0][3]*v[3];
   ans[1] = M[1][0]*v[0] + M[1][1]*v[1] + M[1][2]*v[2] + M[1][3]*v[3];

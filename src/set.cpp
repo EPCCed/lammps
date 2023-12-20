@@ -661,7 +661,7 @@ void Set::command(int narg, char **arg)
       else zvalue = utils::numeric(FLERR,arg[iarg+3],false,lmp);
       if (utils::strmatch(arg[iarg+4],"^v_")) varparse(arg[iarg+4],4);
       else wvalue = utils::numeric(FLERR,arg[iarg+4],false,lmp);
-      if (!atom->spherharm_flag)
+      if (!atom->shdem_flag)
         error->all(FLERR, "Cannot set this attribute for this atom style");
       set(SH_QUAT);
       iarg += 5;
@@ -669,7 +669,7 @@ void Set::command(int narg, char **arg)
     } else if (strcmp(arg[iarg],"sh/quat/random") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal set command");
       ivalue = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
-      if (!atom->spherharm_flag)
+      if (!atom->shdem_flag)
         error->all(FLERR,"Cannot set this attribute for this atom style");
       if (ivalue <= 0)
         error->all(FLERR,"Invalid random number seed in set command");

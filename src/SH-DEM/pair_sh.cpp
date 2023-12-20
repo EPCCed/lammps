@@ -39,8 +39,8 @@
 #include "error.h"
 #include "utils.h"
 #include "math_extra.h"
-#include "atom_vec_spherharm.h"
-#include "math_spherharm.h"
+#include "atom_vec_shdem.h"
+#include "math_shdem.h"
 
 using namespace LAMMPS_NS;
 using namespace MathConst;
@@ -165,7 +165,7 @@ void PairSH::compute(int eflag, int vflag)
 
         // Get the quaternion from north pole of atom "i" to the vector connecting the centre line of atom "i" and "j".
         MathExtra::negate3(delvec);
-        MathSpherharm::get_contact_quat(delvec, iquat_cont);
+        MathSHDEM::get_contact_quat(delvec, iquat_cont);
         // Quaternion of north pole to contact for atom "i"
         MathExtra::quat_to_mat(iquat_cont, irot_cont);
         // Calculate the rotation matrix for the quaternion for atom j
@@ -264,8 +264,8 @@ void PairSH::allocate()
 void PairSH::settings(int narg, char **arg) {
   if (narg != 0) error->all(FLERR, "Illegal pair_style command");
 
-  avec = (AtomVecSpherharm *) atom->style_match("spherharm");
-  if (!avec) error->all(FLERR,"Pair SH requires atom style shperatom");
+  avec = (AtomVecSHDEM *) atom->style_match("shdem");
+  if (!avec) error->all(FLERR,"Pair SH requires atom style shdem");
 
 }
 
@@ -382,7 +382,7 @@ double PairSH::init_one(int i, int j)
 
 /* ----------------------------------------------------------------------
    Weights and abscissa are regenerated here rather than taking those generated
-   in atom_vec_spherharm as the order of quadrature can be specified separately.
+   in atom_vec as the order of quadrature can be specified separately.
    i.e. those used to calculate spherical harmonic type properties do not need
    to be the same as those used in contact
 ------------------------------------------------------------------------- */
@@ -391,10 +391,10 @@ void PairSH::get_quadrature_values(int num_quadrature) {
   memory->create(weights, num_quadrature, "PairSH:weights");
   memory->create(abscissa, num_quadrature, "PairSH:abscissa");
 
-  MathSpherharm::QuadPair p;
+  MathSHDEM::QuadPair p;
   // Get the quadrature weights, and abscissa.
   for (int i = 0; i < num_quadrature; i++) {
-    p = MathSpherharm::GLPair(num_quadrature, i + 1);
+    p = MathSHDEM::GLPair(num_quadrature, i + 1);
     weights[i] = p.weight;
     abscissa[i] = p.x();
   }
@@ -682,7 +682,7 @@ void PairSH::sphere_sphere_norm_force_torque(double ri, double rj, double delta,
   iforce[2] = (zj-zi) / dist;
 
   MathExtra::scale3(Sn, iforce);
-  voloverlap = MathSpherharm::get_sphere_overlap_volume(ri, rj, d);
+  voloverlap = MathSHDEM::get_sphere_overlap_volume(ri, rj, d);
 }
 #
 
