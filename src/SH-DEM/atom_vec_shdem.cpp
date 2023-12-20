@@ -741,125 +741,15 @@ double AtomVecSHDEM::get_shape_radius(int sht, double theta, double phi)
 ------------------------------------------------------------------------- */
 double AtomVecSHDEM::get_shape_radius_and_normal(int sht, double theta, double phi, double rnorm[3]) {
 
-  int n, nloc, loc;
-  double P_n_m, x_val, mphi, Pnm_nn, fnm, st;
-  std::vector<double> Pnm_m2, Pnm_m1;
+  double r = 0.0;
+  double r_dtheta = 0.0;
+  double r_dphi = 0.0;
 
-  fnm = std::sqrt(1.0 / MY_4PI);
-  double rad_val = shcoeffs_byshape[sht][0] * fnm;
-  double rad_dphi, rad_dtheta;
-  rad_dphi = rad_dtheta = 0.0;
+  r = get_shape_radius_and_gradients(sht, theta, phi, r_dphi, r_dtheta);
 
-  Pnm_m2.resize(maxshexpan+1, 0.0);
-  Pnm_m1.resize(maxshexpan+1, 0.0);
+  get_normal(theta, phi, r, r_dphi, r_dtheta, rnorm);
 
-  if (sin(theta) == 0.0) theta += EPSILON; // otherwise dividing by sin(theta) for gradients will not work
-  if (sin(phi) == 0.0) phi += EPSILON; // To be consistent...
-  x_val = std::cos(theta);
-  st = std::sin(theta);
-
-  for (n=1; n<=maxshexpan; n++){
-    nloc = n * (n + 1);
-
-    // n=1
-    if (n == 1) {
-      // n=1, m=0
-      P_n_m = plegendre(1, 0, x_val);
-      Pnm_m2[0] = P_n_m;
-      rad_val += shcoeffs_byshape[sht][4] * P_n_m;
-      fnm = std::sqrt(3.0 / MY_4PI);
-      rad_dtheta -= (shcoeffs_byshape[sht][4]*fnm/st)*((2.0*x_val*plgndr(1,0,x_val))-
-              (2.0*plgndr(2, 0, x_val)));
-      // n=1, m=1
-      P_n_m = plegendre(1, 1, x_val);
-      Pnm_m2[1] = P_n_m;
-      mphi = 1.0 * phi;
-      rad_val += (shcoeffs_byshape[sht][2] * cos(mphi) - shcoeffs_byshape[sht][3] * sin(mphi)) * 2.0 * P_n_m;
-      rad_dphi -= (shcoeffs_byshape[sht][2] * sin(mphi) + shcoeffs_byshape[sht][3] * cos(mphi)) * 2.0 * P_n_m;
-      fnm = std::sqrt(3.0 / (2.0 * MY_4PI));
-      rad_dtheta += 2.0*(fnm/st)*((2.0*x_val*plgndr(1,1,x_val))-(plgndr(2, 1, x_val)))*
-              ((shcoeffs_byshape[sht][3]*sin(mphi))-(shcoeffs_byshape[sht][2] * cos(mphi))) ;
-      // n = 2
-    } else if (n == 2) {
-      // n=2, m=0
-      P_n_m = plegendre(2, 0, x_val);
-      Pnm_m1[0] = P_n_m;
-      rad_val += shcoeffs_byshape[sht][10] * P_n_m;
-      fnm = std::sqrt(5.0 / MY_4PI);
-      rad_dtheta -= (shcoeffs_byshape[sht][10]*fnm / st)*((3.0*x_val*plgndr(2,0,x_val))-
-              (3.0*plgndr(3, 0, x_val)));
-      // n=2 2>=m>0
-      for (int m = 2; m >= 1; m--) {
-        P_n_m = plegendre(2, m, x_val);
-        Pnm_m1[m] = P_n_m;
-        mphi = (double) m * phi;
-        rad_val += (shcoeffs_byshape[sht][nloc] * cos(mphi) - shcoeffs_byshape[sht][nloc + 1] * sin(mphi)) * 2.0 *
-                P_n_m;
-        rad_dphi -= (shcoeffs_byshape[sht][nloc] * sin(mphi) + shcoeffs_byshape[sht][nloc + 1] * cos(mphi)) * 2.0 *
-                P_n_m * (double) m;
-        fnm = std::sqrt((2.0*double(n)+1.0)*MathSpecial::factorial(n-m)/(MY_4PI*MathSpecial::factorial(n+m)));
-        rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,m,x_val))-(double(n-m+1)*plgndr(n+1, m, x_val)))*
-                ((shcoeffs_byshape[sht][nloc+1]*sin(mphi))-(shcoeffs_byshape[sht][nloc] * cos(mphi)));
-        nloc += 2;
-      }
-      Pnm_nn = Pnm_m1[2];
-
-    // 2 < n > n-1
-    } else {
-      P_n_m = plegendre_recycle(n, 0, x_val, Pnm_m1[0], Pnm_m2[0]);
-      Pnm_m2[0] = Pnm_m1[0];
-      Pnm_m1[0] = P_n_m;
-      loc = (n + 1) * (n + 2) - 2;
-      rad_val += shcoeffs_byshape[sht][loc] * P_n_m;
-      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI));
-      rad_dtheta -= (shcoeffs_byshape[sht][loc]*fnm / st)*
-              ((double(n+1)*x_val*plgndr(n,0,x_val))-(double(n+1)*plgndr(n+1, 0, x_val)));
-
-      loc -= 2;
-      for (int m = 1; m < n - 1; m++) {
-        P_n_m = plegendre_recycle(n, m, x_val, Pnm_m1[m], Pnm_m2[m]);
-        Pnm_m2[m] = Pnm_m1[m];
-        Pnm_m1[m] = P_n_m;
-        mphi = (double) m * phi;
-        rad_val += (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
-        rad_dphi -= (shcoeffs_byshape[sht][loc] * sin(mphi) + shcoeffs_byshape[sht][loc + 1] * cos(mphi)) * 2.0 *
-                P_n_m * (double) m;
-        fnm = std::sqrt((2.0*double(n)+1.0)*MathSpecial::factorial(n-m)/(MY_4PI*MathSpecial::factorial(n+m)));
-        rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,m,x_val))-(double(n-m+1)*plgndr(n+1, m, x_val)))*
-                      ((shcoeffs_byshape[sht][loc+1]*sin(mphi))-(shcoeffs_byshape[sht][loc] * cos(mphi)));
-        loc -= 2;
-      }
-
-      // m = n-1
-      P_n_m = x_val * std::sqrt((2.0 * ((double) n - 1.0)) + 3.0) * Pnm_nn;
-      Pnm_m2[n - 1] = Pnm_m1[n - 1];
-      Pnm_m1[n - 1] = P_n_m;
-      mphi = (double) (n - 1) * phi;
-      rad_val += (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
-      rad_dphi -= (shcoeffs_byshape[sht][loc] * sin(mphi) + shcoeffs_byshape[sht][loc + 1] * cos(mphi)) * 2.0 * P_n_m *
-              (double) (n-1);
-      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI*MathSpecial::factorial(2*n-1)));
-      rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,n-1,x_val))-(2.0*plgndr(n+1, n-1, x_val)))*
-                    ((shcoeffs_byshape[sht][loc+1]*sin(mphi))-(shcoeffs_byshape[sht][loc] * cos(mphi)));
-      loc -= 2;
-
-      // m = n
-      P_n_m = plegendre_nn(n, x_val, Pnm_nn);
-      Pnm_nn = P_n_m;
-      Pnm_m1[n] = P_n_m;
-      mphi = (double) n * phi;
-      rad_val += (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
-      rad_dphi -= (shcoeffs_byshape[sht][loc] * sin(mphi) + shcoeffs_byshape[sht][loc + 1] * cos(mphi)) * 2.0 * P_n_m *
-              (double) n;
-      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI*MathSpecial::factorial(2*n)));
-      rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,n,x_val))-(plgndr(n+1, n, x_val)))*
-                    ((shcoeffs_byshape[sht][loc+1]*sin(mphi))-(shcoeffs_byshape[sht][loc] * cos(mphi)));
-    }
-  }
-
-  get_normal(theta, phi, rad_val, rad_dphi, rad_dtheta, rnorm);
-
-  return rad_val;
+  return r;
 }
 
 /* ----------------------------------------------------------------------
