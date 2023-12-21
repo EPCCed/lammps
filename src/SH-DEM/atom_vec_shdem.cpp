@@ -22,19 +22,12 @@
 #include "atom_vec_shdem.h"
 #include "atom.h"
 #include "error.h"
-#include "fix.h"
-#include "fix_adapt.h"
-#include "fstream"
-#include "iomanip"
 #include "math_const.h"
 #include "math_eigen.h"
 #include "math_extra.h"
-#include "math_special.h"
 #include "math_shdem.h"
 #include "memory.h"
-#include "modify.h"
 #include "potential_file_reader.h"
-#include "utils.h"
 
 
 using namespace LAMMPS_NS;
@@ -419,15 +412,13 @@ void AtomVecSHDEM::get_quadrature_values()
   Calculate the expansion factors for all particles using the points of Gaussian quadrature
   (clustering at poles, spreading at the equator)
 ------------------------------------------------------------------------- */
+
 void AtomVecSHDEM::calcexpansionfactors_gauss()
 {
 
-  double safety_factor = 1.00;
   double theta, phi, factor;
-  double x_val, mphi;
-  double P_n_m;
-  int nloc, loc, k;
   int num_quad2 = num_quadrature * num_quadrature;
+
   std::vector<double> r_n, r_npo;
   std::vector<double> ratios, expfactors;
   r_n.resize(num_quad2, 0.0);
@@ -436,101 +427,85 @@ void AtomVecSHDEM::calcexpansionfactors_gauss()
   expfactors.resize(maxshexpan + 1, 0.0);
   expfactors[maxshexpan] = 1.0;
 
-  // P_n_m_c17 = std::assoc_legendre(2, 2, 0.0);
-  // // P_n_m = plegendre(0, 0, cos(theta));
-  // std::cout<<P_n_m_c17<<"\t"<<plegendre(2, 2, 0.0)<<std::endl;
-  // Methode contains C++17 libray  function to calculate normalized Associted legendre function...
-  // Normalization factor is multiplied to the output of the inbuild function..
-
   for (int sht = 0; sht < nshtypes; sht++) {
 
     std::fill(r_n.begin(), r_n.end(), 0.0);
 
     for (int n = 0; n <= maxshexpan; n++) {    // For each harmonic n
-      nloc = n * (n + 1);
-      k = 0;
-      for (int i = 0; i < num_quadrature; i++) {    // For each theta value (k corresponds to angle pair)
-        for (int j = 0; j < num_quadrature; j++) {    // For each phi value (k corresponds to angle pair)
+      int k = 0;
+      for (int i = 0; i < num_quadrature; i++) {
+        for (int j = 0; j < num_quadrature; j++) {
+	  int m = 0;
+	  int indexa = n*(n+1) + 2*(n-m);
+
+	  double areal = shcoeffs_byshape[sht][indexa];
+	  double aimag = 0.0;
+
           theta = angles[0][k];
-          phi = angles[1][k];
-          x_val = cos(theta);
-          loc = nloc;
-          // norm_fact = std::sqrt((2.0*double(n)+1.0)*MathSpecial::factorial(n-m)/(MY_4PI*MathSpecial::factorial(n+m)));
-          // norm_fact = std::sqrt((2.0 * double(n) + 1.0) / MY_4PI);
-          P_n_m = plegendre(n, 0, x_val);
+          phi   = angles[1][k];
 
-          r_n[k] += shcoeffs_byshape[sht][(n + 1) * (n + 2) - 2] * P_n_m;
-          for (int m = n; m > 0; m--) {    // For each m in current harmonic n
-            mphi = (double) m * phi;
-            P_n_m = plegendre(n, m, x_val);
+          r_n[k] += areal*std::sph_legendre(n, m, theta);
 
-              // norm_fact = pow(-1, m) *
-              //     std::sqrt(((2 * n + 1) * MathSpecial::factorial(n - m)) /
-              //               (MY_4PI * MathSpecial::factorial(n + m)));
+          for (m = n; m > 0; m--) {    // For each m in current harmonic n
+            double mphi = 1.0*m*phi;
+	    double ynm = std::sph_legendre(n, m, theta);
 
-              // P_n_m = std::assoc_legendre(n, m, x_val) * norm_fact;
-
-            r_n[k] += (shcoeffs_byshape[sht][loc] * cos(mphi) -
-                       shcoeffs_byshape[sht][loc + 1] * sin(mphi)) *
-                2.0 * P_n_m;
-            loc += 2;
+	    indexa = n*(n+1) + 2*(n-m);
+	    areal = shcoeffs_byshape[sht][indexa];
+	    aimag = shcoeffs_byshape[sht][indexa+1];
+            r_n[k] += 2.0*(areal*cos(mphi) - aimag*sin(mphi))*ynm;
           }
-          if (n <= maxshexpan - 1) {    // Get the ratios of radii between subsequent harmonics (except the final two)
+
+	  if (n == maxshexpan) {
+	    // Get the maximum radius at the final harmonic
+            if (r_n[k] > maxrad_byshape[sht]) maxrad_byshape[sht] = r_n[k];
+	  }
+	  else {
+	    // Get the ratios of radii between subsequent harmonics
+	    int np1 = n + 1;
+	    m = 0;
             r_npo[k] = r_n[k];
-            n++;
-            loc = n * (n + 1);
-            P_n_m = plegendre(n, 0, x_val);
-            // norm_fact = pow(-1, 0) *
-            //     std::sqrt(((2 * n + 1) * MathSpecial::factorial(n - 0)) /
-            //               (MY_4PI * MathSpecial::factorial(n + 0)));
 
-            // P_n_m = std::assoc_legendre(n, 0, x_val) * norm_fact;
+	    indexa = np1*(np1 + 1) + 2*(np1 - m);
+	    areal = shcoeffs_byshape[sht][indexa];
+            r_npo[k] += areal*std::sph_legendre(np1, m, theta);
 
-            r_npo[k] += shcoeffs_byshape[sht][(n + 1) * (n + 2) - 2] * P_n_m;
-            for (int m = n; m > 0; m--) {
-              mphi = (double) m * phi;
-              P_n_m = plegendre(n, m, x_val);
+            for (m = np1; m > 0; m--) {
+              double mphi = 1.0*m*phi;
+	      double ynm = std::sph_legendre(np1, m, theta);
 
-              // norm_fact = pow(-1, m) *
-              //     std::sqrt(((2 * n + 1) * MathSpecial::factorial(n - m)) /
-              //               (MY_4PI * MathSpecial::factorial(n + m)));
-
-              // P_n_m = std::assoc_legendre(n, m, x_val) * norm_fact;
-
-              r_npo[k] += (shcoeffs_byshape[sht][loc] * cos(mphi) -
-                           shcoeffs_byshape[sht][loc + 1] * sin(mphi)) *
-                  2.0 * P_n_m;
-              loc += 2;
+	      indexa = np1*(np1 + 1) + 2*(np1 - m);
+	      areal = shcoeffs_byshape[sht][indexa];
+	      aimag = shcoeffs_byshape[sht][indexa+1];
+              r_npo[k] += 2.0*(areal*cos(mphi) - aimag*sin(mphi))*ynm;
             }
-            n--;
             ratios[k] = r_npo[k] / r_n[k];
-          } else {    // Get the maximum radius at the final harmonic
-            if (r_n[k] > maxrad_byshape[sht]) { maxrad_byshape[sht] = r_n[k]; }
           }
+	  // Next angle ...
           k++;
         }
       }
+
       if (n <= maxshexpan - 1) {
         double max_val = 0;
         for (int ii = 0; ii < k; ii++) {
-          if (ratios[ii] > max_val) { max_val = ratios[ii]; }
+          if (ratios[ii] > max_val) max_val = ratios[ii];
         }
         expfactors[n] = max_val;
-        if (expfactors[n] < 1.0) { expfactors[n] = 1.0; }
+        if (expfactors[n] < 1.0) expfactors[n] = 1.0;
       }
     }
 
     factor = expfactors[maxshexpan];
     for (int n = maxshexpan - 1; n >= 0; n--) {
-      factor *= expfactors[n] * safety_factor;
+      factor *= expfactors[n];
       expfactors[n] = factor;
       expfacts_byshape[sht][n] = factor;
     }
     expfacts_byshape[sht][maxshexpan] = 1.0;
-
-
-    maxrad_byshape[sht] *= safety_factor;
   }
+
+  return;
 }
 
 /* ----------------------------------------------------------------------
@@ -545,110 +520,51 @@ void AtomVecSHDEM::calcexpansionfactors_gauss()
   is less than the input distance, the the radius will be less than the input distance
   for all subsequent harmonics and the algorithm can be stopped and return 0.
 ------------------------------------------------------------------------- */
-int AtomVecSHDEM::check_contact(int sht, double phi_proj, double theta_proj, double outerdist,
-                                    double &finalrad)
-{
 
-  double rad_val = shcoeffs_byshape[sht][0] * std::sqrt(1.0 / (4.0 * MY_PI));
-  double sh_dist = expfacts_byshape[sht][0] * rad_val;
+int AtomVecSHDEM::check_contact(int sht, double phi, double theta,
+				double outerdist,
+				double &radius) {
+  int n = 0;
+  int indexa = 0;
+  double sh_dist = 0.0;
 
-  // Due to hierarchical approach, if the input distance > the 0th harmonic radius,
+  radius  = shcoeffs_byshape[sht][indexa]*std::sph_legendre(0, 0, theta);
+  sh_dist = expfacts_byshape[sht][n]*radius;
+
+  // If the input distance > the 0th harmonic radius,
   // then it is greater than the radius for all subsequent harmonics
-  if (outerdist > sh_dist) { return 0; }
+
+  if (outerdist > sh_dist) return 0;
 
   // Edge case for spheres when the maximum harmonic is 0
-  if (maxshexpan == 0) {
-    if (outerdist <= sh_dist) {
-      finalrad = rad_val;
-      return 1;
+  if (maxshexpan == 0 && outerdist <= sh_dist) return 1;
+
+
+  for (n = 1; n <= maxshexpan; n++) {
+
+    // n, m = 0 contribution
+    int m = 0;
+    indexa = n*(n + 1) + 2*(n - m);
+    radius += shcoeffs_byshape[sht][indexa]*std::sph_legendre(n, m, theta);
+
+    // n, +/- m contribution (... is two terms ...)
+    for (m = 1; m <= n; m++) {
+      indexa = n*(n + 1) + 2*(n - m);
+      {
+	double areal = shcoeffs_byshape[sht][indexa];
+	double aimag = shcoeffs_byshape[sht][indexa + 1];
+	double ynm   = std::sph_legendre(n, m, theta);
+	radius += 2.0*(areal*cos(1.0*m*phi) - aimag*sin(1.0*m*phi))*ynm;
+      }
     }
+
+    sh_dist = expfacts_byshape[sht][n]*radius;
+
+    if (outerdist > sh_dist) break;
   }
 
-  int n, nloc, loc;
-  double P_n_m, x_val, mphi, Pnm_nn;
-  std::vector<double> Pnm_m2, Pnm_m1;
+  if (outerdist <= sh_dist) return 1;
 
-  Pnm_m2.resize(maxshexpan + 1, 0.0);
-  Pnm_m1.resize(maxshexpan + 1, 0.0);
-  n = 1;
-  x_val = std::cos(theta_proj);
-  while (n <= maxshexpan) {
-    nloc = n * (n + 1);
-    if (n == 1) {
-      P_n_m = plegendre(1, 0, x_val);
-      Pnm_m2[0] = P_n_m;
-      rad_val += shcoeffs_byshape[sht][4] * P_n_m;
-
-      P_n_m = plegendre(1, 1, x_val);
-      Pnm_m2[1] = P_n_m;
-      mphi = 1.0 * phi_proj;
-      rad_val += (shcoeffs_byshape[sht][2] * cos(mphi) - shcoeffs_byshape[sht][3] * sin(mphi)) *
-          2.0 * P_n_m;
-    } else if (n == 2) {
-      P_n_m = plegendre(2, 0, x_val);
-      Pnm_m1[0] = P_n_m;
-      rad_val += shcoeffs_byshape[sht][10] * P_n_m;
-      for (int m = 2; m >= 1; m--) {
-        P_n_m = plegendre(2, m, x_val);
-
-        Pnm_m1[m] = P_n_m;
-        mphi = (double) m * phi_proj;
-        rad_val += (shcoeffs_byshape[sht][nloc] * cos(mphi) -
-                    shcoeffs_byshape[sht][nloc + 1] * sin(mphi)) *
-            2.0 * P_n_m;
-        nloc += 2;
-      }
-      Pnm_nn = Pnm_m1[2];
-    } else {
-      P_n_m = plegendre_recycle(n, 0, x_val, Pnm_m1[0], Pnm_m2[0]);
-      Pnm_m2[0] = Pnm_m1[0];
-      Pnm_m1[0] = P_n_m;
-      loc = (n + 1) * (n + 2) - 2;
-      rad_val += shcoeffs_byshape[sht][loc] * P_n_m;
-      loc -= 2;
-      for (int m = 1; m < n - 1; m++) {
-        P_n_m = plegendre_recycle(n, m, x_val, Pnm_m1[m], Pnm_m2[m]);
-        Pnm_m2[m] = Pnm_m1[m];
-        Pnm_m1[m] = P_n_m;
-        mphi = (double) m * phi_proj;
-        rad_val +=
-            (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) *
-            2.0 * P_n_m;
-        loc -= 2;
-      }
-
-      P_n_m = x_val * std::sqrt((2.0 * ((double) n - 1.0)) + 3.0) * Pnm_nn;
-      Pnm_m2[n - 1] = Pnm_m1[n - 1];
-      Pnm_m1[n - 1] = P_n_m;
-      mphi = (double) (n - 1) * phi_proj;
-      rad_val +=
-          (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) *
-          2.0 * P_n_m;
-      loc -= 2;
-
-      P_n_m = plegendre_nn(n, x_val, Pnm_nn);
-      Pnm_nn = P_n_m;
-      Pnm_m1[n] = P_n_m;
-      mphi = (double) n * phi_proj;
-      rad_val +=
-          (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) *
-          2.0 * P_n_m;
-    }
-
-    sh_dist = expfacts_byshape[sht][n] * (rad_val);
-
-    if (outerdist > sh_dist) {
-      return 0;
-    } else {
-      if (++n > maxshexpan) {
-        if (outerdist <= sh_dist) {
-          finalrad = rad_val;
-          return 1;
-        } else
-          return 0;
-      }
-    }
-  }
   return 0;
 }
 
@@ -660,79 +576,32 @@ int AtomVecSHDEM::check_contact(int sht, double phi_proj, double theta_proj, dou
 double AtomVecSHDEM::get_shape_radius(int sht, double theta, double phi)
 {
 
-  double rad_val = shcoeffs_byshape[sht][0] * std::sqrt(1.0 / (4.0 * MY_PI));
+  int indexa = 0;
+  double radius = 0.0;
+  double a00 = shcoeffs_byshape[sht][indexa];
 
-  int n, nloc, loc;
-  double P_n_m, x_val, mphi, Pnm_nn;
-  std::vector<double> Pnm_m2, Pnm_m1;
+  radius += a00*std::sph_legendre(0, 0, theta);
 
-  Pnm_m2.resize(maxshexpan + 1, 0.0);
-  Pnm_m1.resize(maxshexpan + 1, 0.0);
-  x_val = std::cos(theta);
-  for (n=1; n<=maxshexpan; n++){
-    nloc = n * (n + 1);
-    if (n == 1) {
-      P_n_m = plegendre(1, 0, x_val);
-      Pnm_m2[0] = P_n_m;
-      rad_val += shcoeffs_byshape[sht][4] * P_n_m;
-      P_n_m = plegendre(1, 1, x_val);
-      Pnm_m2[1] = P_n_m;
-      mphi = 1.0 * phi;
-      rad_val += (shcoeffs_byshape[sht][2] * cos(mphi) - shcoeffs_byshape[sht][3] * sin(mphi)) * 2.0 * P_n_m;
-    } else if (n == 2) {
-      P_n_m = plegendre(2, 0, x_val);
-      Pnm_m1[0] = P_n_m;
-      rad_val += shcoeffs_byshape[sht][10] * P_n_m;
-      for (int m = 2; m >= 1; m--) {
-        P_n_m = plegendre(2, m, x_val);
-        Pnm_m1[m] = P_n_m;
-        mphi = (double) m * phi;
-        rad_val += (shcoeffs_byshape[sht][nloc] * cos(mphi) - shcoeffs_byshape[sht][nloc + 1] * sin(mphi)) * 2.0 *
-                P_n_m;
-        nloc += 2;
+  for (int n = 1; n <= maxshexpan; n++) {
+
+    // n, m = 0 contribution
+    int m = 0;
+    indexa = n*(n + 1) + 2*(n - m);
+    radius += shcoeffs_byshape[sht][indexa]*std::sph_legendre(n, m, theta);
+
+    // n, +/- m contribution (... is two terms ...)
+    for (m = 1; m <= n; m++) {
+      indexa = n*(n + 1) + 2*(n - m);
+      {
+	double areal = shcoeffs_byshape[sht][indexa];
+	double aimag = shcoeffs_byshape[sht][indexa + 1];
+	double ynm   = std::sph_legendre(n, m, theta);
+	radius += 2.0*(areal*cos(1.0*m*phi) - aimag*sin(1.0*m*phi))*ynm;
       }
-      Pnm_nn = Pnm_m1[2];
-    } else {
-      P_n_m = plegendre_recycle(n, 0, x_val, Pnm_m1[0], Pnm_m2[0]);
-
-
-      Pnm_m2[0] = Pnm_m1[0];
-      Pnm_m1[0] = P_n_m;
-      loc = (n + 1) * (n + 2) - 2;
-      rad_val += shcoeffs_byshape[sht][loc] * P_n_m;
-      loc -= 2;
-      for (int m = 1; m < n - 1; m++) {
-        P_n_m = plegendre_recycle(n, m, x_val, Pnm_m1[m], Pnm_m2[m]);
-
-        Pnm_m2[m] = Pnm_m1[m];
-        Pnm_m1[m] = P_n_m;
-        mphi = (double) m * phi;
-        rad_val +=
-            (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) *
-            2.0 * P_n_m;
-        loc -= 2;
-      }
-
-      P_n_m = x_val * std::sqrt((2.0 * ((double) n - 1.0)) + 3.0) * Pnm_nn;
-      Pnm_m2[n - 1] = Pnm_m1[n - 1];
-      Pnm_m1[n - 1] = P_n_m;
-      mphi = (double) (n - 1) * phi;
-      rad_val +=
-          (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) *
-          2.0 * P_n_m;
-      loc -= 2;
-
-      P_n_m = plegendre_nn(n, x_val, Pnm_nn);
-
-      Pnm_nn = P_n_m;
-      Pnm_m1[n] = P_n_m;
-      mphi = (double) n * phi;
-      rad_val +=
-          (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) *
-          2.0 * P_n_m;
     }
   }
-  return rad_val;
+
+  return radius;
 }
 
 /* ----------------------------------------------------------------------
@@ -757,126 +626,64 @@ double AtomVecSHDEM::get_shape_radius_and_normal(int sht, double theta, double p
   the radius at the maximum degree of spherical harmonic expansion and its
   gradients in theta and phi.
 ------------------------------------------------------------------------- */
-double AtomVecSHDEM::get_shape_radius_and_gradients(int sht, double theta, double phi, double &rad_dphi,
-                                                        double &rad_dtheta) {
 
-  int n, nloc, loc;
-  double P_n_m, x_val, mphi, Pnm_nn, fnm, st;
-  std::vector<double> Pnm_m2, Pnm_m1;
+double AtomVecSHDEM::get_shape_radius_and_gradients(int sht, double theta,
+						    double phi,
+						    double &r_dphi,
+						    double &r_dtheta) {
+  int indexa = 0;
+  double radius = 0.0;
 
-  fnm = std::sqrt(1.0 / MY_4PI);
-  double rad_val = shcoeffs_byshape[sht][0] * fnm;
-  rad_dphi = rad_dtheta = 0.0;
+  double x = cos(theta);
+  double y = sin(theta);
+  double cottheta = x/y;
+  double a00 = shcoeffs_byshape[sht][indexa];
 
-  Pnm_m2.resize(maxshexpan+1, 0.0);
-  Pnm_m1.resize(maxshexpan+1, 0.0);
+  r_dtheta = 0.0;  // derivative w.r.t. theta
+  r_dphi = 0.0;    // derivative w.r.t. phi
 
-  if (sin(theta) == 0.0) theta += EPSILON; // otherwise dividing by sin(theta) for gradients will not work
-  if (sin(phi) == 0.0) phi += EPSILON; // To be consistent...
-  x_val = std::cos(theta);
-  st = std::sin(theta);
+  radius += a00*std::sph_legendre(0, 0, theta);
 
-  for (n=1; n<=maxshexpan; n++){
-    nloc = n * (n + 1);
+  if (y == 0.0) cottheta = x/EPSILON;
 
-    // n=1
-    if (n == 1) {
-      // n=1, m=0
-      P_n_m = plegendre(1, 0, x_val);
-      Pnm_m2[0] = P_n_m;
-      rad_val += shcoeffs_byshape[sht][4] * P_n_m;
-      fnm = std::sqrt(3.0 / MY_4PI);
-      rad_dtheta -= (shcoeffs_byshape[sht][4]*fnm/st)*((2.0*x_val*plgndr(1,0,x_val))-
-              (2.0*plgndr(2, 0, x_val)));
-      // n=1, m=1
-      P_n_m = plegendre(1, 1, x_val);
-      Pnm_m2[1] = P_n_m;
-      mphi = 1.0 * phi;
-      rad_val += (shcoeffs_byshape[sht][2] * cos(mphi) - shcoeffs_byshape[sht][3] * sin(mphi)) * 2.0 * P_n_m;
-      rad_dphi -= (shcoeffs_byshape[sht][2] * sin(mphi) + shcoeffs_byshape[sht][3] * cos(mphi)) * 2.0 * P_n_m;
-      fnm = std::sqrt(3.0 / (2.0 * MY_4PI));
-      rad_dtheta += 2.0*(fnm/st)*((2.0*x_val*plgndr(1,1,x_val))-(plgndr(2, 1, x_val)))*
-                    ((shcoeffs_byshape[sht][3]*sin(mphi))-(shcoeffs_byshape[sht][2] * cos(mphi))) ;
-      // n = 2
-    } else if (n == 2) {
-      // n=2, m=0
-      P_n_m = plegendre(2, 0, x_val);
-      Pnm_m1[0] = P_n_m;
-      rad_val += shcoeffs_byshape[sht][10] * P_n_m;
-      fnm = std::sqrt(5.0 / MY_4PI);
-      rad_dtheta -= (shcoeffs_byshape[sht][10]*fnm / st)*((3.0*x_val*plgndr(2,0,x_val))-
-              (3.0*plgndr(3, 0, x_val)));
-      // n=2 2>=m>0
-      for (int m = 2; m >= 1; m--) {
-        P_n_m = plegendre(2, m, x_val);
-        Pnm_m1[m] = P_n_m;
-        mphi = (double) m * phi;
-        rad_val += (shcoeffs_byshape[sht][nloc] * cos(mphi) - shcoeffs_byshape[sht][nloc + 1] * sin(mphi)) * 2.0 *
-                P_n_m;
-        rad_dphi -= (shcoeffs_byshape[sht][nloc] * sin(mphi) + shcoeffs_byshape[sht][nloc + 1] * cos(mphi)) * 2.0 *
-                P_n_m * (double) m;
-        fnm = std::sqrt((2.0*double(n)+1.0)*MathSpecial::factorial(n-m)/(MY_4PI*MathSpecial::factorial(n+m)));
-        rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,m,x_val))-(double(n-m+1)*plgndr(n+1, m, x_val)))*
-                      ((shcoeffs_byshape[sht][nloc+1]*sin(mphi))-(shcoeffs_byshape[sht][nloc] * cos(mphi)));
-        nloc += 2;
+  for (int n = 1; n <= maxshexpan; n++) {
+
+    // n, m = 0 contribution
+    int m = 0;
+    indexa = n*(n + 1) + 2*(n - m);
+    {
+      double an0 = shcoeffs_byshape[sht][indexa];
+      double ynm = std::sph_legendre(n, m, theta);
+      double ynmp1 = std::sph_legendre(n, m + 1, theta);
+
+      radius += an0*ynm;
+      r_dtheta += an0*(cottheta*m*ynm + sqrt(1.0*(n-m)*(n+m+1))*ynmp1);
+    }
+
+    // n, +/- m contribution ...
+    // Only non-zero m contribute to r_dphi
+    for (m = 1; m <= n; m++) {
+      indexa = n*(n + 1) + 2*(n - m);
+      {
+	double sinmphi = std::sin(1.0*m*phi);
+	double cosmphi = std::cos(1.0*m*phi);
+	double areal = shcoeffs_byshape[sht][indexa];
+	double aimag = shcoeffs_byshape[sht][indexa + 1];
+	double ynm   = std::sph_legendre(n, m, theta);
+	double ynmp1 = std::sph_legendre(n, m + 1, theta);
+
+	radius += 2.0*(areal*cosmphi - aimag*sinmphi)*ynm;
+
+	r_dtheta -= 2.0*(cottheta*m*ynm + sqrt(1.0*(n-m)*(n+m+1))*ynmp1)
+	  *(-areal*cosmphi + aimag*sinmphi);
+	r_dphi   -= 2.0*m*(areal*sinmphi + aimag*cosmphi)*ynm;
       }
-      Pnm_nn = Pnm_m1[2];
-
-      // 2 < n > n-1
-    } else {
-      P_n_m = plegendre_recycle(n, 0, x_val, Pnm_m1[0], Pnm_m2[0]);
-      Pnm_m2[0] = Pnm_m1[0];
-      Pnm_m1[0] = P_n_m;
-      loc = (n + 1) * (n + 2) - 2;
-      rad_val += shcoeffs_byshape[sht][loc] * P_n_m;
-      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI));
-      rad_dtheta -= (shcoeffs_byshape[sht][loc]*fnm / st)*
-                    ((double(n+1)*x_val*plgndr(n,0,x_val))-(double(n+1)*plgndr(n+1, 0, x_val)));
-
-      loc -= 2;
-      for (int m = 1; m < n - 1; m++) {
-        P_n_m = plegendre_recycle(n, m, x_val, Pnm_m1[m], Pnm_m2[m]);
-        Pnm_m2[m] = Pnm_m1[m];
-        Pnm_m1[m] = P_n_m;
-        mphi = (double) m * phi;
-        rad_val += (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
-        rad_dphi -= (shcoeffs_byshape[sht][loc] * sin(mphi) + shcoeffs_byshape[sht][loc + 1] * cos(mphi)) * 2.0 *
-                P_n_m * (double) m;
-        fnm = std::sqrt((2.0*double(n)+1.0)*MathSpecial::factorial(n-m)/(MY_4PI*MathSpecial::factorial(n+m)));
-        rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,m,x_val))-(double(n-m+1)*plgndr(n+1, m, x_val)))*
-                      ((shcoeffs_byshape[sht][loc+1]*sin(mphi))-(shcoeffs_byshape[sht][loc] * cos(mphi)));
-        loc -= 2;
-      }
-
-      // m = n-1
-      P_n_m = x_val * std::sqrt((2.0 * ((double) n - 1.0)) + 3.0) * Pnm_nn;
-      Pnm_m2[n - 1] = Pnm_m1[n - 1];
-      Pnm_m1[n - 1] = P_n_m;
-      mphi = (double) (n - 1) * phi;
-      rad_val += (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
-      rad_dphi -= (shcoeffs_byshape[sht][loc] * sin(mphi) + shcoeffs_byshape[sht][loc + 1] * cos(mphi)) * 2.0 * P_n_m *
-              (double) (n-1);
-      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI*MathSpecial::factorial(2*n-1)));
-      rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,n-1,x_val))-(2.0*plgndr(n+1, n-1, x_val)))*
-                    ((shcoeffs_byshape[sht][loc+1]*sin(mphi))-(shcoeffs_byshape[sht][loc] * cos(mphi)));
-      loc -= 2;
-
-      // m = n
-      P_n_m = plegendre_nn(n, x_val, Pnm_nn);
-      Pnm_nn = P_n_m;
-      Pnm_m1[n] = P_n_m;
-      mphi = (double) n * phi;
-      rad_val += (shcoeffs_byshape[sht][loc] * cos(mphi) - shcoeffs_byshape[sht][loc + 1] * sin(mphi)) * 2.0 * P_n_m;
-      rad_dphi -= (shcoeffs_byshape[sht][loc] * sin(mphi) + shcoeffs_byshape[sht][loc + 1] * cos(mphi)) * 2.0 * P_n_m *
-              (double) n;
-      fnm = std::sqrt((2.0*double(n)+1.0)/(MY_4PI*MathSpecial::factorial(2*n)));
-      rad_dtheta += 2.0*(fnm/st)*((double(n+1)*x_val*plgndr(n,n,x_val))-(plgndr(n+1, n, x_val)))*
-                    ((shcoeffs_byshape[sht][loc+1]*sin(mphi))-(shcoeffs_byshape[sht][loc] * cos(mphi)));
     }
   }
 
-  return rad_val;
+  return radius;
 }
+
 
 /* ----------------------------------------------------------------------
   Get the [NOT UNIT] surface normal for a specified theta and phi value
