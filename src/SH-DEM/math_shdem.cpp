@@ -20,86 +20,6 @@ using namespace LAMMPS_NS::GaussquadConst;
 namespace MathSHDEM {
 
 /* ----------------------------------------------------------------------
-  Calculate the Associated Legendre polynomials (generic)
-------------------------------------------------------------------------- */
-
-  // See Numerical Recipies 3rd Edition Section 6.7 Spherical Harmonics
-  double plegendre(const int l, const int m, const double x) {
-
-    int i,ll;
-    double fact,oldfact,pll,pmm,pmmp1,omx2;
-    pmm=1.0;
-    if (m > 0) {
-      omx2=(1.0-x)*(1.0+x);
-      fact=1.0;
-      for (i=1;i<=m;i++) {
-        pmm *= omx2*fact/(fact+1.0);
-        fact += 2.0;
-      }
-    }
-    pmm=sqrt((2.0*m+1.0)*pmm/(4.0*LAMMPS_NS::MathConst::MY_PI));
-    if (m & 1)
-      pmm=-pmm;
-    if (l == m)
-      return pmm;
-    else {
-      pmmp1=x*sqrt(2.0*m+3.0)*pmm;
-      if (l == (m+1))
-        return pmmp1;
-      else {
-        oldfact=sqrt(2.0*m+3.0);
-        for (ll=m+2;ll<=l;ll++) {
-          fact=sqrt((4.0*ll*ll-1.0)/(ll*ll-m*m));
-          pll=(x*pmmp1-pmm/oldfact)*fact;
-          oldfact=fact;
-          pmm=pmmp1;
-          pmmp1=pll;
-        }
-        return pll;
-      }
-    }
-  }
-
-/* ----------------------------------------------------------------------
-  Calculating the Associated Legendre polynomials (when n=m)
-------------------------------------------------------------------------- */
-  double plegendre_nn(const int l, const double x, const double Pnm_nn) {
-
-    double ll, llm1, fact;
-
-    ll = (double) l;
-    llm1 = 2.0*(ll-1.0);
-    fact = sqrt((llm1 + 3.0)/(llm1 + 2.0));
-    return -sqrt(1.0-(x*x)) * fact * Pnm_nn;
-  }
-
-/* ----------------------------------------------------------------------
-  Calculating the Associated Legendre polynomials (recursion)
-------------------------------------------------------------------------- */
-  double plegendre_recycle(const int l, const int m, const double x, const double pnm_m1, const double pnm_m2) {
-
-    double fact,oldfact, ll, mm, pmn;
-
-    ll = (double) l;
-    mm = (double) m;
-    fact = sqrt((4.0*ll*ll-1.0)/(ll*ll-mm*mm));
-    oldfact = sqrt((4.0*(ll-1.0)*(ll-1.0)-1.0)/((ll-1.0)*(ll-1.0)-mm*mm));
-    pmn=(x*pnm_m1-pnm_m2/oldfact)*fact;
-    return pmn;
-  }
-
-  // See Numerical Recipies 3rd Edition Section 6.7 Spherical Harmonics
-  double plgndr(const int l, const int m, const double x)
-  {
-    if (m < 0 || m > l || std::abs(x) > 1.0)
-      return 0;
-    double prod=1.0;
-    for (int j=l-m+1;j<=l+m;j++)
-      prod *= j;
-    return sqrt(4.0*LAMMPS_NS::MathConst::MY_PI*prod/(2*l+1))*plegendre(l,m,x);
-  }
-
-/* ----------------------------------------------------------------------
   Following methods are used for calculating the nodes and weights of
   Gaussian Quadrature
   // See https://people.math.sc.edu/Burkardt/cpp_src/fastgl/fastgl.html
@@ -136,7 +56,6 @@ namespace MathSHDEM {
       return J1[k-1];
     }
   }
-
 
 // Compute a node-weight pair, with k limited to half the range
   QuadPair GLPairS(size_t n, size_t k)
@@ -297,6 +216,7 @@ namespace MathSHDEM {
     }
   }
 
+
   // contact point cp is relative to particle a's centre
   int get_contact_point_plane(double rada, double xi[3], double (&linenorm)[3], double (&lineorigin)[3], double
   (&p0)[3], double (&cp)[3]){
@@ -413,129 +333,6 @@ namespace MathSHDEM {
   double get_sphere_overlap_volume(double r1, double r2, double d) {
     return LAMMPS_NS::MathConst::MY_PI*(r1+r2-d)*(r1+r2-d)*
       (d*d + 2.0*d*(r1+r2) - 3.0*(r1-r2)*(r1-r2))/(12.0*d);
-  }
-
-  // Calculate the interseciton between a line and an ellipsoid. It's assumed that the line generates from the centre
-  // of another ellipsoid (see the selection between t1 and t2). Algorithm from:
-  // http://www.illusioncatalyst.com/notes_files/mathematics/line_nu_sphere_intersection.php
-
-
-  int line_ellipsoid_intersection(const double elipsoid_centre[3], const double elipse_x_axis[3],
-                                  const double elipse_y_axis[3],const double elipse_z_axis[3],
-                                  const double line_centre[3], const double line_normal[3],
-                                  double &t){
-
-    double M[4][4], Mi[4][4];
-    double C[4], L0[4];
-    double Cp[4], L0p[4];
-    double vp[3], w[3];
-    double T[4][4] = {0.};
-    double R[4][4] = {0.};
-    double S[4][4] = {0.};
-    double a,b,c,discrim,t1,t2;
-    double lenvec;
-
-    // Converting to shape (4,) so can be multiplied by the transformation matrix
-    C[0] = elipsoid_centre[0];
-    C[1] = elipsoid_centre[1];
-    C[2] = elipsoid_centre[2];
-    C[3] = 1.0;
-
-    // Converting to shape (4,) so can be multiplied by the transformation matrix
-    L0[0] = line_centre[0];
-    L0[1] = line_centre[1];
-    L0[2] = line_centre[2];
-    L0[3] = 1.0;
-
-    // Creating the transformation matrices
-    //
-    // Translation
-    T[0][0] = T[1][1] = T[2][2] = T[3][3] = 1.0;
-    T[0][3] = C[0];
-    T[1][3] = C[1];
-    T[2][3] = C[2];
-
-    // Rotation
-    lenvec = MathExtra::len3(elipse_x_axis);
-    R[0][0] = elipse_x_axis[0]/lenvec;
-    R[1][0] = elipse_x_axis[1]/lenvec;
-    R[2][0] = elipse_x_axis[2]/lenvec;
-    lenvec = MathExtra::len3(elipse_y_axis);
-    R[0][1] = elipse_y_axis[0]/lenvec;
-    R[1][1] = elipse_y_axis[1]/lenvec;
-    R[2][1] = elipse_y_axis[2]/lenvec;
-    lenvec = MathExtra::len3(elipse_z_axis);
-    R[0][2] = elipse_z_axis[0]/lenvec;
-    R[1][2] = elipse_z_axis[1]/lenvec;
-    R[2][2] = elipse_z_axis[2]/lenvec;
-    R[3][3] = 1.0;
-
-    // Scaling
-    S[0][0] = MathExtra::len3(elipse_x_axis);
-    S[1][1] = MathExtra::len3(elipse_y_axis);
-    S[2][2] = MathExtra::len3(elipse_z_axis);
-    S[3][3] = 1.0;
-
-    // Combining for M = TRS, Mi = inverse(M), recycling Mi
-    times4(T,R,Mi);
-    times4(Mi,S,M);
-    invert4(M,Mi);
-
-    std::cout<< std::endl;
-    std::cout<< Mi[0][0] << " " << Mi[0][1] << " " << Mi[0][2] << " " << Mi[0][3] << " " <<std::endl;
-    std::cout<< Mi[1][0] << " " << Mi[1][1] << " " << Mi[1][2] << " " << Mi[1][3] << " " << std::endl;
-    std::cout<< Mi[2][0] << " " << Mi[2][1] << " " << Mi[2][2] << " " << Mi[2][3] << " " << std::endl;
-    std::cout<< Mi[3][0] << " " << Mi[3][1] << " " << Mi[3][2] << " " << Mi[3][3] << " " << std::endl;
-
-    // Transforming ellipsoid centre and point on line
-    matvec4(Mi,C,Cp);
-    matvec4(Mi,L0,L0p);
-
-    // Converting to shape (4,) so can be multiplied by the transformation matrix, recycling L0
-    L0[0] = line_normal[0];
-    L0[1] = line_normal[1];
-    L0[2] = line_normal[2];
-    L0[3] = 1.0;
-
-    // Transforming the line normal and then converting back to shape (3,), recycling C
-    matvec4(Mi,L0,C);
-    vp[0] = C[0];
-    vp[1] = C[1];
-    vp[2] = C[2];
-
-    w[0] = L0p[0] - Cp[0];
-    w[1] = L0p[1] - Cp[1];
-    w[2] = L0p[2] - Cp[2];
-
-    std::cout<< std::endl;
-    std::cout<< elipsoid_centre[0] << " " << elipsoid_centre[1] << " " << elipsoid_centre[2] << " " << std::endl;
-    std::cout<< Cp[0] << " " << Cp[1] << " " << Cp[2] << " " << std::endl;
-    std::cout<< L0p[0] << " " << L0p[1] << " " << L0p[2] << " " << std::endl;
-    std::cout<< vp[0] << " " << vp[1] << " " << vp[2] << " " << std::endl;
-    std::cout<< w[0] << " " << w[1] << " " << w[2] << " " << std::endl;
-
-    // Quadratic terms in t
-    a = MathExtra::dot3(vp,vp);
-    b = 2.0*MathExtra::dot3(vp,w);
-    c = MathExtra::dot3(w,w) - 1.0;
-    discrim = b*b - 4.0*a*c;
-
-    if (discrim>0.0){
-      t1 = (-b + std::sqrt(discrim))/(2.0 * a);
-      t2 = (-b - std::sqrt(discrim))/(2.0 * a);
-      // by virtue of the problem, one of these must be negative, i.e. away from the centre is the opposite direction
-      // of the contact, we want the positive value, i.e in the direction of the intersection.
-      t = t1 < t2 ? t1 : t2;
-      std::cout << std::endl << std::endl << std::endl << "T's " << t1 << " " << t2<< std::endl<< std::endl <<
-      std::endl;
-      return 0;
-    }
-    else if(discrim==0.0){
-      t = -b / (2.0*a);
-      return 0;
-    }
-    else return 1;
-
   }
 
 } //end namespace
