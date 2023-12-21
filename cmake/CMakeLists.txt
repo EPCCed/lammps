@@ -412,11 +412,11 @@ if(BUILD_OMP)
   endif()
 
   if(((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 9.0)) OR
-  (CMAKE_CXX_COMPILER_ID STREQUAL "PGI") OR (CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC") OR
-  (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM") OR (CMAKE_CXX_COMPILER_ID STREQUAL "XLClang") OR
-  ((CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang") AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 10.0)) OR
-  ((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 10.0)) OR
-  ((CMAKE_CXX_COMPILER_ID STREQUAL "Intel") AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.0)))
+      (CMAKE_CXX_COMPILER_ID STREQUAL "PGI") OR (CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC") OR
+      (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM") OR (CMAKE_CXX_COMPILER_ID STREQUAL "XLClang") OR
+      ((CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang") AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 10.0)) OR
+      ((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 10.0)) OR
+      ((CMAKE_CXX_COMPILER_ID STREQUAL "Intel") AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.0)))
     # GCC 9.x and later plus Clang 10.x and later implement strict OpenMP 4.0 semantics for consts.
     # Intel 18.0 was tested to support both, so we switch to OpenMP 4+ from 19.x onward to be safe.
     set(LAMMPS_OMP_COMPAT_LEVEL 4)
@@ -669,7 +669,7 @@ endif()
 
 # link with -ldl or equivalent for plugin loading; except on Windows
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
-  target_link_libraries(lammps PRIVATE ${CMAKE_DL_LIBS})
+   target_link_libraries(lammps PRIVATE ${CMAKE_DL_LIBS})
 endif()
 
 ######################################################################
@@ -701,9 +701,9 @@ set(temp "${temp}const char * LAMMPS_NS::LAMMPS::installed_packages[] =  {\n")
 set(temp_PKG_LIST ${STANDARD_PACKAGES} ${SUFFIX_PACKAGES})
 list(SORT temp_PKG_LIST)
 foreach(PKG ${temp_PKG_LIST})
-  if(PKG_${PKG})
-    set(temp "${temp}  \"${PKG}\",\n")
-  endif()
+    if(PKG_${PKG})
+        set(temp "${temp}  \"${PKG}\",\n")
+    endif()
 endforeach()
 set(temp "${temp}  NULL\n};\n#endif\n\n")
 message(STATUS "Generating lmpinstalledpkgs.h...")
@@ -714,11 +714,11 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LAMMPS_STYLE_HE
 # Generate lmpgitversion.h
 ######################################
 add_custom_target(gitversion COMMAND ${CMAKE_COMMAND}
-        -DLAMMPS_DIR="${LAMMPS_DIR}"
-        -DGIT_EXECUTABLE="${GIT_EXECUTABLE}"
-        -DGIT_FOUND="${GIT_FOUND}"
-        -DLAMMPS_STYLE_HEADERS_DIR="${LAMMPS_STYLE_HEADERS_DIR}"
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/Modules/generate_lmpgitversion.cmake)
+  -DLAMMPS_DIR="${LAMMPS_DIR}"
+  -DGIT_EXECUTABLE="${GIT_EXECUTABLE}"
+  -DGIT_FOUND="${GIT_FOUND}"
+  -DLAMMPS_STYLE_HEADERS_DIR="${LAMMPS_STYLE_HEADERS_DIR}"
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/Modules/generate_lmpgitversion.cmake)
 set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${LAMMPS_STYLE_HEADERS_DIR}/gitversion.h)
 add_dependencies(lammps gitversion)
 
@@ -796,9 +796,9 @@ endif()
 configure_file(etc/profile.d/lammps.sh.in ${CMAKE_BINARY_DIR}/etc/profile.d/lammps.sh @ONLY)
 configure_file(etc/profile.d/lammps.csh.in ${CMAKE_BINARY_DIR}/etc/profile.d/lammps.csh @ONLY)
 install(
-        FILES ${CMAKE_BINARY_DIR}/etc/profile.d/lammps.sh
+  FILES ${CMAKE_BINARY_DIR}/etc/profile.d/lammps.sh
         ${CMAKE_BINARY_DIR}/etc/profile.d/lammps.csh
-        DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/profile.d
+  DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/profile.d
 )
 
 ###############################################################################
@@ -823,13 +823,13 @@ if(BUILD_SHARED_LIBS)
       COMMENT "Installing LAMMPS Python module")
   else()
     add_custom_target(
-            install-python
-            ${CMAKE_COMMAND} -E echo "Must have Python installed to install the LAMMPS Python module")
+      install-python
+      ${CMAKE_COMMAND} -E echo "Must have Python installed to install the LAMMPS Python module")
   endif()
 else()
   add_custom_target(
-          install-python
-          ${CMAKE_COMMAND} -E echo "Must build LAMMPS as a shared library to use the Python module")
+    install-python
+    ${CMAKE_COMMAND} -E echo "Must build LAMMPS as a shared library to use the Python module")
 endif()
 
 include(Testing)
@@ -839,8 +839,8 @@ find_package(ClangFormat 8.0)
 
 if(ClangFormat_FOUND)
   add_custom_target(format-src
-          COMMAND ${ClangFormat_EXECUTABLE} --verbose -i -style=file *.cpp *.h */*.cpp */*.h
-          WORKING_DIRECTORY ${LAMMPS_SOURCE_DIR})
+    COMMAND ${ClangFormat_EXECUTABLE} --verbose -i -style=file *.cpp *.h */*.cpp */*.h
+    WORKING_DIRECTORY ${LAMMPS_SOURCE_DIR})
 endif()
 
 # extract Kokkos compilation settings
