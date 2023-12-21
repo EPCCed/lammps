@@ -117,8 +117,6 @@ Atom::Atom(LAMMPS *_lmp) : Pointers(_lmp), atom_style(nullptr), avec(nullptr), a
   quatinit_byshape= nullptr;
   maxrad_byshape= nullptr;
 
-//  extentpoints_byshape = nullptr;
-
   tag = nullptr;
   type = mask = nullptr;
   image = nullptr;
@@ -371,13 +369,11 @@ Atom::~Atom()
 
   delete unique_tags;
 
-//  JY ADDED
   memory->destroy(shtype);
   memory->destroy(quat);
   memory->destroy(pinertia_byshape);
   memory->destroy(quatinit_byshape);
   memory->destroy(maxrad_byshape);
-//  memory->destroy(extentpoints_byshape);
 }
 
 /* ----------------------------------------------------------------------

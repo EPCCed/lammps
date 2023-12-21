@@ -22,7 +22,7 @@ namespace LAMMPS_NS {
 class AtomVec : protected Pointers {
  public:
   enum { PER_ATOM = 0, PER_TYPE = 1 };
-  int molecular;                           // 0 = atomic, 1 = molecular system, 2 = molecular template system
+  int molecular;    // 0 = atomic, 1 = molecular system, 2 = molecular template system
   int bonds_allow, angles_allow;           // 1 if bonds, angles are used
   int dihedrals_allow, impropers_allow;    // 1 if dihedrals, impropers used
   int mass_type;                           // 1 if per-type masses
