@@ -72,6 +72,16 @@ class Atom : protected Pointers {
   imageint *image;
   double **x, **v, **f;
 
+  // spherical harmonics SH-DEM
+  // We are currently borrowing "quat" from finite size particles
+
+  int *shtype;             // integer array or spherical harmonic types
+  int nshtypes;              // Number of spherical harmonic particle types
+
+  double **pinertia_byshape;   // Principle inertia for each shape
+  double **quatinit_byshape;   // Initial quaternion for each shape (pricinple axis rotation from global axis)
+  double *maxrad_byshape;      // The maximum radius of each shape at the maximum SH degree (maxshexpan)
+
   // charged and dipolar particles
 
   double *rmass;
@@ -179,6 +189,7 @@ class Atom : protected Pointers {
   // most are existence flags for per-atom vectors and arrays
   // 1 if variable is used, 0 if not
 
+  int shdem_flag;
   int labelmapflag, types_style;
   int ellipsoid_flag, line_flag, tri_flag, body_flag;
   int peri_flag, electron_flag;
