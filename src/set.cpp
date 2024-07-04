@@ -50,7 +50,8 @@ enum{TYPE,TYPE_FRACTION,TYPE_RATIO,TYPE_SUBSET,
      QUAT,QUAT_RANDOM,THETA,THETA_RANDOM,ANGMOM,OMEGA,TEMPERATURE,
      DIAMETER,RADIUS_ATOM,DENSITY,VOLUME,IMAGE,BOND,ANGLE,DIHEDRAL,IMPROPER,
      SPH_E,SPH_CV,SPH_RHO,EDPD_TEMP,EDPD_CV,CC,SMD_MASS_DENSITY,
-     SMD_CONTACT_RADIUS,DPDTHETA,EPSILON,IVEC,DVEC,IARRAY,DARRAY};
+     SMD_CONTACT_RADIUS,DPDTHETA,EPSILON,IVEC,DVEC,IARRAY,DARRAY,
+     SH_TYPE, SH_QUAT, SH_QUAT_RANDOM};
 
 /* ---------------------------------------------------------------------- */
 
@@ -623,6 +624,37 @@ void Set::command(int narg, char **arg)
         error->all(FLERR,"Cannot set attribute {} for atom style {}", arg[iarg], atom->get_style());
       set(EPSILON);
       iarg += 2;
+    } else if (strcmp(arg[iarg],"sh/shape") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal set command");
+      if (utils::strmatch(arg[iarg+1],"^v_")) varparse(arg[iarg+1],1);
+      else ivalue = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
+      set(SH_TYPE);
+      iarg += 2;
+
+    } else if (strcmp(arg[iarg],"sh/quat") == 0) {
+      if (iarg + 5 > narg) error->all(FLERR, "Illegal set command");
+      if (utils::strmatch(arg[iarg+1],"^v_")) varparse(arg[iarg+1],1);
+      else xvalue = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+      if (utils::strmatch(arg[iarg+2],"^v_")) varparse(arg[iarg+2],2);
+      else yvalue = utils::numeric(FLERR,arg[iarg+2],false,lmp);
+      if (utils::strmatch(arg[iarg+3],"^v_")) varparse(arg[iarg+3],3);
+      else zvalue = utils::numeric(FLERR,arg[iarg+3],false,lmp);
+      if (utils::strmatch(arg[iarg+4],"^v_")) varparse(arg[iarg+4],4);
+      else wvalue = utils::numeric(FLERR,arg[iarg+4],false,lmp);
+      if (!atom->shdem_flag)
+        error->all(FLERR, "Cannot set this attribute for this atom style");
+      set(SH_QUAT);
+      iarg += 5;
+
+    } else if (strcmp(arg[iarg],"sh/quat/random") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal set command");
+      ivalue = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
+      if (!atom->shdem_flag)
+        error->all(FLERR,"Cannot set this attribute for this atom style");
+      if (ivalue <= 0)
+        error->all(FLERR,"Invalid random number seed in set command");
+      setrandom(SH_QUAT_RANDOM);
+      iarg += 2;
 
     } else {
 
@@ -1131,6 +1163,39 @@ void Set::set(int keyword)
       atom->darray[index_custom][i][icol_custom-1] = dvalue;
     }
 
+    // Spherical Harmonics
+    else if (keyword == SH_TYPE) {
+
+      int nshtypes = atom->nshtypes;
+      if (ivalue <= 0 || ivalue > nshtypes)
+        error->one(FLERR,"Invalid value in set command");
+      atom->shtype[i] = ivalue-1;
+    }
+
+    else if (keyword == SH_QUAT) {
+      double **quatinit, *quat;
+      int ishtype, *shtype;
+      double quat_foo[4], quat_bar[4];
+      quat = atom -> quat[i];
+      quatinit = atom->quatinit_byshape;
+      shtype = atom->shtype;
+      if (domain->dimension == 2 && (xvalue != 0.0 || yvalue != 0.0))
+        error->one(FLERR,"Cannot set quaternion with xy components "
+                         "for 2d system");
+
+      double theta2 = MY_PI2 * wvalue/180.0;
+      double sintheta2 = sin(theta2);
+      quat_foo[0] = cos(theta2);
+      quat_foo[1] = xvalue * sintheta2;
+      quat_foo[2] = yvalue * sintheta2;
+      quat_foo[3] = zvalue * sintheta2;
+      MathExtra::qnormalize(quat_foo);
+      ishtype = shtype[i];
+      MathExtra::qconjugate(quatinit[ishtype],quat_bar);
+      MathExtra::quatquat(quat_foo, quat_bar, quat);
+      MathExtra::qnormalize(quat);
+    }
+
     count++;
   }
 
@@ -1412,6 +1477,41 @@ void Set::setrandom(int keyword)
         count++;
       }
     }
+
+  // Spherical Harmonics
+  // set quaternions to random orientations in 3d
+
+  } else if (keyword == SH_QUAT_RANDOM) {
+    int nlocal = atom->nlocal;
+    double **quatinit, *quat;
+    int ishtype, *shtype;
+    double quat_foo[4], quat_bar[4];
+
+    if (domain->dimension == 3) {
+      double s,t1,t2,theta1,theta2;
+      for (i = 0; i < nlocal; i++)
+        if (select[i]) {
+          quat = atom -> quat[i];
+          quatinit = atom->quatinit_byshape;
+          shtype = atom->shtype;
+          ranpark->reset(seed,x[i]);
+          s = ranpark->uniform();
+          t1 = sqrt(1.0-s);
+          t2 = sqrt(s);
+          theta1 = 2.0*MY_PI*ranpark->uniform();
+          theta2 = 2.0*MY_PI*ranpark->uniform();
+          quat_foo[0] = cos(theta2)*t2;
+          quat_foo[1] = sin(theta1)*t1;
+          quat_foo[2] = cos(theta1)*t1;
+          quat_foo[3] = sin(theta2)*t2;
+          ishtype = shtype[i];
+          MathExtra::qconjugate(quatinit[ishtype],quat_bar);
+          MathExtra::quatquat(quat_foo, quat_bar, quat);
+          MathExtra::qnormalize(quat);
+          count++;
+        }
+
+    } else error->one(FLERR,"Spherharm must be three-dimensional");
   }
 
   delete ranpark;

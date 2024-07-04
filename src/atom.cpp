@@ -110,6 +110,14 @@ Atom::Atom(LAMMPS *_lmp) : Pointers(_lmp), atom_style(nullptr), avec(nullptr), a
   // --------------------------------------------------------------------
   // 1st customization section: customize by adding new per-atom variables
 
+  // spherical harmonics
+
+  shtype = nullptr;
+  quat = nullptr;
+  pinertia_byshape= nullptr;
+  quatinit_byshape= nullptr;
+  maxrad_byshape= nullptr;
+
   tag = nullptr;
   type = mask = nullptr;
   image = nullptr;
@@ -366,6 +374,12 @@ Atom::~Atom()
   Atom::map_delete();
 
   delete unique_tags;
+
+  memory->destroy(shtype);
+  memory->destroy(quat);
+  memory->destroy(pinertia_byshape);
+  memory->destroy(quatinit_byshape);
+  memory->destroy(maxrad_byshape);
 }
 
 /* ----------------------------------------------------------------------
@@ -399,6 +413,9 @@ void Atom::peratom_create()
   if (sizeof(tagint) == 8) tagintsize = BIGINT;
   int imageintsize = INT;
   if (sizeof(imageint) == 8) imageintsize = BIGINT;
+
+  add_peratom("shtype",&shtype,INT,0);
+  add_peratom("quat",&quat,DOUBLE,4);
 
   add_peratom("id",&tag,tagintsize,0);
   add_peratom("type",&type,INT,0);
@@ -623,6 +640,7 @@ void Atom::set_atomflag_defaults()
   // 3rd customization section: customize by adding new flag
   // identical list as 2nd customization in atom.h
 
+  shdem_flag = 0;
   labelmapflag = 0;
   ellipsoid_flag = line_flag = tri_flag = body_flag = 0;
   quat_flag = 0;
@@ -3000,6 +3018,10 @@ void *Atom::extract(const char *name)
   // 4th customization section: customize by adding new variable name
   // if new variable is from a package, add package comment
 
+  if (strcmp(name,"shtype") == 0) return (void *) shtype;
+  if (strcmp(name,"quat") == 0) return (void *) quat;
+
+  /* NOTE: this array is only of length ntypes+1 */
   if (strcmp(name,"mass") == 0) return (void *) mass;
 
   if (strcmp(name,"id") == 0) return (void *) tag;
